@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Cancel in-progress runs for the same ref on new push.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── API (Python 3.12) ──────────────────────────────────────────────────────
+  api:
+    name: API (Python 3.12)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: apps/api/pyproject.toml
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Lint (ruff check)
+        run: ruff check src tests
+
+      - name: Format check (ruff format --check)
+        run: ruff format --check src tests
+
+      - name: Type check (mypy)
+        run: mypy src
+
+      - name: Security scan (bandit)
+        run: bandit -r src/ -c pyproject.toml
+
+      - name: Test (pytest + coverage)
+        run: pytest --cov-report=xml
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: api-coverage
+          path: apps/api/coverage.xml
+          retention-days: 7
+
+  # ── Web (Node 20) ──────────────────────────────────────────────────────────
+  web:
+    name: Web (Node 20)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          # Switch to package-lock.json once it is generated and committed.
+          cache-dependency-path: apps/web/package.json
+
+      - name: Install dependencies
+        # `npm ci` requires package-lock.json. Generate it by running
+        # `npm install` locally in apps/web/ and committing package-lock.json.
+        # Until then, this step uses `npm install`.
+        run: npm install
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Test
+        # --if-present exits 0 when no "test" script is defined in package.json.
+        run: npm run test --if-present
