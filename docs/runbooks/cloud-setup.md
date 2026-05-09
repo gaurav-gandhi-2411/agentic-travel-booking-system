@@ -49,8 +49,7 @@ All resources created by this runbook and their cost tier at v1 volume:
 | GCP project | Cloud | Free (billing enabled, pay for actual usage) |
 | Cloud Run (staging + prod) | GCP | **Free** — always-free: 2M req/month, 360K vCPU-sec, 180K GiB-sec |
 | Artifact Registry | GCP | **~Free** — 0.5 GB free; image ~50 MB so effectively $0 at v1 |
-| Secret Manager | GCP | **Near-free** — ~$0.06/secret/month; ~14 secrets = ~$0.85/month |
-| KMS | GCP | **Near-free** — $0.06/key-version + $0.03/10K ops; <$1/month at v1 |
+| Secret Manager | GCP | **Near-free** — ~$0.06/secret/month; ~13 secrets = ~$0.80/month |
 | Cloud Scheduler | GCP | **Free** — free tier: 3 jobs/month; we create 1 |
 | Cloud Trace / Logging / Monitoring | GCP | **Free** — generous free tier covers v1 volume |
 | Neon Postgres | Neon | **Free** — 1 project, 0.5 GB storage, auto-suspend after 5 min idle |
@@ -90,7 +89,6 @@ gcloud services enable \
   artifactregistry.googleapis.com \
   cloudbuild.googleapis.com \
   secretmanager.googleapis.com \
-  cloudkms.googleapis.com \
   iam.googleapis.com \
   iamcredentials.googleapis.com \
   cloudscheduler.googleapis.com \
@@ -111,7 +109,7 @@ based on where your first demo tenant is located.
 **Verification:**
 ```bash
 gcloud projects describe $PROJECT_ID
-gcloud services list --enabled --project=$PROJECT_ID | grep -E "run|artifactregistry|secretmanager|kms|scheduler"
+gcloud services list --enabled --project=$PROJECT_ID | grep -E "run|artifactregistry|secretmanager|scheduler"
 ```
 
 *Related: plan.md §9, §16*
@@ -151,8 +149,6 @@ gcloud projects add-iam-policy-binding $PROJECT_ID \
   --member="serviceAccount:${SA_EMAIL}" \
   --role="roles/secretmanager.viewer"
 
-# KMS: encrypt/decrypt tenant credentials (Section 5)
-# Scoped to the key in Section 5 — not added here, added there.
 ```
 
 > **No service account key is created.** Authentication flows through Workload Identity
@@ -302,57 +298,61 @@ done
 **Verification:**
 ```bash
 gcloud secrets list --project=$PROJECT_ID --format="table(name,createTime)"
-# Expected: 13 secrets listed
+# Expected: 12 secrets listed (tenant-credential-master-key is created in Section 5)
 ```
 
 *Related: plan.md §8.4, §14*
 
 ---
 
-## Section 5 — KMS for Tenant Credential Encryption
+## Section 5 — Application-Layer Encryption Key Seeding (AES-GCM)
 
-**~10 minutes**
+**~5 minutes**
 
-Used to encrypt per-tenant Amadeus/Duffel credentials at rest (plan.md §8.4).
-Cost: near-free — ~$0.06/key-version/month + $0.03/10K operations (<$1/month at v1 volume).
+Tenant Amadeus/Duffel credentials are encrypted at rest using AES-256-GCM at the
+application layer. A single 32-byte master key is stored in Secret Manager. This
+supersedes the KMS approach originally specified in plan.md §8.4 — see ADR-0007 for
+the rationale and the migration path to per-tenant key separation at commercial scale.
 
 ```bash
-# 5.1 Create keyring in the same region as Cloud Run
-gcloud kms keyrings create tenant-secrets \
-  --location=$REGION \
+# 5.1 Generate a 32-byte master key locally (base64-encoded, never transmitted unencrypted)
+MASTER_KEY=$(openssl rand -base64 32)
+
+# 5.2 Create the secret and store the key
+echo -n "$MASTER_KEY" | gcloud secrets create tenant-credential-master-key \
+  --replication-policy=automatic \
+  --data-file=- \
   --project=$PROJECT_ID
 
-# 5.2 Create encryption key with 90-day rotation
-gcloud kms keys create tenant-credentials \
-  --keyring=tenant-secrets \
-  --location=$REGION \
-  --purpose=encryption \
-  --rotation-period=7776000s \
-  --next-rotation-time=$(date -d '+90 days' --utc '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || \
-                         date -v+90d -u '+%Y-%m-%dT%H:%M:%SZ') \
-  --project=$PROJECT_ID
-
-# 5.3 Grant deployer SA encrypt/decrypt access
-gcloud kms keys add-iam-policy-binding tenant-credentials \
-  --keyring=tenant-secrets \
-  --location=$REGION \
+# 5.3 Grant deployer SA read access (used at runtime to load the key for encrypt/decrypt)
+gcloud secrets add-iam-policy-binding tenant-credential-master-key \
   --member="serviceAccount:${SA_EMAIL}" \
-  --role="roles/cloudkms.cryptoKeyEncrypterDecrypter" \
+  --role="roles/secretmanager.secretAccessor" \
   --project=$PROJECT_ID
 
-# 5.4 Store the key resource name for app config
-export KMS_KEY="projects/${PROJECT_ID}/locations/${REGION}/keyRings/tenant-secrets/cryptoKeys/tenant-credentials"
-echo "KMS_KEY_RESOURCE = $KMS_KEY"
-# Add this to Secret Manager or GitHub vars as needed in Phase 1.
+# 5.4 Clear the key from shell environment (do not let it persist in history)
+unset MASTER_KEY
+history -d $(history 1 | awk '{print $1}') 2>/dev/null || true
 ```
+
+> **Security posture (ADR-0007):** A single master key means a Secret Manager compromise
+> exposes all tenant credentials. This is acceptable at v1 with a small tenant count and
+> $0 budget. The migration to per-tenant key separation (or KMS) is documented in
+> `docs/runbooks/master-key-rotation.md`, which will be written in Phase 7 when the
+> multi-tenancy layer lands. For now, that path is a forward reference.
+
+> **Quarterly rotation:** Generate a new key, re-encrypt all `tenant_credentials` rows in
+> Postgres, and add a new Secret Manager version. The old version can be disabled after
+> re-encryption is confirmed. Full protocol in `docs/runbooks/master-key-rotation.md`.
 
 **Verification:**
 ```bash
-gcloud kms keys list --keyring=tenant-secrets --location=$REGION --project=$PROJECT_ID
-# Expected: tenant-credentials listed with state ENABLED
+gcloud secrets versions access latest --secret=tenant-credential-master-key \
+  --project=$PROJECT_ID | wc -c
+# Expected: ~44 (32 bytes base64-encoded = 43 characters + newline = 44)
 ```
 
-*Related: ADR-0004, plan.md §8.4*
+*Related: ADR-0007, plan.md §8.4*
 
 ---
 
