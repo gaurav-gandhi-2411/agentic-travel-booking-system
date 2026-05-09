@@ -20,3 +20,8 @@ repos:
           - fastapi>=0.115.0
           - anthropic>=0.40.0
           - structlog>=24.4.0
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.0
+    hooks:
+      - id: gitleaks
