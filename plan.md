@@ -47,7 +47,7 @@ The repo must read as a drop-in SDK: clean interfaces, tenant-scoped state, Open
 
 ### 4.1 The agents
 
-Five specialist agents and one coordinator. Each agent is a stateless function that takes shared state in, returns shared state out. The coordinator is deterministic code (no LLM); only the agents call Claude.
+Six specialist agents coordinated by deterministic dispatch code. Each agent is a stateless function that takes shared state in, returns shared state out. The coordinator is deterministic code (no LLM); only the agents call Claude.
 
 | Agent | Role | Model |
 |---|---|---|
