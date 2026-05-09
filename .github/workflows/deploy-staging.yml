@@ -1,0 +1,80 @@
+name: Deploy — Staging
+
+# ── Required secrets & vars (provision in Stage 0.4) ──────────────────────
+# secrets.WIF_PROVIDER          Workload Identity Pool Provider resource name
+#                               e.g. projects/123/locations/global/workloadIdentityPools/gh-pool/providers/gh-provider
+# secrets.WIF_SERVICE_ACCOUNT   Service account email for impersonation
+#                               e.g. github-actions@<PROJECT_ID>.iam.gserviceaccount.com
+# vars.GCP_PROJECT_ID           GCP project ID
+# vars.CLOUD_RUN_REGION         Cloud Run region, e.g. us-central1
+# vars.ARTIFACT_REGISTRY_REPO   Artifact Registry repo name, e.g. travel-agent
+# ──────────────────────────────────────────────────────────────────────────
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy-staging:
+    name: Deploy to Cloud Run (staging)
+    # Disabled until Stage 0.4 GCP provisioning is complete.
+    # Remove this line and populate the secrets/vars above to enable.
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    environment: staging
+    permissions:
+      contents: read
+      id-token: write  # Required for Workload Identity Federation
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP via WIF
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: |
+          gcloud auth configure-docker \
+            ${{ vars.CLOUD_RUN_REGION }}-docker.pkg.dev --quiet
+
+      - name: Build and push image
+        env:
+          IMAGE: ${{ vars.CLOUD_RUN_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.ARTIFACT_REGISTRY_REPO }}/api
+        run: |
+          docker build \
+            --tag "$IMAGE:${{ github.sha }}" \
+            --tag "$IMAGE:latest" \
+            apps/api/
+          docker push "$IMAGE:${{ github.sha }}"
+          docker push "$IMAGE:latest"
+
+      - name: Deploy to Cloud Run (staging)
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: agentic-travel-booking-api-staging
+          region: ${{ vars.CLOUD_RUN_REGION }}
+          image: ${{ vars.CLOUD_RUN_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.ARTIFACT_REGISTRY_REPO }}/api:${{ github.sha }}
+          env_vars: |
+            APP_ENV=staging
+          flags: |
+            --min-instances=0
+            --max-instances=5
+            --memory=512Mi
+            --cpu=1
+            --timeout=300
+
+      - name: Smoke test
+        run: |
+          SERVICE_URL=$(
+            gcloud run services describe agentic-travel-booking-api-staging \
+              --region="${{ vars.CLOUD_RUN_REGION }}" \
+              --format="value(status.url)"
+          )
+          echo "Smoke testing $SERVICE_URL/health"
+          curl --fail --silent --show-error "$SERVICE_URL/health"

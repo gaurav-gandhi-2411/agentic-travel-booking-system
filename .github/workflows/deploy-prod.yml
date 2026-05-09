@@ -1,0 +1,93 @@
+name: Deploy — Production
+
+# ── Required secrets & vars (provision in Stage 0.4) ──────────────────────
+# secrets.WIF_PROVIDER          Workload Identity Pool Provider resource name
+# secrets.WIF_SERVICE_ACCOUNT   Service account email for impersonation
+# vars.GCP_PROJECT_ID           GCP project ID
+# vars.CLOUD_RUN_REGION         Cloud Run region, e.g. us-central1
+# vars.ARTIFACT_REGISTRY_REPO   Artifact Registry repo name, e.g. travel-agent
+# ──────────────────────────────────────────────────────────────────────────
+
+on:
+  push:
+    tags:
+      - 'v*'  # e.g. v1.0.0, v1.2.3-rc1
+
+jobs:
+  deploy-prod:
+    name: Deploy to Cloud Run (production)
+    # Disabled until Stage 0.4 GCP provisioning is complete.
+    # Remove this line and populate the secrets/vars above to enable.
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write  # Required for Workload Identity Federation
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP via WIF
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: |
+          gcloud auth configure-docker \
+            ${{ vars.CLOUD_RUN_REGION }}-docker.pkg.dev --quiet
+
+      - name: Build and push image
+        env:
+          IMAGE: ${{ vars.CLOUD_RUN_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.ARTIFACT_REGISTRY_REPO }}/api
+          TAG: ${{ github.ref_name }}
+        run: |
+          docker build \
+            --tag "$IMAGE:$TAG" \
+            --tag "$IMAGE:${{ github.sha }}" \
+            apps/api/
+          docker push "$IMAGE:$TAG"
+          docker push "$IMAGE:${{ github.sha }}"
+
+      - name: Deploy to Cloud Run (production) — 5% canary
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: agentic-travel-booking-api-prod
+          region: ${{ vars.CLOUD_RUN_REGION }}
+          image: ${{ vars.CLOUD_RUN_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.ARTIFACT_REGISTRY_REPO }}/api:${{ github.ref_name }}
+          tag: canary
+          no_traffic: true  # Deploy revision without sending traffic
+          flags: |
+            --min-instances=1
+            --max-instances=20
+            --memory=512Mi
+            --cpu=1
+            --timeout=300
+            --concurrency=80
+
+      - name: Shift 5% traffic to canary
+        run: |
+          gcloud run services update-traffic agentic-travel-booking-api-prod \
+            --region="${{ vars.CLOUD_RUN_REGION }}" \
+            --to-tags=canary=5
+
+      - name: Smoke test canary revision
+        run: |
+          CANARY_URL=$(
+            gcloud run services describe agentic-travel-booking-api-prod \
+              --region="${{ vars.CLOUD_RUN_REGION }}" \
+              --format="value(status.traffic[0].url)"
+          )
+          echo "Smoke testing canary at $CANARY_URL/health"
+          curl --fail --silent --show-error "$CANARY_URL/health"
+
+      - name: Promote canary to 100%
+        run: |
+          gcloud run services update-traffic agentic-travel-booking-api-prod \
+            --region="${{ vars.CLOUD_RUN_REGION }}" \
+            --to-latest
