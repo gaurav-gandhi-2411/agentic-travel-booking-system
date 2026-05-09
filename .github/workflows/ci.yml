@@ -72,14 +72,10 @@ jobs:
         with:
           node-version: "20"
           cache: npm
-          # Switch to package-lock.json once it is generated and committed.
-          cache-dependency-path: apps/web/package.json
+          cache-dependency-path: apps/web/package-lock.json
 
       - name: Install dependencies
-        # `npm ci` requires package-lock.json. Generate it by running
-        # `npm install` locally in apps/web/ and committing package-lock.json.
-        # Until then, this step uses `npm install`.
-        run: npm install
+        run: npm ci
 
       - name: Lint
         run: npm run lint
