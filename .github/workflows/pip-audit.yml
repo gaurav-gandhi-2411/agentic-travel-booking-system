@@ -1,0 +1,65 @@
+name: pip-audit
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'  # Monday 06:00 UTC
+  push:
+    branches: [main]
+    paths:
+      - 'apps/api/pyproject.toml'
+  workflow_dispatch:
+
+jobs:
+  pip-audit:
+    name: pip-audit dependency scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write  # Required to open GitHub issues on failure
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pip-audit and deps
+        run: |
+          pip install pip-audit pip-tools
+          # Install project deps so pip-audit can resolve the full graph
+          pip install -e "apps/api[dev]"
+
+      - name: Run pip-audit
+        id: audit
+        # Audits all installed packages. Fails (exit 1) if any known
+        # vulnerability is found. Adjust --severity if low/medium noise
+        # becomes a problem (e.g., --severity high).
+        run: pip-audit --desc
+
+      - name: Open GitHub issue on failure
+        if: failure() && steps.audit.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TITLE="Security: pip-audit found vulnerabilities"
+          # Avoid duplicate issues — check for any open issue with this title.
+          EXISTING=$(
+            gh issue list --state open --json title \
+              --jq "[.[] | select(.title == \"$TITLE\")] | length"
+          )
+          if [ "$EXISTING" -eq 0 ]; then
+            gh issue create \
+              --title "$TITLE" \
+              --body "$(cat <<'BODY'
+pip-audit detected vulnerabilities in \`apps/api/pyproject.toml\` dependencies.
+
+**Action required:** review the [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}), update affected packages, and close this issue once resolved.
+
+Labels to add manually if not auto-applied: \`security\`, \`dependencies\`
+BODY
+)"
+          else
+            echo "Open issue '$TITLE' already exists (#${EXISTING}) — skipping creation."
+          fi
