@@ -1,0 +1,22 @@
+# Run `pre-commit autoupdate` periodically to bump revs.
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.0
+    hooks:
+      - id: ruff
+        args: [--fix]
+        files: ^apps/api/
+      - id: ruff-format
+        files: ^apps/api/
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.10.0
+    hooks:
+      - id: mypy
+        files: ^apps/api/src/
+        args: [--config-file=apps/api/pyproject.toml]
+        additional_dependencies:
+          - pydantic[mypy]>=2.10.0
+          - fastapi>=0.115.0
+          - anthropic>=0.40.0
+          - structlog>=24.4.0
