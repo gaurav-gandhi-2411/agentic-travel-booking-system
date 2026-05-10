@@ -540,6 +540,7 @@ agentic-travel-booking-system/
 - `scripts/dataset/generate.py` running unattended against OpenRouter free tier (~50 req/day).
 - Self-critique pass (`critique.py`) applied after each generation batch.
 - Target: 1,000 training + 100 eval examples per agent (6,600 total).
+- Hand-curated golden eval set from Phase 3.5 (20–30 examples per agent) is preserved as the primary eval set. Phase 6.5's machine-generated eval examples are added alongside, not in replacement. The hand-curated set remains the trusted reference for cross-baseline comparison; the machine-generated set provides volume for stable judge-model scoring. Provenance tag in dataset card distinguishes the two.
 - Stage 2 QA: 100 examples per agent pasted into Claude.ai, results ingested via `ingest_qa.py`.
 - ~3–6 hours active human time total; ~2–3 weeks calendar time due to rate limits.
 
@@ -549,6 +550,7 @@ agentic-travel-booking-system/
 - LoRA rank 16, 4-bit NF4, sequence length 2,048.
 - ~6–10 hours training per agent; results saved to `models/` and pushed to Hugging Face private repo.
 - Training runs logged in `docs/research/experiment-log.md`.
+- Priority order: Planner > FlightHunter ≈ HotelHunter > Booking. Booking's threshold (100% state-machine correctness) is achievable on the 70B fallback alone; if calendar pressure forces a drop, Booking ships on fallback rather than blocking the phase.
 
 ### Phase 6.7 — Eval + Iterate (Week 16)
 - `eval-full` against the Phase 6.6 adapters.
@@ -668,7 +670,7 @@ Booking audit log queryable by tenant via authenticated API. Retention 7 years (
 
 ## 15. Cost Model
 
-**Budget constraint:** Strict $0 in API spend. All production runtime costs are covered by free tiers. Human time is the only meaningful cost during development.
+**Budget constraint:** $0 in API spend (LLM, GPU, third-party APIs). Production runtime infrastructure runs at a ~$0.80/month floor (Secret Manager active-version cost beyond the 6-version free tier). Human time is the only meaningful variable cost during development.
 
 ### Infrastructure (monthly, pre-launch)
 

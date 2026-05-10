@@ -40,6 +40,15 @@ dev = [
     "testcontainers[postgres]>=4.9.0",
     "freezegun>=1.5.0",
 ]
+finetune = [
+    "unsloth",
+    "transformers>=4.40.0",
+    "peft>=0.10.0",
+    "datasets>=2.20.0",
+    "evaluate>=0.4.0",
+    "bitsandbytes>=0.43.0",
+    "accelerate>=0.30.0",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/travel_agent"]

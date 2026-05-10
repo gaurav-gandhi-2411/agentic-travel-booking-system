@@ -11,7 +11,7 @@ reasoning.
 |---|---|
 | Backend | Python 3.12, FastAPI, Pydantic v2, Anthropic SDK |
 | Frontend | Next.js 15, React 19, TailwindCSS, shadcn/ui |
-| LLM | Claude Sonnet 4.6 (reasoning) + Haiku 4.5 (parsing) |
+| LLM | Multi-provider routing: Ollama (local), OpenRouter/Groq (free cloud), Anthropic (eval baseline) |
 | Database | Neon (Postgres), Alembic migrations |
 | Cache / Rate limiting | Upstash Redis |
 | Auth (tenant) | API key + JWT; Clerk for user sessions |
@@ -41,10 +41,24 @@ make lint && make typecheck && make test
 
 ## Architecture
 
-Five specialist Claude agents + a deterministic coordinator. See:
+Six specialist agents (Planner, FlightHunter, HotelHunter, Optimizer, Booking, Conversation) + a deterministic coordinator. See:
 - `docs/architecture/` — ADRs and system overview
 - `docs/runbooks/cloud-setup.md` — provisioning GCP, Neon, Upstash, Vercel
 - `plan.md` — phased delivery plan and design decisions
+
+## Open-Source Model Track
+
+Alongside the core SaaS product, this project fine-tunes compact open-source models
+(Qwen 2.5 7B/14B) per agent using QLoRA, with the goal of matching frontier performance
+on narrow tasks at zero inference cost.
+
+- **Adapters** released on Hugging Face under CC-BY-NC-4.0 (adapter weights only; base model stays Apache 2.0)
+- **Eval harness** in `evals/` — golden datasets, judge prompts, runner and scorer
+- **Dataset pipeline** in `scripts/dataset/` — diversity matrix, generation, self-critique, human QA
+- **Research workspace** in `docs/research/` — experiment log, model cards, benchmark protocol
+- **20% of eval golden examples** released publicly as a reproducible benchmark sample (CC-BY-4.0)
+
+See ADRs 0008–0012 in `docs/architecture/adr/` for design decisions.
 
 ## License
 
