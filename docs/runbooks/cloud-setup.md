@@ -327,9 +327,9 @@ in Sections 8–12.
 # Placeholder names are PLACEHOLDER_<SECRET_NAME_UPPER> for easy grep later.
 SECRETS=(
   anthropic-api-key
-  amadeus-client-id
-  amadeus-client-secret
-  duffel-api-key
+  travelpayouts-api-token
+  travelpayouts-partner-id
+  travelpayouts-aviasales-marker
   neon-database-url-staging
   neon-database-url-prod
   upstash-redis-url
@@ -358,8 +358,7 @@ echo "Created: jwt-signing-key  (random value)"
 # 4.3 Grant the deployer SA read access to all secrets
 for name in \
   anthropic-api-key \
-  amadeus-client-id amadeus-client-secret \
-  duffel-api-key \
+  travelpayouts-api-token travelpayouts-partner-id travelpayouts-aviasales-marker \
   neon-database-url-staging neon-database-url-prod \
   upstash-redis-url upstash-redis-token \
   clerk-secret-key clerk-publishable-key \
@@ -700,93 +699,54 @@ subscription), not the API. No API key is needed (ADR-0011).
 
 ---
 
-## Section 12 — Amadeus + Duffel Developer Accounts
+## Section 12 — Travelpayouts Credentials
 
-**~20 minutes active** (+ up to 48h waiting for Duffel approval)
+**~5 minutes** (browser to retrieve credentials; CLI to store them)
 
-> **If you haven't started the Duffel signup yet, do Section 12.2's browser step now
-> before Section 12.1.** Duffel can take 24–48 hours; Amadeus is instant.
+Travelpayouts is the primary flight data provider (ADR-0013). The token is already
+obtained; this section stores it in Secret Manager alongside the partner ID and
+Aviasales marker used for affiliate link construction.
 
-### 12.1 Amadeus Self-Service
+**12.1 Browser:** Retrieve credentials
+- Go to **travelpayouts.com** → Profile → **API** → **Data API**
+- Copy your **API Token**
+- Go to **Programs** → **Aviasales** → Partner tools
+- Note your **Partner ID** (numeric, shown in the partner tools header)
+- Note your **Marker** (6-digit affiliate marker for Aviasales deep links)
 
-**Browser:**
-- Go to **developers.amadeus.com** → Create account → Verify email
-- My Apps → **New App** → Name: `agentic-travel-dev`
-- APIs to add: Flight Offers Search, Hotel List, Hotel Offers Search, Flight Offers Price, Flight Create Orders
-- Copy **Client ID** and **Client Secret** from the app dashboard
+**12.2 CLI:** Export and store in Secret Manager
 
-**CLI:**
 ```bash
-export AMADEUS_ID="YOUR_AMADEUS_CLIENT_ID"
-export AMADEUS_SECRET="YOUR_AMADEUS_CLIENT_SECRET"
+export TP_TOKEN="YOUR_TRAVELPAYOUTS_API_TOKEN"
+export TP_PARTNER_ID="YOUR_PARTNER_ID"
+export TP_MARKER="YOUR_AVIASALES_MARKER"
 
-printf '%s' "$AMADEUS_ID" | \
-  gcloud secrets versions add amadeus-client-id \
+printf '%s' "$TP_TOKEN" | \
+  gcloud secrets versions add travelpayouts-api-token \
   --data-file=- --project="$PROJECT_ID"
 
-printf '%s' "$AMADEUS_SECRET" | \
-  gcloud secrets versions add amadeus-client-secret \
+printf '%s' "$TP_PARTNER_ID" | \
+  gcloud secrets versions add travelpayouts-partner-id \
   --data-file=- --project="$PROJECT_ID"
-```
 
-**Verification:**
-```bash
-AMADEUS_ID_CHECK=$(gcloud secrets versions access latest \
-  --secret=amadeus-client-id --project="$PROJECT_ID")
-AMADEUS_SECRET_CHECK=$(gcloud secrets versions access latest \
-  --secret=amadeus-client-secret --project="$PROJECT_ID")
-
-TOKEN=$(curl -s -X POST "https://test.api.amadeus.com/v1/security/oauth2/token" \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "grant_type=client_credentials&client_id=${AMADEUS_ID_CHECK}&client_secret=${AMADEUS_SECRET_CHECK}" \
-  | jq -r '.access_token')
-
-DATE=$(date -d '+1 day' '+%Y-%m-%d' 2>/dev/null || date -v+1d '+%Y-%m-%d')
-curl -s "https://test.api.amadeus.com/v2/shopping/flight-offers?\
-originLocationCode=LHR&destinationLocationCode=CDG\
-&departureDate=${DATE}&adults=1&max=1" \
-  -H "Authorization: Bearer $TOKEN" \
-  | jq '.data | length'
-# Expected: 1  (at least one flight result returned)
-```
-
-> **Tenant onboarding note:** each tenant creates their own Amadeus developer account.
-> We never share a credential pool (ADR-0002, plan.md §8.4). Tenant onboarding runbook
-> (Phase 11) documents the step-by-step handoff.
-
-### 12.2 Duffel
-
-> **⚠ 24–48h approval wait. Start this signup before everything else in the runbook.**
-> Duffel manually reviews developer access requests. If you already signed up, return here
-> to complete the CLI block once access is granted.
-
-**Browser (do this first, before any other section):**
-- Go to **duffel.com** → Create account → Verify email
-- Dashboard → **Access Keys** → **Create Key**
-- Name: `agentic-travel-dev`, Environment: **Test**
-- Copy the API key (prefix `duffel_test_`)
-
-**CLI (once Duffel approves your access):**
-```bash
-export DUFFEL_KEY="duffel_test_xxxxxxxxxxxx"
-
-printf '%s' "$DUFFEL_KEY" | \
-  gcloud secrets versions add duffel-api-key \
+printf '%s' "$TP_MARKER" | \
+  gcloud secrets versions add travelpayouts-aviasales-marker \
   --data-file=- --project="$PROJECT_ID"
 ```
 
 **Verification:**
 ```bash
-DUFFEL_KEY_CHECK=$(gcloud secrets versions access latest \
-  --secret=duffel-api-key --project="$PROJECT_ID")
-curl -s "https://api.duffel.com/air/airports?iata_country_code=GB" \
-  -H "Authorization: Bearer $DUFFEL_KEY_CHECK" \
-  -H "Duffel-Version: v2" \
-  | jq '.meta.total'
-# Expected: a non-zero integer (count of UK airports in Duffel's dataset)
+TP_TOKEN_CHECK=$(gcloud secrets versions access latest \
+  --secret=travelpayouts-api-token --project="$PROJECT_ID")
+
+curl -s "https://api.travelpayouts.com/v1/prices/cheap?\
+origin=DEL&destination=BOM&currency=INR&token=${TP_TOKEN_CHECK}" \
+  | jq 'keys | length'
+# Expected: a non-zero integer (destination keys in the response)
+# If 0 or null: verify the token and confirm Aviasales Data API is enabled on your account
 ```
 
-*Related: ADR-0002, ADR-0003, plan.md §8.4, §9, docs/backlog.md*
+*Related: ADR-0013, ADR-0014, plan.md §9*
 
 ---
 
