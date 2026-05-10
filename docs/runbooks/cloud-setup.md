@@ -1,7 +1,7 @@
 # Cloud Setup Runbook
 
 **Last verified:** 2026-05-10
-**Estimated time:** 1.5–2.5 hours active (+ up to 48h waiting for Duffel approval)
+**Estimated time:** ~60–90 minutes active. No external approval waits.
 **Executor:** gaurav-gandhi-2411
 
 ---
@@ -84,17 +84,7 @@ export PROD_SERVICE="agentic-travel-booking-api-prod"
 
 ## Order of Operations
 
-> **⚠ Do Section 12.2 (Duffel signup) FIRST — before anything else.**
-> Duffel developer access can take 24–48 hours. Start the signup now, then complete
-> Sections 1–11 + 13–15 while you wait. Finish Section 12.2's CLI block once Duffel
-> approves your account.
-
-Recommended sequence:
-1. **Now:** Section 12.2 browser step (Duffel account creation only)
-2. Sections 1–11 in order
-3. Section 12.1 (Amadeus — instant, no wait)
-4. Sections 13–15
-5. **When Duffel approves:** Section 12.2 CLI block + re-run Section 15
+Sections 1–7 (GCP) can run sequentially in one focused block. Sections 8–10 (Neon, Upstash, Vercel) are independent browser tasks. Section 12 (Travelpayouts) values are already captured before starting.
 
 ---
 
@@ -127,8 +117,7 @@ Neon, Upstash, Vercel, GitHub Actions) runs within its free tier at v1 volume.
 | Upstash Redis | Upstash | **Free** — 10K commands/day, 256 MB |
 | Vercel | Vercel | **Free** — Hobby plan |
 | Anthropic API | Anthropic | **$0** — not used in this project (ADR-0011) |
-| Amadeus Self-Service | Amadeus | **Free** — 2,000 API calls/month, sandbox |
-| Duffel | Duffel | **Free** — test mode |
+| Travelpayouts API + Aviasales | Travelpayouts | **$0** — revenue-share affiliate; Aviasales Data API for flight pricing (ADR-0013) |
 | GitHub Actions | GitHub | **Free** — 2,000 min/month |
 
 ---
