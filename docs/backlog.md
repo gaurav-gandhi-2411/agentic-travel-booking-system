@@ -4,6 +4,33 @@ Items deferred from current phase scope. Each entry notes the originating phase 
 
 ---
 
+## Provider milestones
+
+- **Booking.com affiliate program — re-apply after Phase 0.5 ships**
+  Previous application rejected due to absence of a credible project URL. Re-apply once
+  the Phase 0.5 marketing site is live on Vercel with developer-tier framing. Gates real
+  hotel data in `hotel_hunter` (currently running on Synthetic provider per ADR-0013).
+  _(Gated on Phase 0.5 Vercel deploy.)_
+
+- **Secondary hotel programs (Agoda, Hotellook, Trip.com, Expedia) — gate on Booking signal**
+  Apply sequentially after Booking.com acceptance. Booking's approval response signals
+  which tier of affiliate programs will accept at current traffic levels; use that signal
+  to prioritize rather than burning application attempts across all programs in parallel.
+  _(Gated on Booking.com acceptance.)_
+
+- **Kiwi.com + Amadeus Enterprise — re-evaluate after incorporation**
+  Kiwi requires partner application via email and reviews against business registration.
+  Amadeus Self-Service decommissions July 2026 but the Enterprise tier opens post-
+  incorporation. No committed incorporation date; revisit when that milestone lands.
+  _(Gated on incorporation milestone, no committed date.)_
+
+- **v2 provider candidates — niche travel categories**
+  WayAway (LCC flights, Travelpayouts program), Klook (activities), Hostelworld
+  (hostels), Vrbo (vacation rentals). Not v1 scope; add to Phase 2 planning once
+  the core v1 provider stack is stable. _(Flagged ADR-0013.)_
+
+---
+
 ## Phase 11
 
 - **Tenant provider account onboarding guide**
