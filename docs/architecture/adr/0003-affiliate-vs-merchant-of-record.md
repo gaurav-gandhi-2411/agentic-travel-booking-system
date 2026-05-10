@@ -193,3 +193,21 @@ booking requests to them via their API; they handle payment and fulfillment.
 ---
 
 *Referenced plan.md sections: §2, §7.1, §7.2, §7.3, §7.4, §17*
+
+---
+
+## Amendment 2026-05-11 — Drop test-mode booking
+
+Original Decision specified dual-mode operation: test-mode booking via Amadeus/Duffel
+sandbox endpoints for demos, plus affiliate redirect for production revenue. With Amadeus
+and Duffel both removed from the provider stack (see ADR-0013), test-mode booking is no
+longer available. The Decision simplifies to: affiliate redirect only.
+
+Demos use the same affiliate redirect path that production uses. The "test mode vs
+production" distinction collapses into "affiliate marker for demo tenant vs affiliate marker
+for paying tenant." Functionally identical, simpler architecturally.
+
+`BookingAgent`'s `lock_offer` / `cancel_offer` methods become no-ops in the affiliate
+model — the agent surfaces the booking package, user clicks Book, the redirect happens, the
+agent records the click in the audit log. No real lock or cancel exists because we are not
+the merchant of record.
