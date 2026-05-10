@@ -1,4 +1,4 @@
-.PHONY: setup test lint typecheck run-api run-web
+.PHONY: setup test lint typecheck run-api run-web eval-quick eval-full eval-baselines
 
 PYTHON     := python3.12
 VENV       := $(HOME)/projects/venv-dealhunter
@@ -28,3 +28,17 @@ run-api:
 
 run-web:
 	cd $(WEB_DIR) && npm run dev
+
+# ── Eval targets ─────────────────────────────────────────────────────────────
+# eval-quick: 20 examples per agent, ~2 min. Run before every PR.
+eval-quick:
+	$(VENV)/bin/python -m evals.run --agent all --mode quick
+
+# eval-full: Full dataset, ~30 min. Nightly CI; >2% regression blocks merge.
+eval-full:
+	$(VENV)/bin/python -m evals.run --agent all --mode full
+
+# eval-baselines: Frontier models. Requires ANTHROPIC_API_KEY + LLM_ROUTING_PROFILE=eval.
+# Never run in CI — manual baseline benchmarks only.
+eval-baselines:
+	LLM_ROUTING_PROFILE=eval $(VENV)/bin/python -m evals.run --agent all --mode baselines
