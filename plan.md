@@ -8,11 +8,11 @@
 
 ## 1. Vision
 
-A multi-agent travel booking system that takes a natural-language request like *"Book a flight to Rome with a 3-star accommodation or better"* and finds the best 7-day window in the next 30 days across flights and hotels, presents two ranked package archetypes (best-value, best-experience), supports conversational refinement ("show me cheaper", "no morning flights"), and executes the booking after explicit user authorization.
+DealHunter is the reasoning layer for travel platforms. Instead of showing users a list of flights sorted by price, it identifies the best 7-day window across a 30-day horizon, ranks packages on value vs experience trade-offs, explains each recommendation in natural language, and refines conversationally across multiple turns.
 
-Sold as a B2B agent layer that travel platforms (Skyscanner, MakeMyTrip, Kayak-likes) can drop on top of their existing inventory APIs. Their data, our brain. Our positioning is **agent-as-a-layer**, not aggregator-as-a-product.
+The agent ships on fine-tuned 7B open-source models that we benchmark against frontier — with published numbers and reproducible eval. Plug in your inventory via the adapter pattern; we bring the brain.
 
-The project also serves as a **research contribution**: demonstrating that fine-tuned open-source models (Qwen 2.5 7B/14B via QLoRA) can match or compete with frontier models on travel-domain agentic tasks. A reproducible eval harness, published checkpoints on Hugging Face under CC-BY-NC-4.0, and a technical report constitute the research deliverable. The open-source track is a core USP for B2B buyers who want the option of self-hosting without frontier API dependency.
+Sold as a B2B agent layer for travel platforms (Skyscanner, MakeMyTrip, Kayak-likes). They have inventory; they don't have a deeply-reasoning agent that does multi-window arbitrage, two-archetype ranking with NL explanations, and conversational refinement that survives 3+ turns. Our positioning is agent-as-a-layer, not aggregator-as-a-product.
 
 ## 1b. The Two Tracks
 
@@ -50,6 +50,7 @@ Both tracks share: agents, coordinator, provider adapters, the LLM provider abst
 - **Open-source model fine-tuning track:** QLoRA fine-tuning of Qwen 2.5 7B (narrow agents) and 14B (hard agents) with per-agent acceptance thresholds vs frontier baselines.
 - **Reproducible eval harness:** automated CI gates, golden datasets, judge prompts, and JSON result artifacts sufficient for independent reproduction.
 - **Research publication:** technical report PDF, Hugging Face model cards, and 20% eval sample dataset published under open licenses.
+- **Defensible USP grounded in four specific artifacts:** window-optimization algorithm with documented ADR, fine-tuned open-source models with HF-published benchmarks, production-grade engineering posture (40+ commits of discipline before business logic), conversational refinement that re-enters at the right phase based on what changed.
 
 ### Non-Goals (v1)
 - Real merchant-of-record bookings on real money. Booking happens via (a) Amadeus/Duffel test-mode confirmations, or (b) affiliate deep-link handoff to airline/OTA.
@@ -285,7 +286,7 @@ Stored encrypted at rest using **AES-256-GCM at the application layer** (ADR-000
 | **Database** | Neon (Postgres free tier) | Serverless, branching for staging, generous free tier |
 | **Cache & rate limit** | Upstash Redis (free tier) | Serverless Redis, REST API, free plan covers v1 |
 | **Queue** | None in v1 (FastAPI background tasks); add Cloud Tasks if needed | Avoid premature distribution |
-| **Travel APIs** | Amadeus Self-Service (flights + hotels), Duffel (flights) | Real data, free dev tier, sandboxed booking |
+| **Travel APIs** | Travelpayouts Aviasales Data API (cached flight pricing, free, India-accepted); Synthetic provider (`SyntheticFlightProvider` + `SyntheticHotelProvider`) for CI, gap-filling, and demos (ADR-0013, ADR-0014) | Zero cost; covers full v1 scope without provider approval gating |
 | **Auth (tenant)** | API key + JWT for user sessions | Standard for B2B SDK |
 | **Hosting (API)** | Cloud Run + WIF | Reuses gaurav's existing GCP setup, always-free quota |
 | **Hosting (web)** | Vercel | Free tier, Next.js native |
@@ -323,9 +324,12 @@ agentic-travel-booking-system/
 │   │   │   │   └── __init__.py       # get_llm_client() factory
 │   │   │   ├── providers/
 │   │   │   │   ├── base.py           # Protocol
-│   │   │   │   ├── amadeus_flight.py
-│   │   │   │   ├── amadeus_hotel.py
-│   │   │   │   └── duffel_flight.py
+│   │   │   │   ├── aviasales/        # Travelpayouts Aviasales Data API adapter
+│   │   │   │   │   └── flight.py
+│   │   │   │   └── synthetic/        # SyntheticFlightProvider + SyntheticHotelProvider
+│   │   │   │       ├── flight.py
+│   │   │   │       ├── hotel.py
+│   │   │   │       └── data/         # Bundled JSON realism data (ADR-0014)
 │   │   │   ├── scoring/
 │   │   │   │   ├── utility.py
 │   │   │   │   ├── pareto.py
@@ -480,10 +484,18 @@ agentic-travel-booking-system/
 - CI: lint, type-check, unit tests, smoke deploy to staging.
 - ADRs 0001–0012 written.
 
+### Phase 0.5 — Marketing Frontend MVP (3–5 days, gating dependency)
+- Minimal Next.js site deployed to Vercel: landing page, "how it works", contact/waitlist form.
+- No chat UI, no auth. Static or minimal-dynamic. Sole purpose: satisfy the "credible public website" requirement for hotel affiliate program applications (Booking.com, Agoda, Hotellook).
+- Applications submitted immediately after deploy: Booking.com, Agoda, Hotellook, Trip.com.
+- This phase gates real hotel data in Phase 1 and beyond. Calendar gating: Phase 1 starts in parallel; hotel providers become available as approvals land.
+
 ### Phase 1 — Provider Adapters + Search (Week 2)
 - `FlightProvider` and `HotelProvider` Protocols.
-- Amadeus flight + hotel adapters, Duffel flight adapter.
-- Contract tests using recorded fixtures (VCR.py).
+- Travelpayouts Aviasales Data API adapter (`aviasales/flight.py`).
+- `SyntheticFlightProvider` and `SyntheticHotelProvider` with bundled realism data (ADR-0014).
+- `synthetic_when_unavailable` routing flag per agent (ADR-0013).
+- Contract tests for Aviasales adapter; statistical property tests for Synthetic provider.
 - Per-tenant credential loading and AES-GCM decryption.
 - Hard call-budget enforcement.
 
@@ -569,7 +581,7 @@ agentic-travel-booking-system/
 
 ### Phase 8 — Frontend (Week 18)
 - Next.js chat UI on Vercel.
-- SSR marketing pages (landing, pricing, docs).
+- SSR marketing pages (landing, pricing, docs) — extends the Phase 0.5 marketing site in-place; no separate deploy.
 - Authenticated app: chat with the agent, see archetype packages, refine, confirm.
 - Real-time streaming of agent reasoning (Vercel AI SDK on frontend; backend streams via SSE).
 
@@ -735,8 +747,17 @@ The cost ledger tracks token counts and equivalent frontier model cost for trans
 
 What a buyer's tech lead expects to see in the repo before procurement signs:
 
+### Buyer-facing USP artifacts
+
+- [ ] **Window-optimization algorithm** documented end-to-end: ADR-0005 (algorithm rationale), §5 (implementation spec), eval results showing recommendation quality vs brute-force baseline.
+- [ ] **Fine-tuned open-source models with HF-published benchmarks:** LoRA adapters on HF Hub (CC-BY-NC-4.0); per-agent eval results vs 70B frontier baseline; reproducible `make eval` in under 30 min from published checkpoints.
+- [ ] **Production-grade engineering posture:** 40+ discipline commits before business logic; clean interfaces; ADRs 0001–0014; runbooks for top 5 incidents; load test report; OpenAPI spec.
+- [ ] **Conversational refinement that re-enters at the right phase:** ConversationManagerAgent routes "cheaper" to window re-search, "different hotel" to hotel re-rank, "skip red-eyes" to flight filter — not a full pipeline restart.
+
+### Standard procurement checklist
+
 - [ ] OpenAPI spec served at /docs and downloadable
-- [ ] ADRs explaining every load-bearing decision (0001–0012)
+- [ ] ADRs explaining every load-bearing decision (0001–0014)
 - [ ] Threat model document
 - [ ] Runbooks for the top 5 incidents (provider outage, booking rollback failure, tenant credential rotation, hot tenant rate-limit, on-call escalation)
 - [ ] Load test report committed in `docs/performance/`
