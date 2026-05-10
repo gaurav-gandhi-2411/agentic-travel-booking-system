@@ -77,6 +77,10 @@ infra/terraform/*.tfvars
 !infra/terraform/*.tfvars.example
 infra/terraform/.terraform.lock.hcl
 
+# Local scratch / provisioning notes (never committed)
+scratch/
+.env.gcp
+
 # Misc
 *.log
 logs/
