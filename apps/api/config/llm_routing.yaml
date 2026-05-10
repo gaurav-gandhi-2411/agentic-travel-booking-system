@@ -1,0 +1,50 @@
+# LLM routing config — per-agent model and provider selection.
+# Active profile selected via LLM_ROUTING_PROFILE env var (default: local).
+# Phase 2.5: travel_agent.llm.routing will load this file directly.
+
+profiles:
+
+  # ── local ────────────────────────────────────────────────────────────────────
+  # All agents route to Ollama on localhost. Requires a running Ollama instance
+  # with the listed models pulled: `ollama pull qwen2.5:7b && ollama pull qwen2.5:14b`
+  local:
+    planner:        qwen2.5:7b
+    flight_hunter:  qwen2.5:7b
+    hotel_hunter:   qwen2.5:7b
+    optimizer:      qwen2.5:14b
+    booking:        qwen2.5:7b
+    conversation:   qwen2.5:14b
+    provider:       ollama
+    base_url:       http://localhost:11434
+
+  # ── free ─────────────────────────────────────────────────────────────────────
+  # OpenRouter free-tier models. Rate-limited (~50 req/day per model on free tier).
+  # Groq fallback for narrow agents when OpenRouter is exhausted.
+  free:
+    planner:        qwen/qwen-2.5-72b-instruct:free
+    flight_hunter:  meta-llama/llama-3.3-70b-instruct:free
+    hotel_hunter:   meta-llama/llama-3.3-70b-instruct:free
+    optimizer:      qwen/qwen-2.5-72b-instruct:free
+    booking:        meta-llama/llama-3.3-70b-instruct:free
+    conversation:   qwen/qwen-2.5-72b-instruct:free
+    provider:       openrouter
+    fallback_provider: groq
+    fallback_models:
+      planner:        llama-3.3-70b-versatile
+      flight_hunter:  llama-3.3-70b-versatile
+      hotel_hunter:   llama-3.3-70b-versatile
+      optimizer:      llama-3.3-70b-versatile
+      booking:        llama-3.3-70b-versatile
+      conversation:   llama-3.3-70b-versatile
+
+  # ── eval ─────────────────────────────────────────────────────────────────────
+  # Frontier models for baseline benchmarks. Requires ANTHROPIC_API_KEY.
+  # Never active in CI or production — manual baseline runs only.
+  eval:
+    planner:        claude-sonnet-4-6
+    flight_hunter:  claude-haiku-4-5-20251001
+    hotel_hunter:   claude-haiku-4-5-20251001
+    optimizer:      claude-sonnet-4-6
+    booking:        claude-haiku-4-5-20251001
+    conversation:   claude-sonnet-4-6
+    provider:       anthropic
