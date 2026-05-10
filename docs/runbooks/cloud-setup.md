@@ -1,89 +1,172 @@
 # Cloud Setup Runbook
 
 **Last verified:** 2026-05-10
-**Estimated time:** 3–4 hours (excluding Amadeus/Duffel account approval, which can take 24–48h)
+**Estimated time:** 1.5–2.5 hours active (+ up to 48h waiting for Duffel approval)
 **Executor:** gaurav-gandhi-2411
 
 ---
 
-## Prerequisites
+## Pre-flight: Install WSL Tools
 
-Before starting:
+One-time setup in your WSL2 Ubuntu shell. Skip any tool you already have.
 
-- [ ] GCP account with billing enabled (pay-as-you-go or active free trial)
-- [ ] `gcloud` CLI installed and authenticated (`gcloud auth login`, `gcloud auth application-default login`)
-- [ ] GitHub admin access on `gaurav-gandhi-2411/agentic-travel-booking-system`
-- [ ] `gh` CLI installed and authenticated (`gh auth login`)
-- [ ] Node 20+ and `psql` available locally for verification steps
-- [ ] Neon account created at neon.tech (free, GitHub SSO)
-- [ ] Upstash account created at upstash.com (free, GitHub SSO)
-- [ ] Vercel account (free Hobby plan, GitHub SSO)
-- [ ] Anthropic account at console.anthropic.com
-- [ ] Amadeus developer account at developers.amadeus.com (can create during runbook)
-- [ ] Duffel account at duffel.com (can create during runbook)
+```bash
+# Core packages
+sudo apt-get update && sudo apt-get install -y \
+  curl \
+  jq \
+  openssl \
+  postgresql-client
+
+# gcloud (if not installed)
+which gcloud || (
+  curl https://sdk.cloud.google.com | bash
+  exec -l "$SHELL"
+)
+
+# gh — GitHub CLI (if not installed)
+which gh || (
+  curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+    | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+  echo "deb [arch=$(dpkg --print-architecture) \
+    signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] \
+    https://cli.github.com/packages stable main" \
+    | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+  sudo apt-get update && sudo apt-get install -y gh
+)
+
+# Authenticate both CLIs (interactive — one-time per machine)
+gcloud auth login
+gcloud auth application-default login
+gh auth login
+```
 
 ---
 
-## Variables — set these before running any commands
+## Shell Variables
+
+**Source this block once before starting.** Every command in every section below
+references these variables — no inline fill-ins anywhere.
 
 ```bash
-export PROJECT_ID="agentic-travel-XXXXXX"   # Replace XXXXXX with a random suffix
-                                              # Must be globally unique in GCP
-export REGION="asia-south1"                  # Mumbai — closest to India
-                                              # Alternative: us-central1 (cheapest free tier)
-export GITHUB_REPO="gaurav-gandhi-2411/agentic-travel-booking-system"
-export SA_EMAIL="travel-agent-deployer@${PROJECT_ID}.iam.gserviceaccount.com"
+# ── GCP project ────────────────────────────────────────────────────────────
+export PROJECT_ID="agentic-travel-XXXXXX"     # globally unique; pick a short suffix
+export REGION="asia-south1"                    # Mumbai; see tradeoff note in Section 1
+
+# ── Service account ────────────────────────────────────────────────────────
+export DEPLOYER_SA="travel-agent-deployer"
+export SA_EMAIL="${DEPLOYER_SA}@${PROJECT_ID}.iam.gserviceaccount.com"
+
+# ── Artifact Registry ──────────────────────────────────────────────────────
 export AR_REPO="travel-agent"
+export AR_HOST="${REGION}-docker.pkg.dev"      # derived from REGION — no manual fill-in
+
+# ── Workload Identity Federation ───────────────────────────────────────────
 export POOL_ID="github-pool"
 export PROVIDER_ID="github-provider"
+
+# ── GitHub ─────────────────────────────────────────────────────────────────
+export GH_OWNER="gaurav-gandhi-2411"
+export GH_REPO="agentic-travel-booking-system"
+export GH_REPO_FULL="${GH_OWNER}/${GH_REPO}"
+
+# ── Cloud Run service names ─────────────────────────────────────────────────
+export STAGING_SERVICE="agentic-travel-booking-api-staging"
+export PROD_SERVICE="agentic-travel-booking-api-prod"
 ```
+
+> **Persistence tip:** Save this block to `.env.gcp` (gitignored) and `source .env.gcp`
+> at the start of any future session that continues this runbook. `STAGING_URL`,
+> `PROD_URL`, `WIF_PROVIDER`, and `PROJECT_NUMBER` are computed during execution;
+> re-run the capture commands in their respective sections if you close the terminal.
+
+---
+
+## Order of Operations
+
+> **⚠ Do Section 12.2 (Duffel signup) FIRST — before anything else.**
+> Duffel developer access can take 24–48 hours. Start the signup now, then complete
+> Sections 1–11 + 13–15 while you wait. Finish Section 12.2's CLI block once Duffel
+> approves your account.
+
+Recommended sequence:
+1. **Now:** Section 12.2 browser step (Duffel account creation only)
+2. Sections 1–11 in order
+3. Section 12.1 (Amadeus — instant, no wait)
+4. Sections 13–15
+5. **When Duffel approves:** Section 12.2 CLI block + re-run Section 15
+
+---
+
+## What This Costs
+
+**API spend: $0.** No paid LLM, GPU, or third-party API spend during development.
+OpenRouter free tier, Groq, and Ollama handle all LLM inference; the Claude.ai
+web interface covers manual QA (existing Pro/Max subscription). See ADR-0008 and ADR-0011.
+
+**Infrastructure floor: ~$0.80/month.** Secret Manager charges $0.06/secret/month
+for active secrets beyond the 6-version free tier. At ~13 secrets that's ~$0.80/month.
+Every other service (Cloud Run, Artifact Registry, Cloud Scheduler, Cloud Trace, Logging,
+Neon, Upstash, Vercel, GitHub Actions) runs within its free tier at v1 volume.
+
+**Total: ~$0.80/month pre-launch.**
 
 ---
 
 ## Resource Summary
 
-All resources created by this runbook and their cost tier at v1 volume:
-
 | Resource | Service | Cost tier |
 |---|---|---|
-| GCP project | Cloud | Free (billing enabled, pay for actual usage) |
-| Cloud Run (staging + prod) | GCP | **Free** — always-free: 2M req/month, 360K vCPU-sec, 180K GiB-sec |
-| Artifact Registry | GCP | **~Free** — 0.5 GB free; image ~50 MB so effectively $0 at v1 |
-| Secret Manager | GCP | **Near-free** — ~$0.06/secret/month; ~13 secrets = ~$0.80/month |
-| Cloud Scheduler | GCP | **Free** — free tier: 3 jobs/month; we create 1 |
-| Cloud Trace / Logging / Monitoring | GCP | **Free** — generous free tier covers v1 volume |
-| Neon Postgres | Neon | **Free** — 1 project, 0.5 GB storage, auto-suspend after 5 min idle |
-| Upstash Redis | Upstash | **Free** — 10K commands/day, 256 MB max |
-| Vercel | Vercel | **Free** — Hobby plan, unlimited deploys, 100 GB bandwidth |
-| Anthropic API | Anthropic | **Pay-per-token** — add $20 credit for dev through Phase 6; ~$0.03–$0.10/request |
-| Amadeus Self-Service | Amadeus | **Free dev tier** — 2,000 API transactions/month |
-| Duffel | Duffel | **Free in test mode** — production requires revenue-sharing agreement |
-| GitHub Actions | GitHub | **Free** — public/private repos: 2,000 min/month free |
-
-**Total estimated monthly cost at v1 (pre-launch):** ~$2–$5/month
+| GCP project | Cloud | Free |
+| Cloud Run (staging + prod) | GCP | **Free** — 2M req/month, 360K vCPU-sec, 180K GiB-sec |
+| Artifact Registry | GCP | **~Free** — 0.5 GB free; image ~50 MB |
+| Secret Manager | GCP | **~$0.80/mo** — ~13 secrets × $0.06/secret/month |
+| Cloud Scheduler | GCP | **Free** — 3 jobs/month; we use 1 |
+| Cloud Trace / Logging / Monitoring | GCP | **Free** |
+| Neon Postgres | Neon | **Free** — 0.5 GB, auto-suspend after 5 min idle |
+| Upstash Redis | Upstash | **Free** — 10K commands/day, 256 MB |
+| Vercel | Vercel | **Free** — Hobby plan |
+| Anthropic API | Anthropic | **$0** — not used in this project (ADR-0011) |
+| Amadeus Self-Service | Amadeus | **Free** — 2,000 API calls/month, sandbox |
+| Duffel | Duffel | **Free** — test mode |
+| GitHub Actions | GitHub | **Free** — 2,000 min/month |
 
 ---
 
 ## Section 1 — GCP Project Setup
 
-**~15 minutes**
+**~10 minutes**
+
+Project creation and billing attachment require the GCP Console (billing requires
+browser verification). API enablement is fully CLI.
+
+**1.1 Browser:** Create GCP project
+- Go to **console.cloud.google.com** → New Project
+- Project name: `Agentic Travel Booking System`
+- Project ID: set this exactly to the value of `$PROJECT_ID`
+- Click **Create**
+
+**1.2 Browser:** Attach billing
+- Billing → **Link a billing account** → select your pay-as-you-go account
+- If no billing account exists: Billing → **Create billing account** first
+
+**1.3 CLI:** Set default project and enable APIs
 
 ```bash
-# 1.1 Create the project
-gcloud projects create $PROJECT_ID \
-  --name="Agentic Travel Booking System"
+gcloud config set project "$PROJECT_ID"
 
-# 1.2 Set as default for this session
-gcloud config set project $PROJECT_ID
+# Auto-detect billing account (works if you have exactly one)
+export BILLING_ACCOUNT=$(gcloud billing accounts list \
+  --filter="open=true" --format="value(name)" | head -1)
+echo "Billing account: $BILLING_ACCOUNT"
+# If empty or wrong, review and set manually:
+#   gcloud billing accounts list
+#   export BILLING_ACCOUNT="0X0X0X-0X0X0X-0X0X0X"
 
-# 1.3 Link billing (required before enabling APIs)
-# Get your billing account ID:
-gcloud billing accounts list
-# Then link:
-gcloud billing projects link $PROJECT_ID \
-  --billing-account=BILLING_ACCOUNT_ID
+gcloud billing projects link "$PROJECT_ID" \
+  --billing-account="$BILLING_ACCOUNT"
 
-# 1.4 Enable required APIs (single call)
+# Enable all 10 required APIs in a single call
 gcloud services enable \
   run.googleapis.com \
   artifactregistry.googleapis.com \
@@ -95,60 +178,60 @@ gcloud services enable \
   cloudtrace.googleapis.com \
   logging.googleapis.com \
   monitoring.googleapis.com \
-  --project=$PROJECT_ID
+  --project="$PROJECT_ID"
 
-# 1.5 Set default region for Cloud Run
-gcloud config set run/region $REGION
+gcloud config set run/region "$REGION"
 ```
 
-**Region tradeoff:** `asia-south1` (Mumbai) gives lowest latency for India-based users and is
-in the same region as most Indian travel API endpoints. `us-central1` has the cheapest Cloud Run
-pricing and the widest always-free quota. For v1 with near-zero traffic, either works; choose
-based on where your first demo tenant is located.
+**Region tradeoff:** `asia-south1` (Mumbai) — lowest latency for India-based users.
+`us-central1` — cheapest Cloud Run pricing and widest free-tier quota. For v1
+near-zero traffic either works; choose based on your first demo tenant's location.
 
 **Verification:**
 ```bash
-gcloud projects describe $PROJECT_ID
-gcloud services list --enabled --project=$PROJECT_ID | grep -E "run|artifactregistry|secretmanager|scheduler"
+gcloud projects describe "$PROJECT_ID" --format="value(projectId,lifecycleState)"
+# Expected: agentic-travel-XXXXXX   ACTIVE
+
+gcloud services list --enabled --project="$PROJECT_ID" \
+  --filter="NAME:(run.googleapis.com OR artifactregistry.googleapis.com OR \
+secretmanager.googleapis.com OR cloudscheduler.googleapis.com OR \
+iamcredentials.googleapis.com)" \
+  --format="table(NAME)" | wc -l
+# Expected: 6  (1 header row + 5 APIs)
 ```
 
 *Related: plan.md §9, §16*
 
 ---
 
-## Section 2 — Service Account for Cloud Run
+## Section 2 — Service Account
 
-**~10 minutes**
+**~5 minutes** (fully CLI)
 
 ```bash
-# 2.1 Create the service account (used by GitHub Actions for deploy + by Cloud Run at runtime)
-gcloud iam service-accounts create travel-agent-deployer \
+# 2.1 Create the service account
+gcloud iam service-accounts create "$DEPLOYER_SA" \
   --display-name="Travel Agent CI/CD deployer" \
-  --project=$PROJECT_ID
+  --project="$PROJECT_ID"
 
-# 2.2 Grant minimum required roles
-# Cloud Run: deploy revisions
-gcloud projects add-iam-policy-binding $PROJECT_ID \
-  --member="serviceAccount:${SA_EMAIL}" \
-  --role="roles/run.admin"
+# 2.2 Grant project-level roles in a single auditable loop
+ROLES=(
+  roles/run.admin
+  roles/artifactregistry.writer
+  roles/secretmanager.viewer
+)
 
-# Artifact Registry: push images
-gcloud projects add-iam-policy-binding $PROJECT_ID \
-  --member="serviceAccount:${SA_EMAIL}" \
-  --role="roles/artifactregistry.writer"
+for role in "${ROLES[@]}"; do
+  gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+    --member="serviceAccount:${SA_EMAIL}" \
+    --role="$role"
+done
 
-# Impersonate itself (required by Cloud Run deploy action)
-gcloud iam service-accounts add-iam-policy-binding $SA_EMAIL \
+# 2.3 Allow the SA to act as itself (required by Cloud Run deploy action)
+gcloud iam service-accounts add-iam-policy-binding "$SA_EMAIL" \
   --member="serviceAccount:${SA_EMAIL}" \
   --role="roles/iam.serviceAccountUser" \
-  --project=$PROJECT_ID
-
-# Secret Manager: read secrets at runtime (scoped to individual secrets in Section 4)
-# Project-level read access for Secret Manager metadata (list secrets)
-gcloud projects add-iam-policy-binding $PROJECT_ID \
-  --member="serviceAccount:${SA_EMAIL}" \
-  --role="roles/secretmanager.viewer"
-
+  --project="$PROJECT_ID"
 ```
 
 > **No service account key is created.** Authentication flows through Workload Identity
@@ -156,11 +239,15 @@ gcloud projects add-iam-policy-binding $PROJECT_ID \
 
 **Verification:**
 ```bash
-gcloud iam service-accounts describe $SA_EMAIL --project=$PROJECT_ID
-gcloud projects get-iam-policy $PROJECT_ID \
+gcloud iam service-accounts describe "$SA_EMAIL" --project="$PROJECT_ID" \
+  --format="table(email,disabled)"
+# Expected: travel-agent-deployer@PROJECT_ID.iam.gserviceaccount.com   False
+
+gcloud projects get-iam-policy "$PROJECT_ID" \
   --flatten="bindings[].members" \
   --filter="bindings.members:${SA_EMAIL}" \
   --format="table(bindings.role)"
+# Expected: 3 rows — run.admin, artifactregistry.writer, secretmanager.viewer
 ```
 
 *Related: ADR-0001, plan.md §14, §16*
@@ -169,23 +256,24 @@ gcloud projects get-iam-policy $PROJECT_ID \
 
 ## Section 3 — Workload Identity Federation
 
-**~20 minutes** (reuses triage-iq pool/provider pattern)
+**~10 minutes** (fully CLI — reuses triage-iq pool/provider pattern)
 
 ```bash
-# 3.1 Get project number (needed for WIF resource names)
-export PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format='value(projectNumber)')
+# 3.1 Capture project number (required for WIF resource names)
+export PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" \
+  --format="value(projectNumber)")
 
 # 3.2 Create the Workload Identity Pool
-gcloud iam workload-identity-pools create $POOL_ID \
+gcloud iam workload-identity-pools create "$POOL_ID" \
   --location=global \
   --display-name="GitHub Actions pool" \
   --description="WIF pool for GitHub Actions CI/CD" \
-  --project=$PROJECT_ID
+  --project="$PROJECT_ID"
 
-# 3.3 Create the OIDC provider (GitHub token issuer)
-gcloud iam workload-identity-pools providers create-oidc $PROVIDER_ID \
+# 3.3 Create the OIDC provider (GitHub as token issuer)
+gcloud iam workload-identity-pools providers create-oidc "$PROVIDER_ID" \
   --location=global \
-  --workload-identity-pool=$POOL_ID \
+  --workload-identity-pool="$POOL_ID" \
   --display-name="GitHub OIDC provider" \
   --issuer-uri="https://token.actions.githubusercontent.com" \
   --attribute-mapping="\
@@ -193,36 +281,35 @@ google.subject=assertion.sub,\
 attribute.actor=assertion.actor,\
 attribute.repository=assertion.repository,\
 attribute.ref=assertion.ref" \
-  --attribute-condition="assertion.repository=='${GITHUB_REPO}'" \
-  --project=$PROJECT_ID
+  --attribute-condition="assertion.repository=='${GH_REPO_FULL}'" \
+  --project="$PROJECT_ID"
 
-# 3.4 Get the pool resource name for SA binding
+# 3.4 Build the pool resource name
 export POOL_RESOURCE="projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/${POOL_ID}"
 
-# 3.5 Bind the SA to the pool — scoped to this specific repo
-# Covers both push-to-main (deploy-staging) and tag pushes (deploy-prod)
-gcloud iam service-accounts add-iam-policy-binding $SA_EMAIL \
-  --role=roles/iam.workloadIdentityUser \
-  --member="principalSet://iam.googleapis.com/${POOL_RESOURCE}/attribute.repository/${GITHUB_REPO}" \
-  --project=$PROJECT_ID
+# 3.5 Bind the SA — scoped to this exact repo only (covers push-to-main and tag pushes)
+gcloud iam service-accounts add-iam-policy-binding "$SA_EMAIL" \
+  --role="roles/iam.workloadIdentityUser" \
+  --member="principalSet://iam.googleapis.com/${POOL_RESOURCE}/attribute.repository/${GH_REPO_FULL}" \
+  --project="$PROJECT_ID"
 
-# 3.6 Capture the WIF provider resource name for GitHub secrets (Section 13)
+# 3.6 Build the full provider path needed for GitHub secrets (Section 13)
 export WIF_PROVIDER="projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/${POOL_ID}/providers/${PROVIDER_ID}"
-echo "WIF_PROVIDER = $WIF_PROVIDER"
+
+echo "=== Values to carry forward to Section 13 ==="
+echo "WIF_PROVIDER        = $WIF_PROVIDER"
 echo "WIF_SERVICE_ACCOUNT = $SA_EMAIL"
-# Save these values — you will paste them into GitHub secrets in Section 13.
 ```
 
 **Verification:**
 ```bash
-gcloud iam workload-identity-pools providers describe $PROVIDER_ID \
-  --workload-identity-pool=$POOL_ID \
+gcloud iam workload-identity-pools providers describe "$PROVIDER_ID" \
+  --workload-identity-pool="$POOL_ID" \
   --location=global \
-  --project=$PROJECT_ID
+  --project="$PROJECT_ID" \
+  --format="table(name,state,oidc.issuerUri)"
+# Expected: state=ACTIVE, issuerUri=https://token.actions.githubusercontent.com
 ```
-
-Expected output includes `issuerUri: https://token.actions.githubusercontent.com` and your
-`attributeCondition`.
 
 *Related: plan.md §16*
 
@@ -230,57 +317,46 @@ Expected output includes `issuerUri: https://token.actions.githubusercontent.com
 
 ## Section 4 — Secret Manager: Seed All Secrets
 
-**~15 minutes**
+**~5 minutes** (fully CLI)
 
-Creates all secrets with placeholder values. Real values are added in Sections 8–12.
+Creates 12 secrets with named placeholder values. Real values overwrite placeholders
+in Sections 8–12.
 
 ```bash
-# Helper function: create secret + add placeholder version
-create_secret() {
-  local name=$1
-  gcloud secrets create "$name" \
+# 4.1 Create all placeholder secrets in a single loop.
+# Placeholder names are PLACEHOLDER_<SECRET_NAME_UPPER> for easy grep later.
+SECRETS=(
+  anthropic-api-key
+  amadeus-client-id
+  amadeus-client-secret
+  duffel-api-key
+  neon-database-url-staging
+  neon-database-url-prod
+  upstash-redis-url
+  upstash-redis-token
+  clerk-secret-key
+  clerk-publishable-key
+  sentry-dsn
+)
+
+for name in "${SECRETS[@]}"; do
+  placeholder="PLACEHOLDER_$(echo "$name" | tr '[:lower:]-' '[:upper:]_')"
+  printf '%s' "$placeholder" | gcloud secrets create "$name" \
     --replication-policy=automatic \
-    --project=$PROJECT_ID 2>/dev/null || echo "Secret $name already exists"
-  echo -n "PLACEHOLDER" | gcloud secrets versions add "$name" \
     --data-file=- \
-    --project=$PROJECT_ID
-}
+    --project="$PROJECT_ID"
+  echo "Created: $name  (placeholder: $placeholder)"
+done
 
-# LLM
-create_secret "anthropic-api-key"
-
-# Travel providers
-create_secret "amadeus-client-id"
-create_secret "amadeus-client-secret"
-create_secret "duffel-api-key"
-
-# Database (Neon)
-create_secret "neon-database-url-staging"
-create_secret "neon-database-url-prod"
-
-# Cache (Upstash)
-create_secret "upstash-redis-url"
-create_secret "upstash-redis-token"
-
-# Auth (Clerk)
-create_secret "clerk-secret-key"
-create_secret "clerk-publishable-key"
-
-# App signing
-openssl rand -base64 64 | tr -d '\n' | gcloud secrets versions add jwt-signing-key \
+# 4.2 jwt-signing-key gets a real random value immediately (not a placeholder)
+openssl rand -base64 64 | tr -d '\n' | gcloud secrets create jwt-signing-key \
+  --replication-policy=automatic \
   --data-file=- \
-  --project=$PROJECT_ID 2>/dev/null || \
-  openssl rand -base64 64 | tr -d '\n' | \
-  (gcloud secrets create jwt-signing-key --replication-policy=automatic --project=$PROJECT_ID && \
-   gcloud secrets versions add jwt-signing-key --data-file=- --project=$PROJECT_ID)
+  --project="$PROJECT_ID"
+echo "Created: jwt-signing-key  (random value)"
 
-# Sentry (optional — can remain placeholder until Phase 9)
-create_secret "sentry-dsn"
-```
-
-Grant the deployer SA access to read secrets at runtime:
-```bash
-for secret in \
+# 4.3 Grant the deployer SA read access to all secrets
+for name in \
   anthropic-api-key \
   amadeus-client-id amadeus-client-secret \
   duffel-api-key \
@@ -288,68 +364,57 @@ for secret in \
   upstash-redis-url upstash-redis-token \
   clerk-secret-key clerk-publishable-key \
   jwt-signing-key sentry-dsn; do
-  gcloud secrets add-iam-policy-binding "$secret" \
+  gcloud secrets add-iam-policy-binding "$name" \
     --member="serviceAccount:${SA_EMAIL}" \
     --role="roles/secretmanager.secretAccessor" \
-    --project=$PROJECT_ID
+    --project="$PROJECT_ID"
 done
+echo "SA access granted to all 12 secrets."
 ```
 
 **Verification:**
 ```bash
-gcloud secrets list --project=$PROJECT_ID --format="table(name,createTime)"
-# Expected: 12 secrets listed (tenant-credential-master-key is created in Section 5)
+gcloud secrets list --project="$PROJECT_ID" --format="table(name)" | wc -l
+# Expected: 13  (1 header + 12 secrets; tenant-credential-master-key added in Section 5)
+
+gcloud secrets list --project="$PROJECT_ID" --format="value(name)" | sort
+# Spot-check: all 12 names appear in the output
 ```
 
 *Related: plan.md §8.4, §14*
 
 ---
 
-## Section 5 — Application-Layer Encryption Key Seeding (AES-GCM)
+## Section 5 — Application-Layer Encryption Key (AES-256-GCM)
 
-**~5 minutes**
-
-Tenant Amadeus/Duffel credentials are encrypted at rest using AES-256-GCM at the
-application layer. A single 32-byte master key is stored in Secret Manager. This
-supersedes the KMS approach originally specified in plan.md §8.4 — see ADR-0007 for
-the rationale and the migration path to per-tenant key separation at commercial scale.
+**~2 minutes** (fully CLI)
 
 ```bash
-# 5.1 Generate a 32-byte master key locally (base64-encoded, never transmitted unencrypted)
-MASTER_KEY=$(openssl rand -base64 32)
-
-# 5.2 Create the secret and store the key
-echo -n "$MASTER_KEY" | gcloud secrets create tenant-credential-master-key \
+# Generate and store the 32-byte master key in a single pipeline
+openssl rand -base64 32 | gcloud secrets create tenant-credential-master-key \
   --replication-policy=automatic \
   --data-file=- \
-  --project=$PROJECT_ID
+  --project="$PROJECT_ID"
 
-# 5.3 Grant deployer SA read access (used at runtime to load the key for encrypt/decrypt)
+# Grant deployer SA read access (used at runtime for encrypt/decrypt)
 gcloud secrets add-iam-policy-binding tenant-credential-master-key \
   --member="serviceAccount:${SA_EMAIL}" \
   --role="roles/secretmanager.secretAccessor" \
-  --project=$PROJECT_ID
-
-# 5.4 Clear the key from shell environment (do not let it persist in history)
-unset MASTER_KEY
-history -d $(history 1 | awk '{print $1}') 2>/dev/null || true
+  --project="$PROJECT_ID"
 ```
 
 > **Security posture (ADR-0007):** A single master key means a Secret Manager compromise
-> exposes all tenant credentials. This is acceptable at v1 with a small tenant count and
-> $0 budget. The migration to per-tenant key separation (or KMS) is documented in
-> `docs/runbooks/master-key-rotation.md`, which will be written in Phase 7 when the
-> multi-tenancy layer lands. For now, that path is a forward reference.
-
-> **Quarterly rotation:** Generate a new key, re-encrypt all `tenant_credentials` rows in
-> Postgres, and add a new Secret Manager version. The old version can be disabled after
-> re-encryption is confirmed. Full protocol in `docs/runbooks/master-key-rotation.md`.
+> exposes all tenant credentials. Acceptable at v1 with a small tenant count and $0 budget.
+> The migration path to per-tenant key separation (or Cloud KMS when commercial) is in
+> docs/backlog.md §Phase 8. Full rotation protocol in `docs/runbooks/master-key-rotation.md`
+> (written Phase 7).
 
 **Verification:**
 ```bash
-gcloud secrets versions access latest --secret=tenant-credential-master-key \
-  --project=$PROJECT_ID | wc -c
-# Expected: ~44 (32 bytes base64-encoded = 43 characters + newline = 44)
+gcloud secrets versions access latest \
+  --secret=tenant-credential-master-key \
+  --project="$PROJECT_ID" | wc -c
+# Expected: 44  (32 bytes base64-encoded = 43 chars + newline = 44)
 ```
 
 *Related: ADR-0007, plan.md §8.4*
@@ -358,62 +423,63 @@ gcloud secrets versions access latest --secret=tenant-credential-master-key \
 
 ## Section 6 — Cloud Run Service Stubs
 
-**~15 minutes**
-
-Creates empty services so the deploy workflows have an existing target to update.
-Using the official hello-world image as the initial revision.
+**~10 minutes** (fully CLI)
 
 ```bash
-# 6.1 Create Artifact Registry repository (required before pushing app images)
-gcloud artifacts repositories create $AR_REPO \
+# 6.1 Create Artifact Registry repository
+gcloud artifacts repositories create "$AR_REPO" \
   --repository-format=docker \
-  --location=$REGION \
-  --description="Agentic Travel Booking System images" \
-  --project=$PROJECT_ID
+  --location="$REGION" \
+  --description="Agentic Travel Booking System container images" \
+  --project="$PROJECT_ID"
 
-# 6.2 Deploy staging stub
-gcloud run deploy agentic-travel-booking-api-staging \
+# 6.2 Deploy staging stub (hello-world image; replaced on first real deploy)
+gcloud run deploy "$STAGING_SERVICE" \
   --image=gcr.io/cloudrun/hello \
-  --region=$REGION \
+  --region="$REGION" \
   --platform=managed \
   --allow-unauthenticated \
-  --service-account=$SA_EMAIL \
+  --service-account="$SA_EMAIL" \
   --min-instances=0 \
   --max-instances=5 \
   --memory=512Mi \
   --cpu=1 \
   --timeout=60 \
-  --project=$PROJECT_ID
+  --project="$PROJECT_ID"
 
 # 6.3 Deploy prod stub
-gcloud run deploy agentic-travel-booking-api-prod \
+gcloud run deploy "$PROD_SERVICE" \
   --image=gcr.io/cloudrun/hello \
-  --region=$REGION \
+  --region="$REGION" \
   --platform=managed \
   --allow-unauthenticated \
-  --service-account=$SA_EMAIL \
+  --service-account="$SA_EMAIL" \
   --min-instances=1 \
   --max-instances=20 \
   --memory=512Mi \
   --cpu=1 \
   --timeout=300 \
   --concurrency=80 \
-  --project=$PROJECT_ID
+  --project="$PROJECT_ID"
 
-# 6.4 Capture URLs
-export STAGING_URL=$(gcloud run services describe agentic-travel-booking-api-staging \
-  --region=$REGION --project=$PROJECT_ID --format='value(status.url)')
-export PROD_URL=$(gcloud run services describe agentic-travel-booking-api-prod \
-  --region=$REGION --project=$PROJECT_ID --format='value(status.url)')
+# 6.4 Capture URLs (used in Sections 7, 10, 13, 15)
+export STAGING_URL=$(gcloud run services describe "$STAGING_SERVICE" \
+  --region="$REGION" --project="$PROJECT_ID" --format="value(status.url)")
+export PROD_URL=$(gcloud run services describe "$PROD_SERVICE" \
+  --region="$REGION" --project="$PROJECT_ID" --format="value(status.url)")
 echo "Staging: $STAGING_URL"
 echo "Prod:    $PROD_URL"
 ```
 
 **Verification:**
 ```bash
-gcloud run services list --region=$REGION --project=$PROJECT_ID
-curl --fail "$STAGING_URL"   # Returns hello-world HTML
-curl --fail "$PROD_URL"
+gcloud run services list --region="$REGION" --project="$PROJECT_ID" \
+  --format="table(metadata.name,status.url,status.conditions[0].type)"
+# Expected: both services listed with Ready condition
+
+curl -s "$STAGING_URL" | grep -o "It's running\|Congratulations"
+curl -s "$PROD_URL"    | grep -o "It's running\|Congratulations"
+# Expected: "It's running" from the hello-world image on each URL
 ```
 
 *Related: plan.md §9, §16*
@@ -422,121 +488,149 @@ curl --fail "$PROD_URL"
 
 ## Section 7 — Cloud Scheduler Keep-Alive Cron
 
-**~5 minutes**
+**~3 minutes** (fully CLI)
 
 Prevents Neon Postgres from auto-suspending between requests (Risk 1 from Phase 0
-planning). The `/health` endpoint must issue `SELECT 1` against the DB (Phase 1
-implementation requirement). Until Phase 1 ships, the cron hits a 404 — expected.
+planning). The `/health` endpoint must issue `SELECT 1` — this is a Phase 1 requirement.
 
-Cloud Scheduler free tier: 3 jobs/month. This is job 1 of 3.
+> **Until Phase 1 ships `/health`, this cron will receive a 404 from the Cloud Run stub.
+> This is expected and harmless. Create the job now so it's ready the moment Phase 1 lands.**
+
+Cloud Scheduler free tier: 3 jobs/month. This runbook uses 1.
 
 ```bash
-# 7.1 Create Cloud Scheduler service account (if not already present)
-gcloud projects add-iam-policy-binding $PROJECT_ID \
-  --member="serviceAccount:service-${PROJECT_NUMBER}@gcp-sa-cloudscheduler.iam.gserviceaccount.com" \
-  --role="roles/cloudscheduler.serviceAgent" 2>/dev/null || true
+# Ensure PROJECT_NUMBER is set (captured in Section 3; re-export if session was closed)
+: "${PROJECT_NUMBER:=$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')}"
 
-# 7.2 Create the keep-alive job
 gcloud scheduler jobs create http neon-keepalive \
-  --location=$REGION \
+  --location="$REGION" \
   --schedule="*/4 * * * *" \
   --uri="${STAGING_URL}/health" \
   --http-method=GET \
-  --description="Keep Neon Postgres warm — prevents 1-3s cold start on first request after idle" \
-  --project=$PROJECT_ID
+  --description="Keep Neon Postgres warm — prevents 1-3s cold start after idle" \
+  --project="$PROJECT_ID"
 
-# Note: Cloud Scheduler does not support all regions.
-# If $REGION is not supported, use the closest available:
+# If $REGION is not supported for Scheduler, use the nearest available:
 #   gcloud scheduler locations list
 ```
 
 **Verification:**
 ```bash
-gcloud scheduler jobs list --location=$REGION --project=$PROJECT_ID
-# Manually trigger to confirm it fires (will 404 until Phase 1):
-gcloud scheduler jobs run neon-keepalive --location=$REGION --project=$PROJECT_ID
+gcloud scheduler jobs describe neon-keepalive \
+  --location="$REGION" --project="$PROJECT_ID" \
+  --format="table(name,schedule,httpTarget.uri,state)"
+# Expected: state=ENABLED, schedule=*/4 * * * *, uri ends with /health
+
+gcloud scheduler jobs run neon-keepalive \
+  --location="$REGION" --project="$PROJECT_ID"
+echo "Exit $?  — 0 means the scheduler accepted the trigger. 404 from /health is expected until Phase 1."
 ```
 
-*Related: plan.md §15 (Risk 1 from Phase 0 review), docs/backlog.md*
+*Related: plan.md §15 Risk 1*
 
 ---
 
 ## Section 8 — Neon Postgres
 
-**~15 minutes**
+**~15 minutes** (browser for project + branch creation; CLI for credentials)
 
-1. Go to **neon.tech** → New project → Name: `agentic-travel-booking-system`
-2. Choose region: closest to `$REGION` (for `asia-south1` → Singapore; for `us-central1` → US East)
-3. Postgres version: 16
+**8.1 Browser:** Create Neon project
+- Go to **neon.tech** → **New Project**
+- Name: `agentic-travel-booking-system`
+- Region: for `asia-south1` → **AWS ap-southeast-1 (Singapore)**; for `us-central1` → **AWS us-east-1**
+- Postgres version: **16**
+- Click **Create Project**
 
-**Create staging branch:**
-- Project → Branches → New branch
+**8.2 Browser:** Create staging branch
+- Project → **Branches** → **New Branch**
 - Name: `staging`, branch from: `main`
 
-**Capture connection strings:**
-- For each branch, go to Connection Details → Connection string (pooled, asyncpg driver)
-- Format: `postgresql+asyncpg://user:password@ep-xxx.region.aws.neon.tech/neondb?sslmode=require`
+**8.3 Browser:** Capture connection strings
+- Select the **`main`** branch → **Connection Details** tab
+- Driver: **asyncpg** (or psycopg; the `postgresql+asyncpg://` prefix is what matters)
+- Copy the connection string for `main` → this is your prod URL
+- Switch to **`staging`** branch → copy its connection string → this is your staging URL
 
 ```bash
-# Store in Secret Manager (replace <...> with actual values)
-echo -n "postgresql+asyncpg://<staging-connection-string>" | \
-  gcloud secrets versions add neon-database-url-staging --data-file=- --project=$PROJECT_ID
+# Paste your actual values here, then run the export block
+export NEON_URL_STAGING="postgresql+asyncpg://user:password@ep-xxx.region.aws.neon.tech/neondb?sslmode=require"
+export NEON_URL_PROD="postgresql+asyncpg://user:password@ep-xxx.region.aws.neon.tech/neondb?sslmode=require"
+```
 
-echo -n "postgresql+asyncpg://<prod-connection-string>" | \
-  gcloud secrets versions add neon-database-url-prod --data-file=- --project=$PROJECT_ID
+**8.4 CLI:** Store in Secret Manager
+
+```bash
+printf '%s' "$NEON_URL_STAGING" | \
+  gcloud secrets versions add neon-database-url-staging \
+  --data-file=- --project="$PROJECT_ID"
+
+printf '%s' "$NEON_URL_PROD" | \
+  gcloud secrets versions add neon-database-url-prod \
+  --data-file=- --project="$PROJECT_ID"
 ```
 
 **Verification:**
 ```bash
-# Test staging connection (requires psql with sslmode support)
-NEON_STAGING=$(gcloud secrets versions access latest \
-  --secret=neon-database-url-staging --project=$PROJECT_ID | \
+# Pull staging URL from Secret Manager and verify connectivity
+NEON_TEST=$(gcloud secrets versions access latest \
+  --secret=neon-database-url-staging --project="$PROJECT_ID" | \
   sed 's|postgresql+asyncpg|postgresql|')
-psql "$NEON_STAGING" -c "SELECT version(), current_database();"
+psql "$NEON_TEST" -c "SELECT version(), current_database();"
+# Expected: PostgreSQL 16.x ... | neondb
 ```
 
-> **Neon free tier note:** The free tier auto-suspends compute after 5 minutes of
-> inactivity (1–3s cold start on wake). The Cloud Scheduler cron (Section 7) mitigates
-> this for staging. Production has min-instances=1 on Cloud Run which ensures at least
-> one warm instance, but Neon still suspends — consider Neon Launch ($19/month) for
-> production SLO compliance before launch.
+> **Neon free tier:** Auto-suspends after 5 min idle (1–3s cold start on wake). The Cloud
+> Scheduler cron (Section 7) keeps staging warm. For production SLO compliance before launch,
+> consider Neon Launch ($19/month).
 
-*Related: plan.md §9, ADR-0004, §13.2 (p95 SLO)*
+*Related: plan.md §9, ADR-0004*
 
 ---
 
 ## Section 9 — Upstash Redis
 
-**~10 minutes**
+**~5 minutes** (browser for database creation; CLI for credentials)
 
-1. Go to **upstash.com** → Create database
-2. Name: `agentic-travel-cache`
-3. Region: closest to `$REGION` (for `asia-south1` → Singapore; for `us-central1` → US East)
-4. Type: Regional (not Global — Global is paid)
-5. TLS: enabled
+**9.1 Browser:** Create Upstash database
+- Go to **upstash.com** → **Create Database**
+- Name: `agentic-travel-cache`
+- Type: **Regional** (not Global — Global is paid)
+- Region: for `asia-south1` → **Singapore**; for `us-central1` → **US East**
+- TLS: **enabled**
+- Click **Create**
 
-**Capture credentials:**
-- Dashboard → REST API → Endpoint (URL) and Token
+**9.2 Browser:** Capture REST credentials
+- Database → **REST API** tab
+- Copy **Endpoint** (URL starting `https://`) and **Token**
 
 ```bash
-echo -n "https://xxx.upstash.io" | \
-  gcloud secrets versions add upstash-redis-url --data-file=- --project=$PROJECT_ID
-
-echo -n "AXxxxxxxxxxxxxxxxx" | \
-  gcloud secrets versions add upstash-redis-token --data-file=- --project=$PROJECT_ID
+export UPSTASH_URL="https://xxx.upstash.io"
+export UPSTASH_TOKEN="AXxxxxxxxxxxxxxxxxx"
 ```
 
-**Free tier ceiling:** 10,000 commands/day, 256 MB max. At v1 volume this is ample.
-If a demo day spikes over 10K commands, the next day resets. Upstash Pro starts at $0.20
-per 100K commands beyond the free tier if you need burst capacity.
+**9.3 CLI:** Store in Secret Manager
+
+```bash
+printf '%s' "$UPSTASH_URL" | \
+  gcloud secrets versions add upstash-redis-url \
+  --data-file=- --project="$PROJECT_ID"
+
+printf '%s' "$UPSTASH_TOKEN" | \
+  gcloud secrets versions add upstash-redis-token \
+  --data-file=- --project="$PROJECT_ID"
+```
 
 **Verification:**
 ```bash
-UPSTASH_URL=$(gcloud secrets versions access latest --secret=upstash-redis-url --project=$PROJECT_ID)
-UPSTASH_TOKEN=$(gcloud secrets versions access latest --secret=upstash-redis-token --project=$PROJECT_ID)
-curl -s -H "Authorization: Bearer $UPSTASH_TOKEN" "$UPSTASH_URL/ping"
-# Expected: {"result":"PONG"}
+URL_CHECK=$(gcloud secrets versions access latest \
+  --secret=upstash-redis-url --project="$PROJECT_ID")
+TOK_CHECK=$(gcloud secrets versions access latest \
+  --secret=upstash-redis-token --project="$PROJECT_ID")
+curl -s -H "Authorization: Bearer $TOK_CHECK" "${URL_CHECK}/ping" | jq -r '.result'
+# Expected: PONG
 ```
+
+**Free tier ceiling:** 10K commands/day, 256 MB max — ample at v1 volume.
 
 *Related: plan.md §5.2, §8.3, §9*
 
@@ -544,191 +638,206 @@ curl -s -H "Authorization: Bearer $UPSTASH_TOKEN" "$UPSTASH_URL/ping"
 
 ## Section 10 — Vercel Project
 
-**~15 minutes**
+**~15 minutes** (browser-only — Vercel CLI requires interactive OAuth that doesn't fit copy-paste flow)
 
-1. Go to **vercel.com** → Add New Project → Import from GitHub
-2. Select repo `gaurav-gandhi-2411/agentic-travel-booking-system`
-3. Root directory: `apps/web`
-4. Framework preset: Next.js
-5. Node.js version: 20.x
-6. Leave build settings as default (Next.js auto-detected)
+**10.1** Go to **vercel.com/new** → **Import Git Repository**
+- Select `gaurav-gandhi-2411/agentic-travel-booking-system`
+- **Root Directory:** click Edit → type `apps/web` → confirm
+- **Framework Preset:** Next.js (auto-detected)
+- **Node.js Version:** 20.x
+- Leave build settings as default
 
-**Configure environment variables** (Vercel dashboard → Project Settings → Environment Variables):
+**10.2** Project Settings → **Environment Variables** — add these three variables:
 
 | Variable | Environment | Value |
 |---|---|---|
-| `NEXT_PUBLIC_API_BASE_URL` | Preview + Production | Staging URL for Preview; Prod URL for Production |
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Preview + Production | From Clerk (Section — not yet created; add placeholder) |
-| `CLERK_SECRET_KEY` | Preview + Production | From Clerk (add placeholder) |
+| `NEXT_PUBLIC_API_BASE_URL` | Preview | Paste `$STAGING_URL` |
+| `NEXT_PUBLIC_API_BASE_URL` | Production | Paste `$PROD_URL` |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Preview + Production | `PLACEHOLDER_CLERK_PUBLISHABLE_KEY` |
+| `CLERK_SECRET_KEY` | Preview + Production | `PLACEHOLDER_CLERK_SECRET_KEY` |
 
 ```bash
-# Get Cloud Run URLs to configure NEXT_PUBLIC_API_BASE_URL
-echo "Preview env NEXT_PUBLIC_API_BASE_URL = $STAGING_URL"
-echo "Production env NEXT_PUBLIC_API_BASE_URL = $PROD_URL"
+# Print values to copy-paste into the Vercel dashboard
+echo "NEXT_PUBLIC_API_BASE_URL (Preview)    = $STAGING_URL"
+echo "NEXT_PUBLIC_API_BASE_URL (Production) = $PROD_URL"
 ```
 
-**Two deployment environments:**
-- **Preview:** auto-deploys on every PR branch push. URL: `https://<branch>-<project>.vercel.app`
-- **Production:** auto-deploys on push to `main`. URL: configured custom domain (or `<project>.vercel.app`)
+**10.3** Trigger a preview deploy to verify the Vercel integration:
 
-**Trigger a preview deploy:**
-Create a trivial branch (`git checkout -b test-vercel && git push origin test-vercel`),
-open a PR, confirm Vercel posts a preview URL in the PR comments. Then close the PR.
+```bash
+git checkout -b chore/verify-vercel
+git commit --allow-empty -m "chore: trigger Vercel preview deploy verification"
+git push origin chore/verify-vercel
+gh pr create \
+  --title "chore: verify Vercel preview deploy" \
+  --body "Verification PR — close once the Vercel preview URL appears in PR checks." \
+  --repo="$GH_REPO_FULL"
+```
 
-**Verification:** Vercel dashboard shows deployment status green. Preview URL returns 404
-(expected — no Next.js pages yet until Phase 8) not 500.
+**Verification:** PR checks show a Vercel preview URL within ~2 minutes. Open the URL —
+expect a 404 (no Next.js pages until Phase 8), not a 5xx. Close the PR and delete the branch.
 
 *Related: plan.md §9, §16*
 
 ---
 
-## Section 11 — Anthropic API Key
+## Section 11 — Anthropic API
 
-**~10 minutes**
+**No action required.**
 
-1. Go to **console.anthropic.com** → API Keys → Create Key
-2. Name: `agentic-travel-dev`
-3. Copy the key (shown once)
+This project uses **no Anthropic API spend**. The `anthropic-api-key` placeholder created
+in Section 4 can remain as-is throughout development.
 
-```bash
-echo -n "sk-ant-xxx" | \
-  gcloud secrets versions add anthropic-api-key --data-file=- --project=$PROJECT_ID
-```
+LLM inference runs on OpenRouter free tier, Groq, and Ollama, selected by
+`LLM_ROUTING_PROFILE` (see ADR-0008). The `eval` profile — which routes to
+`claude-sonnet-4-6` via the Anthropic API — is reserved for **manual baseline
+benchmarks only** and is explicitly **off in CI and normal development** (ADR-0010).
 
-**Add credit:** Billing → Add credits → $20 recommended for development through Phase 6.
-At $0.03–$0.10/request with prompt caching, $20 covers 200–650 full end-to-end
-test requests.
+Dataset generation for fine-tuning uses the Claude.ai web interface (existing Pro/Max
+subscription), not the API. No API key is needed (ADR-0011).
 
-**Prompt caching:** enabled by default for system prompts longer than 1,024 tokens. The
-agent system prompts (Phase 3) will exceed this threshold. No configuration needed.
-
-**Verification:**
-```bash
-ANTHROPIC_KEY=$(gcloud secrets versions access latest --secret=anthropic-api-key --project=$PROJECT_ID)
-curl -s https://api.anthropic.com/v1/messages \
-  -H "x-api-key: $ANTHROPIC_KEY" \
-  -H "anthropic-version: 2023-06-01" \
-  -H "content-type: application/json" \
-  -d '{"model":"claude-haiku-4-5-20251001","max_tokens":16,"messages":[{"role":"user","content":"hi"}]}' | \
-  python3 -c "import sys,json; d=json.load(sys.stdin); print('OK:', d['content'][0]['text'])"
-```
-
-*Related: plan.md §9, §15*
+*Related: ADR-0008, ADR-0010, ADR-0011*
 
 ---
 
 ## Section 12 — Amadeus + Duffel Developer Accounts
 
-**~30 minutes (+ up to 24–48h for Duffel access approval)**
+**~20 minutes active** (+ up to 48h waiting for Duffel approval)
+
+> **If you haven't started the Duffel signup yet, do Section 12.2's browser step now
+> before Section 12.1.** Duffel can take 24–48 hours; Amadeus is instant.
 
 ### 12.1 Amadeus Self-Service
 
-1. Go to **developers.amadeus.com** → Create account → Verify email
-2. My Apps → New App → Name: `agentic-travel-dev`
-3. APIs to add: Flight Offers Search, Hotel List, Hotel Offers Search, Flight Offers Price, Flight Create Orders
-4. Copy **Client ID** and **Client Secret** (shown in app dashboard)
+**Browser:**
+- Go to **developers.amadeus.com** → Create account → Verify email
+- My Apps → **New App** → Name: `agentic-travel-dev`
+- APIs to add: Flight Offers Search, Hotel List, Hotel Offers Search, Flight Offers Price, Flight Create Orders
+- Copy **Client ID** and **Client Secret** from the app dashboard
 
-Free dev tier: 2,000 API transactions/month, sandbox only.
-
+**CLI:**
 ```bash
-echo -n "YOUR_AMADEUS_CLIENT_ID" | \
-  gcloud secrets versions add amadeus-client-id --data-file=- --project=$PROJECT_ID
+export AMADEUS_ID="YOUR_AMADEUS_CLIENT_ID"
+export AMADEUS_SECRET="YOUR_AMADEUS_CLIENT_SECRET"
 
-echo -n "YOUR_AMADEUS_CLIENT_SECRET" | \
-  gcloud secrets versions add amadeus-client-secret --data-file=- --project=$PROJECT_ID
+printf '%s' "$AMADEUS_ID" | \
+  gcloud secrets versions add amadeus-client-id \
+  --data-file=- --project="$PROJECT_ID"
+
+printf '%s' "$AMADEUS_SECRET" | \
+  gcloud secrets versions add amadeus-client-secret \
+  --data-file=- --project="$PROJECT_ID"
 ```
 
 **Verification:**
 ```bash
-# Get OAuth2 token
-AMADEUS_ID=$(gcloud secrets versions access latest --secret=amadeus-client-id --project=$PROJECT_ID)
-AMADEUS_SECRET=$(gcloud secrets versions access latest --secret=amadeus-client-secret --project=$PROJECT_ID)
+AMADEUS_ID_CHECK=$(gcloud secrets versions access latest \
+  --secret=amadeus-client-id --project="$PROJECT_ID")
+AMADEUS_SECRET_CHECK=$(gcloud secrets versions access latest \
+  --secret=amadeus-client-secret --project="$PROJECT_ID")
 
 TOKEN=$(curl -s -X POST "https://test.api.amadeus.com/v1/security/oauth2/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "grant_type=client_credentials&client_id=${AMADEUS_ID}&client_secret=${AMADEUS_SECRET}" | \
-  python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+  -d "grant_type=client_credentials&client_id=${AMADEUS_ID_CHECK}&client_secret=${AMADEUS_SECRET_CHECK}" \
+  | jq -r '.access_token')
 
-# Search flights: LHR → CDG, tomorrow
 DATE=$(date -d '+1 day' '+%Y-%m-%d' 2>/dev/null || date -v+1d '+%Y-%m-%d')
-curl -s "https://test.api.amadeus.com/v2/shopping/flight-offers?originLocationCode=LHR&destinationLocationCode=CDG&departureDate=${DATE}&adults=1&max=1" \
-  -H "Authorization: Bearer $TOKEN" | python3 -c "import sys,json; d=json.load(sys.stdin); print('OK: found', len(d.get('data',[])), 'flight(s)')"
+curl -s "https://test.api.amadeus.com/v2/shopping/flight-offers?\
+originLocationCode=LHR&destinationLocationCode=CDG\
+&departureDate=${DATE}&adults=1&max=1" \
+  -H "Authorization: Bearer $TOKEN" \
+  | jq '.data | length'
+# Expected: 1  (at least one flight result returned)
 ```
 
-> **Note for tenant onboarding:** each tenant must create their own Amadeus developer
-> account. We never share a single credential pool (ADR-0002, plan.md §8.4). The
-> tenant onboarding runbook (Phase 11) will document this step-by-step.
+> **Tenant onboarding note:** each tenant creates their own Amadeus developer account.
+> We never share a credential pool (ADR-0002, plan.md §8.4). Tenant onboarding runbook
+> (Phase 11) documents the step-by-step handoff.
 
 ### 12.2 Duffel
 
-1. Go to **duffel.com** → Create account → Verify email
-2. Dashboard → Access Keys → Create Key → Name: `agentic-travel-dev`
-3. Select **Test** environment
-4. Copy the API key (prefix `duffel_test_xxx`)
+> **⚠ 24–48h approval wait. Start this signup before everything else in the runbook.**
+> Duffel manually reviews developer access requests. If you already signed up, return here
+> to complete the CLI block once access is granted.
 
-> Duffel may require a short approval step for developer access. If access is not
-> immediate, proceed with Sections 13–15 and return here once approved.
+**Browser (do this first, before any other section):**
+- Go to **duffel.com** → Create account → Verify email
+- Dashboard → **Access Keys** → **Create Key**
+- Name: `agentic-travel-dev`, Environment: **Test**
+- Copy the API key (prefix `duffel_test_`)
 
+**CLI (once Duffel approves your access):**
 ```bash
-echo -n "duffel_test_xxx" | \
-  gcloud secrets versions add duffel-api-key --data-file=- --project=$PROJECT_ID
+export DUFFEL_KEY="duffel_test_xxxxxxxxxxxx"
+
+printf '%s' "$DUFFEL_KEY" | \
+  gcloud secrets versions add duffel-api-key \
+  --data-file=- --project="$PROJECT_ID"
 ```
 
 **Verification:**
 ```bash
-DUFFEL_KEY=$(gcloud secrets versions access latest --secret=duffel-api-key --project=$PROJECT_ID)
+DUFFEL_KEY_CHECK=$(gcloud secrets versions access latest \
+  --secret=duffel-api-key --project="$PROJECT_ID")
 curl -s "https://api.duffel.com/air/airports?iata_country_code=GB" \
-  -H "Authorization: Bearer $DUFFEL_KEY" \
-  -H "Duffel-Version: v2" | \
-  python3 -c "import sys,json; d=json.load(sys.stdin); print('OK:', d['meta']['total'], 'airports')"
+  -H "Authorization: Bearer $DUFFEL_KEY_CHECK" \
+  -H "Duffel-Version: v2" \
+  | jq '.meta.total'
+# Expected: a non-zero integer (count of UK airports in Duffel's dataset)
 ```
 
-*Related: ADR-0002, ADR-0003, plan.md §8.4, §9, docs/backlog.md (tenant Amadeus onboarding)*
+*Related: ADR-0002, ADR-0003, plan.md §8.4, §9, docs/backlog.md*
 
 ---
 
 ## Section 13 — GitHub Actions Secrets and Variables
 
-**~10 minutes**
+**~5 minutes** (fully CLI)
 
 ```bash
-# Ensure you have the values from earlier sections:
-echo "WIF_PROVIDER = $WIF_PROVIDER"
+# Confirm all required values are in scope
+echo "WIF_PROVIDER        = $WIF_PROVIDER"
 echo "WIF_SERVICE_ACCOUNT = $SA_EMAIL"
-echo "GCP_PROJECT_ID = $PROJECT_ID"
-echo "CLOUD_RUN_REGION = $REGION"
+echo "GCP_PROJECT_ID      = $PROJECT_ID"
+echo "CLOUD_RUN_REGION    = $REGION"
+echo "AR_REPO             = $AR_REPO"
+echo "AR_HOST             = $AR_HOST"
 
-# Add repository secrets (sensitive — not visible after creation)
+# 2 repository secrets (sensitive — value hidden after creation)
 gh secret set WIF_PROVIDER \
   --body="$WIF_PROVIDER" \
-  --repo=$GITHUB_REPO
+  --repo="$GH_REPO_FULL"
 
 gh secret set WIF_SERVICE_ACCOUNT \
   --body="$SA_EMAIL" \
-  --repo=$GITHUB_REPO
+  --repo="$GH_REPO_FULL"
 
-# Add repository variables (visible in Actions UI, not sensitive)
+# 4 repository variables (visible in Actions UI, not sensitive)
 gh variable set GCP_PROJECT_ID \
   --body="$PROJECT_ID" \
-  --repo=$GITHUB_REPO
+  --repo="$GH_REPO_FULL"
 
 gh variable set CLOUD_RUN_REGION \
   --body="$REGION" \
-  --repo=$GITHUB_REPO
+  --repo="$GH_REPO_FULL"
 
 gh variable set ARTIFACT_REGISTRY_REPO \
   --body="$AR_REPO" \
-  --repo=$GITHUB_REPO
+  --repo="$GH_REPO_FULL"
+
+gh variable set ARTIFACT_REGISTRY_HOST \
+  --body="$AR_HOST" \
+  --repo="$GH_REPO_FULL"
 ```
 
 **Verification:**
 ```bash
-gh secret list --repo=$GITHUB_REPO
-gh variable list --repo=$GITHUB_REPO
+echo "=== Secrets ===" && gh secret list --repo="$GH_REPO_FULL"
+echo "=== Variables ===" && gh variable list --repo="$GH_REPO_FULL"
 ```
 
 Expected secrets: `WIF_PROVIDER`, `WIF_SERVICE_ACCOUNT`
-Expected variables: `GCP_PROJECT_ID`, `CLOUD_RUN_REGION`, `ARTIFACT_REGISTRY_REPO`
+Expected variables: `GCP_PROJECT_ID`, `CLOUD_RUN_REGION`, `ARTIFACT_REGISTRY_REPO`, `ARTIFACT_REGISTRY_HOST`
 
 *Related: plan.md §16*
 
@@ -738,85 +847,116 @@ Expected variables: `GCP_PROJECT_ID`, `CLOUD_RUN_REGION`, `ARTIFACT_REGISTRY_REP
 
 **~5 minutes**
 
-Both deploy workflows are gated with `if: ${{ false }}` at the job level (commit 22).
-Remove this gate once all secrets and variables from Section 13 are in place.
+Both deploy workflows are gated with `if: ${{ false }}` (commit 22). Remove the gate
+now that all secrets and variables are in place.
 
 ```bash
-# In your local repo:
+# Remove the disabling gate from both workflows
+sed -i '/if: \${{ false }}.*Stage 0\.4/d' \
+  .github/workflows/deploy-staging.yml \
+  .github/workflows/deploy-prod.yml
+
+# Verify the lines are gone (should print nothing)
+grep -n 'if: \${{ false }}' \
+  .github/workflows/deploy-staging.yml \
+  .github/workflows/deploy-prod.yml \
+  && echo "ERROR: gate line still present — check file manually" \
+  || echo "OK: gate removed from both files"
+
+# Commit via PR — do not push directly to main
 git checkout -b chore/enable-deploy-workflows
-
-# Edit .github/workflows/deploy-staging.yml:
-# Remove the line: if: ${{ false }}  # Disabled until Stage 0.4 GCP provisioning is complete.
-
-# Edit .github/workflows/deploy-prod.yml:
-# Remove the same line.
-
-# Commit and push
 git add .github/workflows/deploy-staging.yml .github/workflows/deploy-prod.yml
 git commit -m "chore: enable Cloud Run deploy workflows post-Stage-0.4 provisioning"
 git push origin chore/enable-deploy-workflows
-# Open PR, merge to main.
+
+gh pr create \
+  --title "chore: enable Cloud Run deploy workflows" \
+  --body "Removes the if-false gate. All Stage 0.4 secrets and variables are in place." \
+  --repo="$GH_REPO_FULL"
 ```
 
-> This is the one commit in this runbook that goes through the normal PR process.
-> Do not push directly to main.
+> **Merge the PR before running Section 15.** The merge to main triggers the first real
+> staging deploy.
 
 ---
 
-## Section 15 — End-to-End Validation
+## Section 15 — End-to-End Smoke Test
 
-**~15 minutes**
+**~15 minutes** (fully CLI — run after Section 14 PR is merged)
 
 ```bash
-# 15.1 Trigger a staging deploy by pushing a trivial commit to main
-echo "# runbook validation $(date)" >> docs/runbooks/cloud-setup.md
-git add docs/runbooks/cloud-setup.md
-git commit -m "chore: runbook validation trigger"
-git push origin main
+# 15.1 List recent workflow runs and watch the staging deploy
+gh run list --repo="$GH_REPO_FULL" --limit=5
+gh run watch --repo="$GH_REPO_FULL"
+# Select the most recent run when prompted.
+# Expected: all jobs green (build, push, deploy-staging).
 
-# 15.2 Watch the deploy-staging workflow
-gh run watch --repo=$GITHUB_REPO
-
-# 15.3 Confirm the Cloud Run revision updated
+# 15.2 Confirm the Cloud Run revision updated (should show app image, not hello-world)
 gcloud run revisions list \
-  --service=agentic-travel-booking-api-staging \
-  --region=$REGION \
-  --project=$PROJECT_ID
+  --service="$STAGING_SERVICE" \
+  --region="$REGION" \
+  --project="$PROJECT_ID" \
+  --format="table(metadata.name,status.conditions[0].status,spec.containers[0].image)" \
+  --limit=3
+# Expected: latest revision ACTIVE with your app image (not gcr.io/cloudrun/hello)
 
-# 15.4 Smoke test staging (will 404 until Phase 1 ships the API, but must return 404 not 5xx)
-STAGING_URL=$(gcloud run services describe agentic-travel-booking-api-staging \
-  --region=$REGION --project=$PROJECT_ID --format='value(status.url)')
-STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$STAGING_URL/health")
-echo "Health endpoint status: $STATUS"
-# 404 = expected (no app yet). 200 = Phase 1 is live. 5xx = investigate.
+# 15.3 Smoke test the staging URL
+STAGING_URL=$(gcloud run services describe "$STAGING_SERVICE" \
+  --region="$REGION" --project="$PROJECT_ID" --format="value(status.url)")
 
-# 15.5 Confirm Neon is reachable from the scheduled cron
-gcloud scheduler jobs run neon-keepalive --location=$REGION --project=$PROJECT_ID
-# Check logs: Cloud Logging -> Logs Explorer -> resource type: Cloud Scheduler Job
+STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${STAGING_URL}/health")
+echo "Health endpoint HTTP status: $STATUS"
+# 404 = expected (Phase 1 /health not yet implemented)
+# 200 = Phase 1 is live
+# 5xx = investigate Cloud Run logs
 
-# 15.6 Confirm Vercel preview deployed
-gh pr list --repo=$GITHUB_REPO
-# Any open PRs should have a Vercel preview URL in the PR checks.
+# 15.4 Confirm the Cloud Scheduler hit the service
+gcloud scheduler jobs run neon-keepalive \
+  --location="$REGION" --project="$PROJECT_ID"
+echo "Scheduler trigger fired — 404 from /health is expected until Phase 1"
+
+# 15.5 Tail Cloud Run logs to confirm the request arrived
+gcloud logging read \
+  "resource.type=cloud_run_revision \
+   resource.labels.service_name=${STAGING_SERVICE} \
+   httpRequest.status=404" \
+  --project="$PROJECT_ID" \
+  --limit=5 \
+  --format="table(timestamp,httpRequest.status,httpRequest.requestUrl)"
+# Expected: one entry with status=404 and requestUrl ending in /health
 ```
 
-**All green:** CI passing on main, deploy-staging fired and updated the Cloud Run revision,
-staging URL returns non-5xx, Neon scheduler job ran without GCP error, Vercel preview
-deploys on PRs. You are ready to authorize Phase 1.
+**All green checklist:**
+- [ ] `gh run watch` completed with all jobs green
+- [ ] Latest Cloud Run revision shows the app image (not `gcr.io/cloudrun/hello`)
+- [ ] `curl /health` returns 404 (or 200 if Phase 1 merged), not 5xx
+- [ ] Scheduler job trigger exits 0; 404 log entry visible
+- [ ] Vercel preview URL appears in open PR checks
+
+**You are ready to authorize Phase 1.**
 
 ---
 
-## Appendix — Cleaning Up (if you need to start over)
+## Appendix — Clean Up (Start Over)
 
 ```bash
-# Delete all GCP resources (destructive — use only to reset)
-gcloud projects delete $PROJECT_ID
-# Neon: neon.tech dashboard -> Project Settings -> Delete project
-# Upstash: upstash.com dashboard -> Database -> Delete
-# Vercel: vercel.com -> Project Settings -> Delete Project
-# GitHub secrets: gh secret remove WIF_PROVIDER --repo=$GITHUB_REPO (etc.)
+# Delete all GCP resources (destructive — resets the entire project)
+gcloud projects delete "$PROJECT_ID"
+
+# Remove GitHub secrets and variables
+gh secret remove WIF_PROVIDER           --repo="$GH_REPO_FULL"
+gh secret remove WIF_SERVICE_ACCOUNT    --repo="$GH_REPO_FULL"
+gh variable remove GCP_PROJECT_ID       --repo="$GH_REPO_FULL"
+gh variable remove CLOUD_RUN_REGION     --repo="$GH_REPO_FULL"
+gh variable remove ARTIFACT_REGISTRY_REPO --repo="$GH_REPO_FULL"
+gh variable remove ARTIFACT_REGISTRY_HOST --repo="$GH_REPO_FULL"
+
+# Neon: neon.tech dashboard → Project Settings → Delete Project
+# Upstash: upstash.com → Database → Delete
+# Vercel: vercel.com → Project Settings → Delete Project
 ```
 
 ---
 
 *This runbook covers plan.md Phase 0 (§11) external provisioning requirements.
-Once complete, authorize Phase 1 (Provider Adapters + Search) per plan.md §11.*
+Once Section 15 is green, authorize Phase 1 (Provider Adapters + Search) per plan.md §11.*
