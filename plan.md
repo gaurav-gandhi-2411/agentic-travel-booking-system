@@ -483,6 +483,7 @@ agentic-travel-booking-system/
 - Upstash Redis provisioned.
 - CI: lint, type-check, unit tests, smoke deploy to staging.
 - ADRs 0001–0012 written.
+- Minimum FastAPI module and Dockerfile sufficient for staging-deploy workflow verification (Stage 0.4 end). Real API surface in Phase 1.
 
 ### Phase 0.5 — Marketing Frontend MVP (3–5 days, gating dependency)
 - Minimal Next.js site deployed to Vercel: landing page, "how it works", contact/waitlist form.
@@ -491,6 +492,9 @@ agentic-travel-booking-system/
 - This phase gates real hotel data in Phase 1 and beyond. Calendar gating: Phase 1 starts in parallel; hotel providers become available as approvals land.
 
 ### Phase 1 — Provider Adapters + Search (Week 2)
+
+Phase 1 starts from the Phase 0 baseline: an empty travel_agent package, a minimum main.py with one /health endpoint, and a working Dockerfile. The first Phase 1 commit expands the API surface beyond this baseline.
+
 - `FlightProvider` and `HotelProvider` Protocols.
 - Travelpayouts Aviasales Data API adapter (`aviasales/flight.py`).
 - `SyntheticFlightProvider` and `SyntheticHotelProvider` with bundled realism data (ADR-0014).
