@@ -204,8 +204,10 @@ gcloud iam service-accounts create "$DEPLOYER_SA" \
   --project="$PROJECT_ID"
 
 # 2.2 Grant project-level roles in a single auditable loop
+# roles/run.developer (not run.admin): CI needs to deploy revisions and shift traffic;
+# it does not need to delete services or modify their IAM. Least-privilege per ADR posture.
 ROLES=(
-  roles/run.admin
+  roles/run.developer
   roles/artifactregistry.writer
   roles/secretmanager.viewer
 )
