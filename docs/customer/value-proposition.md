@@ -1,4 +1,4 @@
-# DealHunter — Value Proposition
+# Agentic Travel Booking System — Value Proposition
 
 **Audience:** Platform engineering leads evaluating the agent layer
 
@@ -6,7 +6,7 @@
 
 ## What we are
 
-DealHunter is a multi-agent reasoning layer that sits in front of your existing travel
+We are a multi-agent reasoning layer that sits in front of your existing travel
 inventory. You provide flights and hotels via the adapter pattern; we provide the agent
 that turns a natural-language query into a ranked, explained recommendation — and refines
 it conversationally across multiple turns.
@@ -19,7 +19,7 @@ We are not an aggregator. You already have inventory. What you don't have is the
 
 ### 1. Window optimization that beats cheapest-first
 
-DealHunter identifies the best 7-day travel window across a 30-day horizon using a
+We identify the best 7-day travel window across a 30-day horizon using a
 hierarchical sampling algorithm. Stage 1 sweeps 8 candidate windows with lightweight
 provider calls; Stage 2 drills into the top 3; the Pareto frontier extracts two archetype
 winners — best-value and best-experience — with natural-language explanations. Returning
