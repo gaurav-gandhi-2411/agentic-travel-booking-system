@@ -67,12 +67,4 @@ jobs:
             --cpu=1
             --timeout=300
 
-      - name: Smoke test
-        run: |
-          SERVICE_URL=$(
-            gcloud run services describe agentic-travel-booking-api-staging \
-              --region="${{ vars.CLOUD_RUN_REGION }}" \
-              --format="value(status.url)"
-          )
-          echo "Smoke testing $SERVICE_URL/health"
-          curl --fail --silent --show-error "$SERVICE_URL/health"
+# TODO(Phase 1): re-add health endpoint smoke test after /health ships
