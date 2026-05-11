@@ -17,9 +17,7 @@ on:
 jobs:
   deploy-staging:
     name: Deploy to Cloud Run (staging)
-    # Disabled until Stage 0.4 GCP provisioning is complete.
-    # Remove this line and populate the secrets/vars above to enable.
-    if: ${{ false }}
+
     runs-on: ubuntu-latest
     environment: staging
     permissions:

@@ -16,9 +16,7 @@ on:
 jobs:
   deploy-prod:
     name: Deploy to Cloud Run (production)
-    # Disabled until Stage 0.4 GCP provisioning is complete.
-    # Remove this line and populate the secrets/vars above to enable.
-    if: ${{ false }}
+
     runs-on: ubuntu-latest
     environment: production
     permissions:
