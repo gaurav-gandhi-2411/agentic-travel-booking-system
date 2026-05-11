@@ -5,14 +5,33 @@ import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"] });
 
+const DESCRIPTION =
+  "The reasoning layer for travel platforms. Multi-agent window optimization, two-archetype ranking, and conversational refinement — built as a B2B SDK.";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(
+    process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : "http://localhost:3000",
+  ),
   title: "Agentic Travel Booking System",
-  description:
-    "The reasoning layer for travel platforms. Multi-agent window optimization, two-archetype ranking, and conversational refinement — built as a B2B SDK.",
+  description: DESCRIPTION,
+  openGraph: {
+    title: "Agentic Travel Booking System",
+    description: DESCRIPTION,
+    type: "website",
+    siteName: "Agentic Travel Booking System",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Agentic Travel Booking System",
+    description: DESCRIPTION,
+  },
 };
 
 const GITHUB_URL =
   "https://github.com/gaurav-gandhi-2411/agentic-travel-booking-system";
+const CONTACT_EMAIL = "gaurav.gandhi.2411@gmail.com";
 
 export default function RootLayout({
   children,
@@ -52,13 +71,18 @@ export default function RootLayout({
         <main className="flex-1">{children}</main>
 
         <footer className="border-t border-border/60 bg-background">
-          <div className="mx-auto max-w-5xl px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
-            <p>© {new Date().getFullYear()} Gaurav Gandhi. Building in public.</p>
-            <nav className="flex items-center gap-6">
-              <Link
-                href="/about"
+          <div className="mx-auto max-w-5xl px-6 py-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-sm text-muted-foreground">
+            <div className="flex flex-col gap-1">
+              <p>© {new Date().getFullYear()} Gaurav Gandhi. Building in public.</p>
+              <a
+                href={`mailto:${CONTACT_EMAIL}`}
                 className="hover:text-foreground transition-colors"
               >
+                {CONTACT_EMAIL}
+              </a>
+            </div>
+            <nav className="flex items-center gap-6">
+              <Link href="/about" className="hover:text-foreground transition-colors">
                 About
               </Link>
               <a
@@ -69,16 +93,10 @@ export default function RootLayout({
               >
                 GitHub
               </a>
-              <Link
-                href="/privacy"
-                className="hover:text-foreground transition-colors"
-              >
+              <Link href="/privacy" className="hover:text-foreground transition-colors">
                 Privacy
               </Link>
-              <Link
-                href="/terms"
-                className="hover:text-foreground transition-colors"
-              >
+              <Link href="/terms" className="hover:text-foreground transition-colors">
                 Terms
               </Link>
             </nav>
