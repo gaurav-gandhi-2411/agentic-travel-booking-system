@@ -4,6 +4,17 @@ Items deferred from current phase scope. Each entry notes the originating phase 
 
 ---
 
+## Phase 1 follow-ups
+
+- **Re-add `/health` smoke test to both deploy workflows**
+  `deploy-staging.yml` and `deploy-prod.yml` both have a `# TODO(Phase 1)` marker where
+  the `curl --fail $SERVICE_URL/health` step was removed during Stage 0.4 provisioning
+  (the endpoint didn't exist yet). Once Phase 1 ships the `/health` endpoint that issues
+  `SELECT 1`, re-add the step to each workflow so deploy CI verifies the service is
+  actually serving before the run turns green. _(Flagged Stage 0.4.)_
+
+---
+
 ## Provider milestones
 
 - **Booking.com affiliate program — re-apply after Phase 0.5 ships**
