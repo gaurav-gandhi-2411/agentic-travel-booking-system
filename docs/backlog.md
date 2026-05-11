@@ -99,6 +99,18 @@ Items deferred from current phase scope. Each entry notes the originating phase 
 
 ---
 
+## Phase 11.5 (Technical Report)
+
+- **About page: tighten "the agent handles..." sentence**
+  `apps/web/app/(marketing)/about/page.tsx` currently reads "the agent handles window
+  search, scoring, ranking, explanation, and refinement routing." Those capabilities are
+  architected, not all built at time of writing. Surrounding context ("adapter pattern",
+  "targets fine-tuned models") disambiguates sufficiently for the marketing site, but the
+  wording should be tightened when the technical report is drafted to reflect actual
+  shipped vs. designed capabilities accurately. _(Flagged Phase 0.5-D.)_
+
+---
+
 ## Resolved / In-scope
 
 - ~~**Neon cold-start mitigation**~~ → Handled in Stage 0.4 cloud-setup runbook via Cloud

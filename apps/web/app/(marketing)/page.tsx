@@ -87,7 +87,7 @@ export default function HomePage() {
                   <p className="text-sm text-muted-foreground leading-relaxed">
                     {description}
                   </p>
-                  <p className="text-xs text-muted-foreground/60 mt-auto pt-3 border-t border-border/50">
+                  <p className="text-xs text-muted-foreground mt-auto pt-3 border-t border-border/50">
                     {status}
                   </p>
                 </CardContent>
@@ -113,7 +113,7 @@ export default function HomePage() {
               not marketing claims. Agents that don&apos;t reach threshold ship on the 70B
               fallback — documented, not hidden.
             </p>
-            <p className="text-sm text-muted-foreground/70 leading-relaxed">
+            <p className="text-sm text-muted-foreground leading-relaxed">
               Fine-tuning begins in Phase 6.6, after the eval harness and baseline
               benchmarks are in place. LoRA adapters and a 20% eval sample will publish
               to Hugging Face under open licenses (CC-BY-NC-4.0 and CC-BY-4.0).
@@ -136,7 +136,7 @@ export default function HomePage() {
               for training. Two CI modes: a 20-example quick check on every PR, and a
               full nightly run on main. Regression threshold is a 2% drop on any metric.
             </p>
-            <p className="text-sm text-muted-foreground/70 leading-relaxed">
+            <p className="text-sm text-muted-foreground leading-relaxed">
               Baseline benchmarks due in Phase 3.5. When adapters publish,{" "}
               <code className="text-xs bg-muted px-1 py-0.5 rounded font-mono">
                 make eval
