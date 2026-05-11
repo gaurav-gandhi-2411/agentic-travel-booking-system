@@ -801,20 +801,33 @@ Expected variables: `GCP_PROJECT_ID`, `CLOUD_RUN_REGION`, `ARTIFACT_REGISTRY_REP
 Both deploy workflows are gated with `if: ${{ false }}` (commit 22). Remove the gate
 now that all secrets and variables are in place.
 
-```bash
-# Remove the disabling gate from both workflows
-sed -i '/if: \${{ false }}.*Stage 0\.4/d' \
-  .github/workflows/deploy-staging.yml \
-  .github/workflows/deploy-prod.yml
+In each workflow file, remove this exact 3-line block (the `if:` gate line and the two
+stale comments above it that explain the gate):
 
-# Verify the lines are gone (should print nothing)
+```yaml
+    # Disabled until Stage 0.4 GCP provisioning is complete.
+    # Remove this line and populate the secrets/vars above to enable.
+    if: ${{ false }}
+```
+
+The block appears in `jobs.<job_id>:` in both files, just above `runs-on:`. Remove all
+three lines. Do **not** use a sed one-liner — the `if:` line and the `Stage 0.4` comment
+are on separate lines; a single-line regex will silently match nothing and leave the gate
+in place.
+
+After editing both files, verify with grep before committing:
+
+```bash
 grep -n 'if: \${{ false }}' \
   .github/workflows/deploy-staging.yml \
   .github/workflows/deploy-prod.yml \
   && echo "ERROR: gate line still present — check file manually" \
   || echo "OK: gate removed from both files"
+```
 
-# Commit via PR — do not push directly to main
+Then commit via PR — do not push directly to main:
+
+```bash
 git checkout -b chore/enable-deploy-workflows
 git add .github/workflows/deploy-staging.yml .github/workflows/deploy-prod.yml
 git commit -m "chore: enable Cloud Run deploy workflows post-Stage-0.4 provisioning"
