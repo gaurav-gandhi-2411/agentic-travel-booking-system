@@ -84,3 +84,65 @@ Format: date | unit | summary | files touched | test delta | deferred followups.
 **Coverage:** 85% → 93% (74 tests, all passing)
 
 **Deferred followups:** see docs/followups.md
+
+---
+
+## 2026-05-14 | Unit 3 — Hotfix: _openai_compat tools path
+
+**Summary**
+Covered the tool-call branch in `llm/_openai_compat.py` (lines 41-42) that was
+untested after Unit 2.  One VCR cassette added per OpenAI-compatible adapter.
+
+**Files touched:** 6
+- `apps/api/tests/fixtures/cassettes/{ollama,openrouter,groq,vllm}/chat_tool_call.yaml` (4 new)
+- `apps/api/tests/unit/llm/test_adapters.py` (4 new tests)
+- `docs/followups.md` (Unit 3 deferred items)
+
+**Test delta:** +4 test cases (tools path for Ollama/OpenRouter/Groq/vLLM)
+**Coverage:** 93.40% (78 tests, all passing)
+
+---
+
+## 2026-05-14 | Unit 3 — Phase B: Synthetic Provider + Coordinator Skeleton
+
+**Summary**
+Full Phase B implementation: coordinator config, synthetic data layer, agent
+stubs, coordinator skeleton, and ADR-0013 statistical property tests.
+
+Key design decisions:
+- `config/coordinator.yaml` is the single source of truth for call_budget, window
+  search, and destination city mapping.  `coordinator/constants.py` loads it once
+  via `lru_cache` and exports typed module-level constants; `CallBudget` defaults
+  now reference these constants (not hardcoded literals).
+- Synthetic flight data: 30 templates (10 per route: BOM-CDG, BOM-NRT, BOM-DPS),
+  bimodal LCC/premium price clusters with >=15k INR gap zone on every route.
+  Real IATA codes, real airline codes, realistic durations.
+- Synthetic hotel data: 20 templates (Paris 8, Tokyo 7, Bali 5).  Star distribution
+  skewed 3-star-heavy (10/20).  Three anomalous hotels: Budget Palace Montmartre
+  (overpriced 3-star), Le Petit Bijou (underpriced 4-star at INR 4,200 -- cheaper
+  than most 3-star), Tokyo Central Hostel Business (review_score 6.2, Shinjuku
+  location).
+- Coordinator uses asyncio.gather for parallel FlightHunterAgent + HotelHunterAgent;
+  each agent receives state.model_copy(deep=True) to prevent mutation races; results
+  merged back into a fresh copy.
+- ADR-0013 tests cannot skip: bimodal gap, cluster counts, star skew, all three weird
+  hotels, determinism, different windows produce distinct IDs.
+
+**Files touched:** 17
+- `apps/api/config/coordinator.yaml` (new)
+- `apps/api/src/travel_agent/coordinator/constants.py` (new)
+- `apps/api/src/travel_agent/coordinator/state.py` (CallBudget defaults from constants)
+- `apps/api/src/travel_agent/coordinator/coordinator.py` (new)
+- `apps/api/src/travel_agent/providers/data/flights.json` (new -- 30 templates)
+- `apps/api/src/travel_agent/providers/data/hotels.json` (new -- 20 templates)
+- `apps/api/src/travel_agent/providers/synthetic.py` (new)
+- `apps/api/src/travel_agent/agents/base.py` (new -- Agent Protocol)
+- `apps/api/src/travel_agent/agents/{planner,flight_hunter,hotel_hunter,optimizer,booking,conversation}.py` (new)
+- `apps/api/tests/unit/providers/__init__.py` (new)
+- `apps/api/tests/unit/providers/test_synthetic.py` (new -- ADR-0013 tests)
+- `apps/api/tests/unit/coordinator/test_coordinator.py` (new)
+
+**Test delta:** +2 test files, +40 new test cases (21 provider + 19 coordinator)
+**Coverage:** 89.91% (118 tests, all passing)
+
+**Deferred followups:** see docs/followups.md
