@@ -10,6 +10,10 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+import structlog
+
+_logger = structlog.get_logger(__name__)
+
 
 def pareto_frontier[T](
     options: list[T],
@@ -50,4 +54,6 @@ def pareto_frontier[T](
             ]
             frontier.append((sa, sb, opt))
 
-    return [opt for _, _, opt in frontier]
+    result = [opt for _, _, opt in frontier]
+    _logger.debug("pareto_frontier", input_size=len(options), frontier_size=len(result))
+    return result

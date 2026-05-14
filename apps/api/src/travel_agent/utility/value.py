@@ -18,7 +18,7 @@ from travel_agent.coordinator.state import FlightOption
 # Price reference for normalisation: roughly the 99th-pctile expected price
 # for BOM international routes in INR. Scores saturate gracefully above this.
 _PRICE_REF_INR = 200_000
-_LAYOVER_PENALTY = 0.08  # per stop
+_LAYOVER_PENALTY = 0.10  # per stop
 _RED_EYE_PENALTY = 0.05  # for 00-05 departure hour
 _RED_EYE_HOUR_END = 5
 

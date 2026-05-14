@@ -68,7 +68,7 @@ class AviasalesAdapter:
         return_at: str | None = None,
         currency: str = "inr",
         sorting: str = "price",
-        limit: int = 30,
+        limit: int = 100,
     ) -> list[dict[str, Any]]:
         """Search for flights. Returns a list of raw flight dicts."""
         params: dict[str, str | int] = {

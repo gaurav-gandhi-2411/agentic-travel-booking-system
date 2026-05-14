@@ -41,12 +41,14 @@ def _make_intent(
     origin: str = "BOM",
     destination: str = "CDG",
     cabin: CabinClass = CabinClass.ECONOMY,
+    earliest: date = date(2026, 6, 1),
+    latest: date = date(2026, 6, 8),
 ) -> TravelIntent:
     return TravelIntent(
         origin_iata=origin,
         destination_iata=destination,
-        earliest_departure=date(2026, 6, 1),
-        latest_departure=date(2026, 6, 8),
+        earliest_departure=earliest,
+        latest_departure=latest,
         cabin_class=cabin,
         trip_type=TripType.ROUND_TRIP,
         raw_query="fly from Mumbai to Paris next month",
@@ -132,7 +134,7 @@ async def test_uses_adapter_when_injected() -> None:
     agent = FlightHunterAgent(adapter=adapter)
     state = _make_state()
     result = await agent.run(state)
-    adapter.get_flights.assert_called_once_with("BOM", "CDG", "2026-06-01")
+    adapter.get_flights.assert_called_once_with("BOM", "CDG", "2026-06")
     assert len(result.flight_options) == 1
 
 
@@ -159,14 +161,18 @@ async def test_falls_back_to_synthetic_without_adapter() -> None:
     assert all(opt.provider == "synthetic" for opt in result.flight_options)
 
 
-async def test_tracks_call_count_per_window() -> None:
+async def test_tracks_call_count_per_month() -> None:
     adapter = _mock_adapter([_RAW_FLIGHT])
     agent = FlightHunterAgent(adapter=adapter)
+    # Span two calendar months so two API calls are issued
     windows = [
-        Window(start_date=date(2026, 6, 1), end_date=date(2026, 6, 7)),
-        Window(start_date=date(2026, 6, 2), end_date=date(2026, 6, 8)),
+        Window(start_date=date(2026, 6, 15), end_date=date(2026, 6, 21)),
+        Window(start_date=date(2026, 7, 1), end_date=date(2026, 7, 15)),
     ]
-    state = _make_state(windows=windows)
+    state = _make_state(
+        intent=_make_intent(earliest=date(2026, 6, 15), latest=date(2026, 7, 15)),
+        windows=windows,
+    )
     result = await agent.run(state)
     assert result.call_budget.flight_calls_used == 2
 
@@ -174,14 +180,18 @@ async def test_tracks_call_count_per_window() -> None:
 async def test_respects_flight_call_budget() -> None:
     adapter = _mock_adapter([_RAW_FLIGHT])
     agent = FlightHunterAgent(adapter=adapter)
+    # Span two calendar months; budget allows only 1 more call (max=10, used=9)
     windows = [
-        Window(start_date=date(2026, 6, d), end_date=date(2026, 6, d + 6))
-        for d in range(1, 4)
+        Window(start_date=date(2026, 6, 15), end_date=date(2026, 6, 21)),
+        Window(start_date=date(2026, 7, 1), end_date=date(2026, 7, 15)),
     ]
-    state = _make_state(windows=windows, budget_overrides={"flight_calls_used": 149})
+    state = _make_state(
+        intent=_make_intent(earliest=date(2026, 6, 15), latest=date(2026, 7, 15)),
+        windows=windows,
+        budget_overrides={"flight_calls_used": 9},
+    )
     result = await agent.run(state)
-    # budget allows only 1 more call (150 max - 149 used = 1 remaining)
-    assert result.call_budget.flight_calls_used == 150
+    assert result.call_budget.flight_calls_used == 10
     assert result.is_partial is True
 
 
@@ -202,17 +212,20 @@ async def test_no_windows_returns_unchanged() -> None:
     assert result.flight_options == []
 
 
-async def test_multiple_windows_accumulate_flights() -> None:
-    raw_a = {**_RAW_FLIGHT, "departure_at": "2026-06-01T02:30:00+05:30"}
-    raw_b = {**_RAW_FLIGHT, "departure_at": "2026-06-02T02:30:00+05:30"}
+async def test_multiple_months_accumulate_flights() -> None:
+    raw_a = {**_RAW_FLIGHT, "departure_at": "2026-06-15T02:30:00+05:30"}
+    raw_b = {**_RAW_FLIGHT, "departure_at": "2026-07-01T02:30:00+05:30"}
     adapter = MagicMock()
     adapter.get_flights = AsyncMock(side_effect=[[raw_a], [raw_b]])
     agent = FlightHunterAgent(adapter=adapter)
     windows = [
-        Window(start_date=date(2026, 6, 1), end_date=date(2026, 6, 7)),
-        Window(start_date=date(2026, 6, 2), end_date=date(2026, 6, 8)),
+        Window(start_date=date(2026, 6, 15), end_date=date(2026, 6, 21)),
+        Window(start_date=date(2026, 7, 1), end_date=date(2026, 7, 7)),
     ]
-    state = _make_state(windows=windows)
+    state = _make_state(
+        intent=_make_intent(earliest=date(2026, 6, 15), latest=date(2026, 7, 15)),
+        windows=windows,
+    )
     result = await agent.run(state)
     assert len(result.flight_options) == 2
 

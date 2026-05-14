@@ -1,12 +1,16 @@
 call_budget:
-  flight_calls_max: 150
+  # Month-granularity Aviasales calls: at most 2 months per 30-day horizon.
+  # 10 provides generous retry headroom.
+  flight_calls_max: 10
   hotel_calls_max: 100
   llm_calls_max: 20
 
 window_search:
   horizon_days: 30
   window_size_days: 7
-  max_windows: 10
+  # max_windows bounds post-filter scoring buckets, not API calls.
+  # 5 buckets cover a 35-day horizon; 12 gives headroom for wider searches.
+  max_windows: 12
 
 destination_cities:
   CDG: Paris

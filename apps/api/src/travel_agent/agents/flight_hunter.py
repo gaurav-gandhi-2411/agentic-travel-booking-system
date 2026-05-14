@@ -1,16 +1,46 @@
 """FlightHunterAgent — searches for flights across candidate windows.
 
-Uses AviasalesAdapter when injected; falls back to SyntheticProvider for
-development / tests that do not configure a live API key.
+Uses AviasalesAdapter when injected (month-granularity calls + Python date filter);
+falls back to SyntheticProvider for development / tests that do not configure a live
+API key.
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from travel_agent.coordinator.state import CabinClass, FlightOption, RequestState, Window
 from travel_agent.providers.aviasales import AviasalesAdapter
 from travel_agent.providers.synthetic import SyntheticProvider
+
+_DECEMBER = 12
+
+
+def _months_in_range(start: date, end: date) -> list[str]:
+    """Return 'YYYY-MM' strings for all calendar months overlapping [start, end]."""
+    months: list[str] = []
+    current = date(start.year, start.month, 1)
+    end_month = date(end.year, end.month, 1)
+    while current <= end_month:
+        months.append(current.strftime("%Y-%m"))
+        if current.month == _DECEMBER:
+            current = date(current.year + 1, 1, 1)
+        else:
+            current = date(current.year, current.month + 1, 1)
+    return months
+
+
+def _date_from_raw(raw: dict[str, Any]) -> date:
+    """Extract departure date from a raw Aviasales response dict."""
+    return date.fromisoformat(str(raw["departure_at"])[:10])
+
+
+def _assign_window(departure: date, windows: list[Window]) -> Window:
+    """Return the window whose date range contains *departure*, or the last window."""
+    for window in windows:
+        if window.start_date <= departure <= window.end_date:
+            return window
+    return windows[-1]
 
 
 def _map_raw_to_flight_option(
@@ -60,28 +90,44 @@ class FlightHunterAgent:
             return state
 
         all_flights: list[FlightOption] = []
-        for window in state.candidate_windows:
-            if not state.call_budget.can_call_flight():
-                state.is_partial = True
-                break
-            if self._adapter is not None:
+
+        if self._adapter is not None:
+            # Month-granularity: one Aviasales call per calendar month, then
+            # filter to the exact horizon in Python.
+            months = _months_in_range(
+                state.intent.earliest_departure,
+                state.intent.latest_departure,
+            )
+            for month in months:
+                if not state.call_budget.can_call_flight():
+                    state.is_partial = True
+                    break
                 raw_flights = await self._adapter.get_flights(
                     state.intent.origin_iata,
                     state.intent.destination_iata,
-                    window.start_date.isoformat(),
+                    month,
                 )
-                flights = [
-                    _map_raw_to_flight_option(r, window, state.intent.cabin_class)
-                    for r in raw_flights
-                ]
-            else:
+                for r in raw_flights:
+                    dep = _date_from_raw(r)
+                    if state.intent.earliest_departure <= dep <= state.intent.latest_departure:
+                        window = _assign_window(dep, state.candidate_windows)
+                        all_flights.append(
+                            _map_raw_to_flight_option(r, window, state.intent.cabin_class)
+                        )
+                state.call_budget.flight_calls_used += 1
+        else:
+            # Synthetic provider — per-window calls (no live API key needed).
+            for window in state.candidate_windows:
+                if not state.call_budget.can_call_flight():
+                    state.is_partial = True
+                    break
                 flights = self._synthetic.get_flights(
                     state.intent.origin_iata,
                     state.intent.destination_iata,
                     window,
                 )
-            all_flights.extend(flights)
-            state.call_budget.flight_calls_used += 1
+                all_flights.extend(flights)
+                state.call_budget.flight_calls_used += 1
 
         state.flight_options = all_flights
         return state

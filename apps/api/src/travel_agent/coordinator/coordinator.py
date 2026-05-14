@@ -28,7 +28,7 @@ from travel_agent.providers.aviasales import AviasalesAdapter
 
 
 def _generate_windows(intent: TravelIntent) -> list[Window]:
-    """Generate up to MAX_WINDOWS 7-day windows stepping daily (ADR-0005)."""
+    """Generate up to MAX_WINDOWS non-overlapping WINDOW_SIZE_DAYS-wide buckets."""
     windows: list[Window] = []
     current = intent.earliest_departure
     while current <= intent.latest_departure and len(windows) < MAX_WINDOWS:
@@ -38,7 +38,7 @@ def _generate_windows(intent: TravelIntent) -> list[Window]:
                 end_date=current + timedelta(days=WINDOW_SIZE_DAYS - 1),
             )
         )
-        current += timedelta(days=1)
+        current += timedelta(days=WINDOW_SIZE_DAYS)
     return windows
 
 

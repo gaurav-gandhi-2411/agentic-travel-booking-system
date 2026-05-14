@@ -129,6 +129,12 @@ def test_premium_cluster_outscores_lcc_on_experience() -> None:
     assert experience_score(premium) > experience_score(lcc)
 
 
+def test_morning_departure_higher_experience() -> None:
+    morning = _flight(outbound_departure_at="2026-06-01T09:00:00+05:30")
+    red_eye = _flight(outbound_departure_at="2026-06-01T03:00:00+05:30")
+    assert experience_score(morning) > experience_score(red_eye)
+
+
 def test_lcc_cluster_outscores_premium_on_value() -> None:
     premium = _flight(price_inr=91_500, layover_count=0, outbound_duration_minutes=540)
     lcc = _flight(

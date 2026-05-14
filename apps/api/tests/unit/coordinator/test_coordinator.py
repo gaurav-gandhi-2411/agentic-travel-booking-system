@@ -37,17 +37,18 @@ def _make_intent(
 
 
 def test_generate_windows_respects_max() -> None:
-    intent = _make_intent(earliest=date(2026, 6, 1), latest=date(2026, 6, 30))
+    # Long horizon (10 months) so MAX_WINDOWS cap is the binding constraint
+    intent = _make_intent(earliest=date(2026, 6, 1), latest=date(2027, 3, 31))
     windows = _generate_windows(intent)
     assert len(windows) == MAX_WINDOWS
 
 
-def test_generate_windows_step_by_one_day() -> None:
+def test_generate_windows_step_by_window_size() -> None:
     intent = _make_intent(earliest=date(2026, 6, 1), latest=date(2026, 6, 30))
     windows = _generate_windows(intent)
     for i in range(1, len(windows)):
         delta = (windows[i].start_date - windows[i - 1].start_date).days
-        assert delta == 1, f"Window step should be 1 day, got {delta}"
+        assert delta == WINDOW_SIZE_DAYS, f"expected {WINDOW_SIZE_DAYS}, got {delta}"
 
 
 def test_generate_windows_correct_size() -> None:
@@ -59,9 +60,10 @@ def test_generate_windows_correct_size() -> None:
 
 
 def test_generate_windows_short_horizon() -> None:
+    # 3-day horizon with a 7-day stride produces exactly 1 window
     intent = _make_intent(earliest=date(2026, 6, 1), latest=date(2026, 6, 3))
     windows = _generate_windows(intent)
-    assert len(windows) == 3
+    assert len(windows) == 1
 
 
 def test_generate_windows_single_day_horizon() -> None:
@@ -108,9 +110,10 @@ async def test_coordinator_hotel_options_in_correct_city() -> None:
 
 
 async def test_coordinator_candidate_windows_populated() -> None:
+    # June 1-30 with a 7-day stride produces 5 windows (not MAX_WINDOWS=12)
     state = RequestState(intent=_make_intent())
     result = await Coordinator().run(state)
-    assert len(result.candidate_windows) == MAX_WINDOWS
+    assert len(result.candidate_windows) == 5
 
 
 # ── no-intent guard ───────────────────────────────────────────────────────────
@@ -127,15 +130,17 @@ async def test_coordinator_errors_without_intent() -> None:
 
 
 async def test_coordinator_increments_flight_call_budget() -> None:
+    # June 1-30 → 5 windows → 5 synthetic per-window calls
     state = RequestState(intent=_make_intent())
     result = await Coordinator().run(state)
-    assert result.call_budget.flight_calls_used == MAX_WINDOWS
+    assert result.call_budget.flight_calls_used == 5
 
 
 async def test_coordinator_increments_hotel_call_budget() -> None:
+    # June 1-30 → 5 windows → 5 hotel calls
     state = RequestState(intent=_make_intent())
     result = await Coordinator().run(state)
-    assert result.call_budget.hotel_calls_used == MAX_WINDOWS
+    assert result.call_budget.hotel_calls_used == 5
 
 
 # ── state isolation (model_copy) ──────────────────────────────────────────────
