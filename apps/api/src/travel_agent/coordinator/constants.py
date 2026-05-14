@@ -2,6 +2,7 @@
 
 Phase D will tune these values — centralised here so callers need no updates.
 """
+
 from __future__ import annotations
 
 from functools import lru_cache

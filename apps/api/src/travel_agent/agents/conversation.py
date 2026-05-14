@@ -1,4 +1,5 @@
 """ConversationManagerAgent stub — multi-turn dialogue lands in Phase F."""
+
 from __future__ import annotations
 
 from travel_agent.coordinator.state import RequestState

@@ -6,6 +6,7 @@ set of options not dominated by any other option.
 
 Reference: ADR-0006 (scoring model).
 """
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -33,9 +34,7 @@ def pareto_frontier[T](
     if not options:
         return []
 
-    scored: list[tuple[float, float, T]] = [
-        (score_a(opt), score_b(opt), opt) for opt in options
-    ]
+    scored: list[tuple[float, float, T]] = [(score_a(opt), score_b(opt), opt) for opt in options]
 
     frontier: list[tuple[float, float, T]] = []
     for sa, sb, opt in scored:

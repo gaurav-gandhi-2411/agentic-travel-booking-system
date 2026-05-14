@@ -5,6 +5,7 @@ response.  The caller must pre-set state.raw_input before calling run().
 
 Phase C: requires state.raw_input; sets state.intent on success.
 """
+
 from __future__ import annotations
 
 import json

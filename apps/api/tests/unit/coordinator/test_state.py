@@ -1,4 +1,5 @@
 """Tests for the coordinator state models (RequestState, TravelIntent, etc.)."""
+
 from datetime import date
 
 from travel_agent.coordinator.state import (

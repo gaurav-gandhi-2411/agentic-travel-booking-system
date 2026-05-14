@@ -1,4 +1,5 @@
 """Unit tests for value_score and experience_score."""
+
 from __future__ import annotations
 
 from datetime import date

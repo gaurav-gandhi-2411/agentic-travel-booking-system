@@ -1,4 +1,5 @@
 """HotelHunterAgent — searches SyntheticProvider for hotels across candidate windows."""
+
 from __future__ import annotations
 
 from travel_agent.coordinator.constants import IATA_TO_CITY

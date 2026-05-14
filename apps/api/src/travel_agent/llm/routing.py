@@ -7,6 +7,7 @@ a hardcoded dict (Phase 0) to YAML loading (Quick-Win Q10, 2026-05-14).
 Override the config file path with the LLM_ROUTING_CONFIG_PATH env var for testing
 or non-standard deployments.
 """
+
 from __future__ import annotations
 
 import os
@@ -19,9 +20,7 @@ import yaml
 _DEFAULT_PROFILE = "local"
 
 # Path relative to this file: apps/api/src/travel_agent/llm/ → apps/api/config/
-_DEFAULT_CONFIG_PATH = (
-    Path(__file__).parent.parent.parent.parent / "config" / "llm_routing.yaml"
-)
+_DEFAULT_CONFIG_PATH = Path(__file__).parent.parent.parent.parent / "config" / "llm_routing.yaml"
 
 AGENT_KEYS: frozenset[str] = frozenset(
     {"planner", "flight_hunter", "hotel_hunter", "optimizer", "booking", "conversation"}
@@ -68,8 +67,7 @@ def get_active_profile() -> dict[str, str]:
     config = load_routing_config()
     if profile_name not in config:
         msg = (
-            f"Unknown LLM_ROUTING_PROFILE={profile_name!r}. "
-            f"Valid profiles: {sorted(config.keys())}"
+            f"Unknown LLM_ROUTING_PROFILE={profile_name!r}. Valid profiles: {sorted(config.keys())}"
         )
         raise ValueError(msg)
     return config[profile_name]

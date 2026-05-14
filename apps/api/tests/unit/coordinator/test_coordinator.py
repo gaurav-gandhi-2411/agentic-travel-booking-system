@@ -5,6 +5,7 @@ the coordinator drives the state machine through SEARCHING → OPTIMIZING →
 PRESENTING, populates flight and hotel options, and correctly merges parallel
 agent results.
 """
+
 from __future__ import annotations
 
 from datetime import date

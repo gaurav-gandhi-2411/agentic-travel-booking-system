@@ -3,6 +3,7 @@
 Uses a mocked LLMClient (so no real API calls) and SyntheticProvider (no Aviasales key needed).
 Verifies the full pipeline produces a terminal PRESENTING state with flight and hotel options.
 """
+
 from __future__ import annotations
 
 from datetime import date

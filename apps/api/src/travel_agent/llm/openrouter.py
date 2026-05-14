@@ -4,6 +4,7 @@ OpenRouter aggregates free-tier models (Qwen2.5-72B, Llama3.3-70B, etc.).
 Requires OPENROUTER_API_KEY. Optional headers OPENROUTER_SITE_URL and
 OPENROUTER_APP_NAME are sent for rate-limit attribution.
 """
+
 from __future__ import annotations
 
 import os

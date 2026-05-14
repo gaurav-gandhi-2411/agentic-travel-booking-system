@@ -1,4 +1,5 @@
 """Tests for FastAPI application entry point — health endpoint and lifespan guard."""
+
 from pathlib import Path
 
 import pytest

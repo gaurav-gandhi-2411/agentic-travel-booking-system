@@ -6,6 +6,7 @@ second.  Never let prompt engineering drift the schema silently.
 
 References: agents/prompts/{planner,flight_hunter,hotel_hunter}_system.txt
 """
+
 from __future__ import annotations
 
 from travel_agent.llm.base import ToolDefinition

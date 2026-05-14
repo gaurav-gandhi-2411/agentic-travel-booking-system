@@ -8,6 +8,7 @@ promises:
   - the three "weird" hotels exist with their expected anomalies
   - deterministic output for identical inputs
 """
+
 from __future__ import annotations
 
 from datetime import date
@@ -83,9 +84,7 @@ def test_both_clusters_non_empty(
 ) -> None:
     prices = sorted(f.price_inr for f in provider.get_flights(origin, destination, window))
     gaps = [
-        i
-        for i in range(len(prices) - 1)
-        if prices[i + 1] - prices[i] >= _BIMODAL_GAP_THRESHOLD
+        i for i in range(len(prices) - 1) if prices[i + 1] - prices[i] >= _BIMODAL_GAP_THRESHOLD
     ]
     gap_idx = gaps[0]
     lcc_count = gap_idx + 1
@@ -100,9 +99,7 @@ def test_both_clusters_non_empty(
 
 
 @pytest.mark.parametrize("city", _CITIES)
-def test_hotel_count_per_city(
-    provider: SyntheticProvider, window: Window, city: str
-) -> None:
+def test_hotel_count_per_city(provider: SyntheticProvider, window: Window, city: str) -> None:
     hotels = provider.get_hotels(city, window, nights=7)
     assert len(hotels) == _CITY_COUNTS[city], (
         f"{city}: expected {_CITY_COUNTS[city]} hotels, got {len(hotels)}"
@@ -116,9 +113,7 @@ def test_unknown_city_returns_empty(provider: SyntheticProvider, window: Window)
 # ── hotel star distribution ───────────────────────────────────────────────────
 
 
-def test_star_distribution_skewed_to_budget(
-    provider: SyntheticProvider, window: Window
-) -> None:
+def test_star_distribution_skewed_to_budget(provider: SyntheticProvider, window: Window) -> None:
     all_hotels = []
     for city in _CITIES:
         all_hotels.extend(provider.get_hotels(city, window, nights=7))
@@ -202,18 +197,14 @@ def test_hotel_total_price_is_nights_times_nightly(
 # ── determinism ───────────────────────────────────────────────────────────────
 
 
-def test_get_flights_is_deterministic(
-    provider: SyntheticProvider, window: Window
-) -> None:
+def test_get_flights_is_deterministic(provider: SyntheticProvider, window: Window) -> None:
     first = provider.get_flights("BOM", "CDG", window)
     second = provider.get_flights("BOM", "CDG", window)
     assert [f.id for f in first] == [f.id for f in second]
     assert [f.price_inr for f in first] == [f.price_inr for f in second]
 
 
-def test_get_hotels_is_deterministic(
-    provider: SyntheticProvider, window: Window
-) -> None:
+def test_get_hotels_is_deterministic(provider: SyntheticProvider, window: Window) -> None:
     first = provider.get_hotels("Tokyo", window, nights=7)
     second = provider.get_hotels("Tokyo", window, nights=7)
     assert [h.id for h in first] == [h.id for h in second]

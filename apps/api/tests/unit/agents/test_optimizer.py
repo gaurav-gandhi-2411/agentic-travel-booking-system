@@ -1,4 +1,5 @@
 """Unit tests for OptimizerAgent."""
+
 from __future__ import annotations
 
 from datetime import date
@@ -217,15 +218,27 @@ async def test_score_breakdown_has_both_axes() -> None:
 async def test_bimodal_synthetic_correct_archetype_assignment() -> None:
     # Replicate bimodal shape: LCC cluster (cheap, slow) vs premium (expensive, direct)
     flights = [
-        _flight(price_inr=47_500, layover_count=2, outbound_duration_minutes=1020,
-                outbound_departure_at="2026-06-01T02:30:00+05:30",
-                outbound_arrival_at="2026-06-01T21:00:00+05:30"),
+        _flight(
+            price_inr=47_500,
+            layover_count=2,
+            outbound_duration_minutes=1020,
+            outbound_departure_at="2026-06-01T02:30:00+05:30",
+            outbound_arrival_at="2026-06-01T21:00:00+05:30",
+        ),
         _flight(price_inr=55_000, layover_count=2, outbound_duration_minutes=1080),
         _flight(price_inr=62_000, layover_count=1, outbound_duration_minutes=900),
-        _flight(price_inr=91_500, layover_count=0, outbound_duration_minutes=540,
-                outbound_arrival_at="2026-06-01T14:00:00+05:30"),
-        _flight(price_inr=105_000, layover_count=0, outbound_duration_minutes=510,
-                outbound_arrival_at="2026-06-01T13:00:00+05:30"),
+        _flight(
+            price_inr=91_500,
+            layover_count=0,
+            outbound_duration_minutes=540,
+            outbound_arrival_at="2026-06-01T14:00:00+05:30",
+        ),
+        _flight(
+            price_inr=105_000,
+            layover_count=0,
+            outbound_duration_minutes=510,
+            outbound_arrival_at="2026-06-01T13:00:00+05:30",
+        ),
         _flight(price_inr=119_800, layover_count=0, outbound_duration_minutes=480),
     ]
     agent = OptimizerAgent(client=_mock_client(), partner_marker="12345")

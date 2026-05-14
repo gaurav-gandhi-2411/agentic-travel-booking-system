@@ -1,4 +1,5 @@
 """Unit tests for pareto_frontier."""
+
 from __future__ import annotations
 
 from travel_agent.utility.pareto import pareto_frontier

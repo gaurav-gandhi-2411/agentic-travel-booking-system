@@ -1,4 +1,5 @@
 """Agent Protocol shared by all agents in the coordinator pipeline."""
+
 from __future__ import annotations
 
 from typing import Protocol, runtime_checkable

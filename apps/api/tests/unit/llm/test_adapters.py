@@ -9,6 +9,7 @@ To re-record a cassette: delete the .yaml file and run the test with
 LLM_ROUTING_PROFILE set and the appropriate API key in the environment.
 vcrpy will record the interaction on first run and replay on subsequent runs.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -170,9 +171,7 @@ async def test_groq_tool_call_via_cassette(monkeypatch: pytest.MonkeyPatch) -> N
 async def test_vllm_tool_call_via_cassette() -> None:
     with _VCR.use_cassette("vllm/chat_tool_call.yaml"):
         adapter = VLLMAdapter()
-        response = await adapter.chat(
-            _TOOL_MSG, model="qwen2.5-7b-instruct", tools=[_FLIGHT_TOOL]
-        )
+        response = await adapter.chat(_TOOL_MSG, model="qwen2.5-7b-instruct", tools=[_FLIGHT_TOOL])
     assert len(response.tool_calls) == 1
     assert response.tool_calls[0].name == "search_flights"
     assert response.content == ""

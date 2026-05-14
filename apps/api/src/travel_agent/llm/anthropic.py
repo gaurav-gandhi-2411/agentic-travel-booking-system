@@ -7,6 +7,7 @@ Prompt caching: pass cache_system_prompt=True in **kwargs to wrap the system
 prompt in a cache_control block. Saves ~90% of system-prompt tokens on calls
 that hit the 5-minute cache window. Enable on agents with long, stable prompts.
 """
+
 from __future__ import annotations
 
 import os
@@ -83,9 +84,7 @@ class AnthropicAdapter:
 
         latency_ms = (time.monotonic() - start) * 1000
 
-        content_text = next(
-            (block.text for block in response.content if block.type == "text"), ""
-        )
+        content_text = next((block.text for block in response.content if block.type == "text"), "")
         tool_calls = parse_anthropic_tool_calls(list(response.content))
 
         return LLMResponse(

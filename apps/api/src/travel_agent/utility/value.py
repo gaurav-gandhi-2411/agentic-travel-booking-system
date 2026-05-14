@@ -12,6 +12,7 @@ they live in experience_score so the Pareto axes remain independent.
 This lets cheap-but-uncomfortable flights win "best value" while
 comfortable-but-pricier flights win "best experience".
 """
+
 from __future__ import annotations
 
 import math

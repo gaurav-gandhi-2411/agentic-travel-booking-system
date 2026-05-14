@@ -1,4 +1,5 @@
 """Verify routing config validity and profile-switching behaviour."""
+
 from pathlib import Path
 
 import pytest

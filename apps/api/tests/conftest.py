@@ -3,6 +3,7 @@
 Ensures tests always run in synthetic mode regardless of any .env file that
 load_dotenv() may have picked up from the project root.
 """
+
 from __future__ import annotations
 
 import pytest

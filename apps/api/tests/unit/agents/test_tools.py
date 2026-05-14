@@ -1,4 +1,5 @@
 """Schema validity tests for the three extraction tool definitions."""
+
 from __future__ import annotations
 
 from travel_agent.agents.tools import (

@@ -15,6 +15,7 @@ Event sequence:
   done
   error                 {message: str}                          (on failure)
 """
+
 from __future__ import annotations
 
 import os
@@ -86,9 +87,7 @@ async def stream_search(  # noqa: PLR0912, PLR0915
 
     yield {
         "type": "search_started",
-        "windows": [
-            {"start": str(w.start_date), "end": str(w.end_date)} for w in windows
-        ],
+        "windows": [{"start": str(w.start_date), "end": str(w.end_date)} for w in windows],
     }
 
     adapter = _get_adapter()

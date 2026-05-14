@@ -5,6 +5,7 @@ Response: text/event-stream, one JSON event per line.
 
 See coordinator/streaming.py for the full event sequence spec.
 """
+
 from __future__ import annotations
 
 import json

@@ -5,6 +5,7 @@ Configure VLLM_BASE_URL to point at the running vLLM instance.
 VLLM_API_KEY defaults to "EMPTY" (vLLM's conventional placeholder when
 auth is disabled — change if your deployment enables API key auth).
 """
+
 from __future__ import annotations
 
 import os

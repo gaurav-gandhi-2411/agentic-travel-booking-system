@@ -9,6 +9,7 @@ Usage:
 The active provider and per-agent model are resolved from LLM_ROUTING_PROFILE
 (default: "local") via apps/api/config/llm_routing.yaml.
 """
+
 from __future__ import annotations
 
 from travel_agent.llm.anthropic import AnthropicAdapter

@@ -4,6 +4,7 @@ Generates a UUID if the client does not supply one. Binds the ID to the structlo
 contextvars store so every log line emitted during the request carries request_id
 without callers needing to thread it explicitly.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -27,9 +28,7 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
     def __init__(self, app: ASGIApp) -> None:
         super().__init__(app)
 
-    async def dispatch(
-        self, request: Request, call_next: _RequestResponseEndpoint
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: _RequestResponseEndpoint) -> Response:
         req_id = request.headers.get(_HEADER) or str(uuid.uuid4())
         structlog.contextvars.clear_contextvars()
         structlog.contextvars.bind_contextvars(request_id=req_id)

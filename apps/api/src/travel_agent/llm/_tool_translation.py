@@ -7,6 +7,7 @@ Two distinct shapes exist in the wild:
 Neither format leaks into application code — all adapters call these helpers and
 return the unified ToolCall dataclass.
 """
+
 from __future__ import annotations
 
 import json

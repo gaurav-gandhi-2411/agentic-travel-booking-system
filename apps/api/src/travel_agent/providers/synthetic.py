@@ -7,6 +7,7 @@ inputs.
 
 References: ADR-0013 (provider contract and statistical property guarantees).
 """
+
 from __future__ import annotations
 
 import json
@@ -62,9 +63,7 @@ class SyntheticProvider:
             outbound_arr = outbound_dep + timedelta(minutes=tmpl["outbound_duration_minutes"])
 
             ret_date = window.start_date + timedelta(days=7)
-            ret_dep = datetime(
-                ret_date.year, ret_date.month, ret_date.day, 10, 0, tzinfo=UTC
-            )
+            ret_dep = datetime(ret_date.year, ret_date.month, ret_date.day, 10, 0, tzinfo=UTC)
             ret_dur: int | None = tmpl.get("return_duration_minutes")
             ret_arr = (ret_dep + timedelta(minutes=ret_dur)) if ret_dur is not None else None
 
@@ -98,11 +97,7 @@ class SyntheticProvider:
         nights: int,
         min_stars: float = 0.0,
     ) -> list[HotelOption]:
-        templates = [
-            t
-            for t in _load_hotels()
-            if t["city"] == city and t["stars"] >= min_stars
-        ]
+        templates = [t for t in _load_hotels() if t["city"] == city and t["stars"] >= min_stars]
         return [
             HotelOption(
                 id=f"{t['id_prefix']}-{window.start_date.isoformat()}",

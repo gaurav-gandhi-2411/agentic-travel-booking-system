@@ -6,6 +6,7 @@ to keep coverage above the fail_under threshold.
 Adapters that require API keys (Anthropic, OpenRouter, Groq) raise RuntimeError
 when instantiated without their respective env vars.
 """
+
 import pytest
 
 from travel_agent.llm.anthropic import AnthropicAdapter

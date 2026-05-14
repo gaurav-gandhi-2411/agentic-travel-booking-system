@@ -1,4 +1,5 @@
 """Unit tests for HotelHunterAgent."""
+
 from __future__ import annotations
 
 from datetime import date
@@ -138,8 +139,7 @@ async def test_low_star_filter_includes_more_hotels() -> None:
 async def test_tracks_call_count_per_window() -> None:
     agent = HotelHunterAgent()
     windows = [
-        Window(start_date=date(2026, 6, d), end_date=date(2026, 6, d + 6))
-        for d in range(1, 4)
+        Window(start_date=date(2026, 6, d), end_date=date(2026, 6, d + 6)) for d in range(1, 4)
     ]
     state = _make_state(windows=windows)
     result = await agent.run(state)
@@ -149,8 +149,7 @@ async def test_tracks_call_count_per_window() -> None:
 async def test_respects_hotel_call_budget() -> None:
     agent = HotelHunterAgent()
     windows = [
-        Window(start_date=date(2026, 6, d), end_date=date(2026, 6, d + 6))
-        for d in range(1, 4)
+        Window(start_date=date(2026, 6, d), end_date=date(2026, 6, d + 6)) for d in range(1, 4)
     ]
     state = _make_state(windows=windows, budget_overrides={"hotel_calls_used": 99})
     result = await agent.run(state)

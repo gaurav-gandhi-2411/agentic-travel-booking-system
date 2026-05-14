@@ -1,4 +1,5 @@
 """Aviasales provider package — adapter + deep-link builder."""
+
 from __future__ import annotations
 
 from travel_agent.providers.aviasales.adapter import (

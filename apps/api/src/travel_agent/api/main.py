@@ -3,6 +3,7 @@
 Phase 0 baseline: single /health endpoint, startup guard, request-ID middleware.
 Phase C (demo): /search SSE endpoint, demo auth middleware, Aviasales startup guard.
 """
+
 from __future__ import annotations
 
 import logging

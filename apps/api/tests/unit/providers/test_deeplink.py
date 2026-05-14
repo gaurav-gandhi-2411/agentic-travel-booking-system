@@ -1,4 +1,5 @@
 """Unit tests for the Aviasales affiliate deep-link builder."""
+
 from __future__ import annotations
 
 from urllib.parse import parse_qs, urlparse

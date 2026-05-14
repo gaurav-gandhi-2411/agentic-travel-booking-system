@@ -5,6 +5,7 @@ Requires GROQ_API_KEY. Used as a secondary fallback in the 'free' profile
 when OpenRouter is rate-limited, and directly in deployments where sub-200ms
 inference latency is required.
 """
+
 from __future__ import annotations
 
 import os

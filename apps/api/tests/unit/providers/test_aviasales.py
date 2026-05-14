@@ -1,4 +1,5 @@
 """Tests for AviasalesAdapter using VCR cassettes."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -38,9 +39,7 @@ def test_adapter_requires_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
 
 async def test_get_flights_happy_path(adapter: AviasalesAdapter) -> None:
     with _VCR.use_cassette("flights_happy_path.yaml"):
-        flights = await adapter.get_flights(
-            "BOM", "CDG", "2026-06-01", currency="inr"
-        )
+        flights = await adapter.get_flights("BOM", "CDG", "2026-06-01", currency="inr")
     assert len(flights) == 2
     assert flights[0]["price"] == 47500
     assert flights[0]["airline"] == "6E"

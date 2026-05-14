@@ -7,6 +7,7 @@ Phase C: OptimizerAgent wired; demo path uses AviasalesAdapter for flights.
 
 References: ADR-0001 (coordinator pattern), ADR-0005 (window search).
 """
+
 from __future__ import annotations
 
 import asyncio

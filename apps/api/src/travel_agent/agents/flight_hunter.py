@@ -4,6 +4,7 @@ Uses AviasalesAdapter when injected (month-granularity calls + Python date filte
 falls back to SyntheticProvider for development / tests that do not configure a live
 API key.
 """
+
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta

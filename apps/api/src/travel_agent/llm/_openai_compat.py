@@ -4,6 +4,7 @@ Used by OllamaAdapter, OpenRouterAdapter, GroqAdapter, and VLLMAdapter.
 All four providers accept the same request shape and return the same response shape,
 differing only in base URL and authentication header.
 """
+
 from __future__ import annotations
 
 import time

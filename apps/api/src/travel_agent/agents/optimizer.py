@@ -6,6 +6,7 @@ a short NL explanation for each archetype (2 LLM calls per search).
 
 Phase D will extend this to flight+hotel package scoring and full HITL booking.
 """
+
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
@@ -149,10 +150,7 @@ def _fallback_explanation(flight: FlightOption, label: ArchetypeLabel) -> str:
         )
     hrs = flight.outbound_duration_minutes // 60
     stops = "non-stop" if flight.layover_count == 0 else f"{flight.layover_count} stop(s)"
-    return (
-        f"Fastest option at {hrs}h total, {stops}. "
-        "Best choice for comfort and convenience."
-    )
+    return f"Fastest option at {hrs}h total, {stops}. Best choice for comfort and convenience."
 
 
 def _score_breakdown(flight: FlightOption) -> dict[str, float]:

@@ -11,6 +11,7 @@ The `raw_link` comes from the Aviasales API response field "link",
 e.g. "/search/BOM0106CDG08062026".  When the raw link is absent (synthetic
 provider or future adapters), we construct a fallback from IATA codes and date.
 """
+
 from __future__ import annotations
 
 from urllib.parse import urlencode

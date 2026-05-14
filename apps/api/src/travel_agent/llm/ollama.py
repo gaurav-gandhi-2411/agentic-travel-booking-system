@@ -4,6 +4,7 @@ Ollama serves models at http://localhost:11434/v1/chat/completions by default.
 Override the base URL with OLLAMA_BASE_URL for non-standard setups (Docker, remote).
 No API key is required; Ollama accepts any non-empty string as the key.
 """
+
 from __future__ import annotations
 
 import os

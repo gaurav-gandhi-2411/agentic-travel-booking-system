@@ -5,6 +5,7 @@ Only enforced when APP_MODE=demo.  In APP_MODE=local|synthetic, all requests pas
 
 Protects the /search endpoint from unauthenticated use in the public demo.
 """
+
 from __future__ import annotations
 
 import os

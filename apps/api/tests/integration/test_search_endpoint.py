@@ -5,6 +5,7 @@ Verifies the full SSE event sequence is emitted correctly:
   planner_started → planner_done → search_started → search_progress (x N)
   → search_done → optimizer_started → archetype_ready (x2) → done
 """
+
 from __future__ import annotations
 
 import json
@@ -54,7 +55,7 @@ def _parse_sse(raw: str) -> list[dict[str, Any]]:
     for raw_line in raw.splitlines():
         stripped = raw_line.strip()
         if stripped.startswith("data:"):
-            payload = stripped[len("data:"):].strip()
+            payload = stripped[len("data:") :].strip()
             events.append(json.loads(payload))
     return events
 

@@ -12,6 +12,7 @@ Error handling:
   - 5xx: raise AviasalesServerError (caller should retry with backoff)
   - other 4xx: raise AviasalesClientError
 """
+
 from __future__ import annotations
 
 import os

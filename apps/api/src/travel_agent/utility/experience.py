@@ -14,6 +14,7 @@ Design intent: the score must spread across flights on a short-haul route like
 BOM->DXB where all options may be non-stop.  A 07:00 non-stop should score
 meaningfully higher than a 03:00 red-eye on the same route.
 """
+
 from __future__ import annotations
 
 from travel_agent.coordinator.state import CabinClass, FlightOption
@@ -35,10 +36,10 @@ _DAYTIME_END = 20
 # Each entry: (start_hour_inclusive, end_hour_inclusive, quality_bonus)
 # Hours not covered (00-05) return 0.0 (red-eye departure, worst).
 _DEPARTURE_QUALITY_WINDOWS: tuple[tuple[int, int, float], ...] = (
-    (7, 11, 0.15),   # prime morning: most convenient
+    (7, 11, 0.15),  # prime morning: most convenient
     (12, 16, 0.10),  # afternoon: good
     (17, 20, 0.07),  # early evening: acceptable
-    (6, 6, 0.05),    # very early: slight inconvenience
+    (6, 6, 0.05),  # very early: slight inconvenience
     (21, 23, 0.03),  # late night: not great
 )
 

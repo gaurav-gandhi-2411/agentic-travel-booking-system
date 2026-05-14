@@ -10,6 +10,7 @@ to/from Redis (active sessions) and Postgres (conversation history).
 
 References: ADR-0001 (coordinator pattern), ADR-0005 (window search), ADR-0006 (scoring).
 """
+
 from __future__ import annotations
 
 from datetime import date
