@@ -40,3 +40,47 @@ Format: date | unit | summary | files touched | test delta | deferred followups.
 **Test delta:** +2 test files, +~50 new test cases (protocol dataclasses, state models, main endpoint, lifespan guard, routing YAML loading)
 
 **Deferred followups:** see docs/followups.md
+
+---
+
+## 2026-05-14 | Unit 2 — Phase A: Remaining LLM Adapters
+
+**Summary**
+- Extracted shared tool format translation into `llm/_tool_translation.py`:
+  `to_anthropic_tools`, `parse_anthropic_tool_calls` (content blocks),
+  `to_openai_tools`, `parse_openai_tool_calls` (message.tool_calls).
+- Extracted shared OpenAI-compatible chat loop into `llm/_openai_compat.py`
+  (`openai_compat_chat`) — used by all four non-Anthropic adapters to avoid
+  30-line duplication across Ollama/OpenRouter/Groq/vLLM.
+- Refactored `AnthropicAdapter` to use translation helpers; removed inline
+  dict comprehension and for-loop.
+- Implemented `OllamaAdapter` — `http://localhost:11434/v1`, no API key required.
+- Implemented `OpenRouterAdapter` — `https://openrouter.ai/api/v1`, requires `OPENROUTER_API_KEY`.
+- Implemented `GroqAdapter` — `https://api.groq.com/openai/v1`, requires `GROQ_API_KEY`.
+- Implemented `VLLMAdapter` — configurable base URL, `VLLM_API_KEY` defaults to `"EMPTY"`.
+- Added `openai>=1.60.0` to main dependencies.
+- VCR cassette infrastructure: `tests/fixtures/cassettes/{adapter}/chat.yaml` (5 cassettes),
+  `.gitignore` blocking `*secret*` files, `record_mode="none"` in CI.
+- Tests: +24 new test cases (18 tool translation unit tests + 7 adapter cassette tests).
+  Updated Protocol tests to monkeypatch env vars for key-guarded adapters.
+
+**Files touched:** 15
+- `apps/api/src/travel_agent/llm/_tool_translation.py` (new)
+- `apps/api/src/travel_agent/llm/_openai_compat.py` (new)
+- `apps/api/src/travel_agent/llm/anthropic.py` (refactored)
+- `apps/api/src/travel_agent/llm/ollama.py` (implemented)
+- `apps/api/src/travel_agent/llm/openrouter.py` (implemented)
+- `apps/api/src/travel_agent/llm/groq.py` (implemented)
+- `apps/api/src/travel_agent/llm/vllm.py` (implemented)
+- `apps/api/pyproject.toml` (openai dep, A002 test ignore)
+- `apps/api/.env.example` (OPENROUTER_API_KEY, GROQ_API_KEY, OLLAMA_BASE_URL, VLLM_BASE_URL)
+- `apps/api/tests/fixtures/cassettes/.gitignore` (new)
+- `apps/api/tests/fixtures/cassettes/{anthropic,ollama,openrouter,groq,vllm}/chat.yaml` (5 new)
+- `apps/api/tests/unit/llm/test_tool_translation.py` (new)
+- `apps/api/tests/unit/llm/test_adapters.py` (new)
+- `apps/api/tests/unit/llm/test_protocol.py` (updated)
+
+**Test delta:** +2 test files, +24 new test cases
+**Coverage:** 85% → 93% (74 tests, all passing)
+
+**Deferred followups:** see docs/followups.md
