@@ -1,7 +1,7 @@
 """FastAPI application entry point.
 
-Phase 0 baseline: single /health endpoint, startup guard, request-ID middleware,
-and structlog configuration. Phase 1 expands with routes, DB pool, and OTel wiring.
+Phase 0 baseline: single /health endpoint, startup guard, request-ID middleware.
+Phase C (demo): /search SSE endpoint, demo auth middleware, Aviasales startup guard.
 """
 from __future__ import annotations
 
@@ -14,11 +14,11 @@ import structlog
 import structlog.contextvars
 from fastapi import FastAPI
 
+from travel_agent.api.middleware.auth import DemoAuthMiddleware
 from travel_agent.api.middleware.request_id import RequestIDMiddleware
+from travel_agent.api.routes.search import router as search_router
 
 # ── structlog configuration ───────────────────────────────────────────────────
-# Configured once at module load. All loggers emit structured JSON.
-# In development, swap JSONRenderer for ConsoleRenderer for human-readable output.
 structlog.configure(
     processors=[
         structlog.contextvars.merge_contextvars,
@@ -39,12 +39,9 @@ logger = structlog.get_logger(__name__)
 # ── lifespan ──────────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Startup guards and resource initialisation.
-
-    Fails fast at boot rather than at the first request so that Cloud Run
-    readiness probes catch misconfigured environments immediately.
-    """
     profile = os.environ.get("LLM_ROUTING_PROFILE", "local")
+    app_mode = os.environ.get("APP_MODE", "synthetic")
+
     if profile in {"eval", "prod"} and not os.environ.get("ANTHROPIC_API_KEY"):
         msg = (
             "LLM_ROUTING_PROFILE=eval|prod requires ANTHROPIC_API_KEY. "
@@ -53,7 +50,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         )
         raise RuntimeError(msg)
 
-    logger.info("startup", llm_routing_profile=profile, phase="0")
+    if app_mode == "demo" and not os.environ.get("AVIASALES_API_KEY"):
+        msg = (
+            "APP_MODE=demo requires AVIASALES_API_KEY. "
+            "Set the env var or switch APP_MODE=synthetic to use synthetic data."
+        )
+        raise RuntimeError(msg)
+
+    logger.info("startup", llm_routing_profile=profile, app_mode=app_mode, phase="C")
     yield
     logger.info("shutdown")
 
@@ -61,13 +65,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 # ── application ───────────────────────────────────────────────────────────────
 app = FastAPI(
     title="Agentic Travel Booking API",
-    version="0.0.0",
+    version="0.1.0",
     lifespan=lifespan,
 )
 
+app.add_middleware(DemoAuthMiddleware)
 app.add_middleware(RequestIDMiddleware)
+
+app.include_router(search_router)
 
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "ok", "phase": "0"}
+    return {"status": "ok", "phase": "C"}

@@ -260,3 +260,32 @@ EXTRACT_HOTEL_OPTIONS = ToolDefinition(
         "additionalProperties": False,
     },
 )
+
+# ── OptimizerAgent ────────────────────────────────────────────────────────────
+
+GENERATE_ARCHETYPE_EXPLANATION = ToolDefinition(
+    name="generate_archetype_explanation",
+    description=(
+        "Generate a concise 1-2 sentence explanation for why this flight option represents "
+        "the best-value or best-experience archetype. "
+        "Be specific: mention price, duration, or stops as relevant. "
+        "Output must be 50-200 characters — no markdown, no bullet points."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "explanation": {
+                "type": "string",
+                "minLength": 30,
+                "maxLength": 200,
+                "description": (
+                    "One or two plain sentences explaining why this archetype is recommended. "
+                    "Example: 'Lowest price on the board at INR 47,500 with only 2 stops -- "
+                    "ideal if budget is the priority.'"
+                ),
+            }
+        },
+        "required": ["explanation"],
+        "additionalProperties": False,
+    },
+)

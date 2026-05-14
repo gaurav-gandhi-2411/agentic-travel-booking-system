@@ -40,9 +40,9 @@ class CabinClass(StrEnum):
     FIRST = "first"
 
 
-class Archetype(StrEnum):
-    BEST_VALUE = "best_value"
-    BEST_EXPERIENCE = "best_experience"
+class ArchetypeLabel(StrEnum):
+    BEST_VALUE = "best-value"
+    BEST_EXPERIENCE = "best-experience"
 
 
 class BookingPhase(StrEnum):
@@ -140,10 +140,20 @@ class HotelOption(BaseModel):
 # ── scoring & packages ────────────────────────────────────────────────────────
 
 
+class Archetype(BaseModel):
+    """Demo-path archetype: one of two recommended flight options with explanation."""
+
+    label: ArchetypeLabel
+    flight: FlightOption
+    explanation: str
+    deeplink_url: str
+    score_breakdown: dict[str, float] = Field(default_factory=dict)
+
+
 class Package(BaseModel):
     """A flight + hotel combination for a given window, with scoring."""
 
-    archetype: Archetype
+    archetype: ArchetypeLabel
     flight: FlightOption
     hotel: HotelOption
     window: Window
@@ -223,6 +233,7 @@ class RequestState(BaseModel):
     hotel_options: list[HotelOption] = Field(default_factory=list)
 
     # Set by OptimizerAgent
+    archetypes: list[Archetype] = Field(default_factory=list)  # best-value + best-experience
     packages: list[Package] = Field(default_factory=list)
     best_value_package: Package | None = None
     best_experience_package: Package | None = None

@@ -2,7 +2,7 @@
 from datetime import date
 
 from travel_agent.coordinator.state import (
-    Archetype,
+    ArchetypeLabel,
     BookingPhase,
     BookingStatus,
     CabinClass,
@@ -201,5 +201,5 @@ def test_request_state_serialization_roundtrip() -> None:
     assert restored.tenant_id == "tenant-abc"
 
 
-def test_archetype_enum_values_distinct() -> None:
-    assert Archetype.BEST_VALUE != Archetype.BEST_EXPERIENCE
+def test_archetype_label_enum_values_distinct() -> None:
+    assert ArchetypeLabel.BEST_VALUE != ArchetypeLabel.BEST_EXPERIENCE

@@ -208,3 +208,61 @@ Key design decisions:
 **Coverage:** 92.64% (194 tests, all passing)
 
 **Deferred followups:** see docs/followups.md
+
+---
+
+## 2026-05-14 | Unit 5A — Demo Path: OptimizerAgent + SSE /search Endpoint
+
+**Summary**
+Full demo-path implementation: affiliate deep-link builder, Pareto-frontier scoring
+utilities, OptimizerAgent with LLM-generated archetype explanations, Coordinator wired
+with OptimizerAgent, SSE streaming endpoint, and DemoAuthMiddleware.
+
+Key design decisions:
+- `ArchetypeLabel` StrEnum (was `Archetype`) uses dash-cased values (`"best-value"`,
+  `"best-experience"`) for clean JSON serialization.  New `Archetype` BaseModel holds
+  label + FlightOption + explanation + deeplink_url + score_breakdown.
+- Pareto frontier (`utility/pareto.py`) uses PEP 695 generic function syntax (`[T]`).
+  `value_score` = sigmoid on price + layover penalty + red-eye penalty (00-05 departure).
+  `experience_score` = linear duration + direct bonus + cabin bonus + daytime bonus.
+  Both scores bounded to [0, 1]; all magic numbers extracted to module-level constants.
+- OptimizerAgent makes 2 LLM calls per search (one per archetype) using
+  `generate_archetype_explanation` tool; falls back to hardcoded text when no LLM client
+  or no tool call returned.
+- `coordinator/streaming.py` owns the per-window flight loop (not FlightHunterAgent)
+  so `search_progress` events can be emitted between windows.  Imports
+  `_map_raw_to_flight_option` from flight_hunter to reuse mapping logic.
+- DemoAuthMiddleware only enforces when `APP_MODE=demo`; health endpoint is always open
+  for Cloud Run readiness probes.
+- Aviasales affiliate deep-link uses raw `/search/...` path from API when present;
+  constructs `/{ORIGIN}{DD}{MM}{YYYY}{DEST}` fallback otherwise.  Partner sub-ID appended
+  as `{marker}.{archetype-label}` for per-archetype attribution.
+
+**Files touched:** 18
+- `apps/api/src/travel_agent/providers/aviasales/__init__.py` (refactored from single file)
+- `apps/api/src/travel_agent/providers/aviasales/adapter.py` (moved from providers/aviasales.py)
+- `apps/api/src/travel_agent/providers/aviasales/deeplink.py` (new)
+- `apps/api/src/travel_agent/utility/value.py` (new)
+- `apps/api/src/travel_agent/utility/experience.py` (new)
+- `apps/api/src/travel_agent/utility/pareto.py` (new)
+- `apps/api/src/travel_agent/agents/tools.py` (GENERATE_ARCHETYPE_EXPLANATION added)
+- `apps/api/src/travel_agent/agents/prompts/optimizer_system.txt` (new)
+- `apps/api/src/travel_agent/agents/optimizer.py` (implemented from stub)
+- `apps/api/src/travel_agent/coordinator/state.py` (ArchetypeLabel + Archetype BaseModel + archetypes field)
+- `apps/api/src/travel_agent/coordinator/coordinator.py` (OptimizerAgent wired, APP_MODE guard)
+- `apps/api/src/travel_agent/coordinator/streaming.py` (new)
+- `apps/api/src/travel_agent/api/routes/search.py` (new)
+- `apps/api/src/travel_agent/api/middleware/auth.py` (new)
+- `apps/api/src/travel_agent/api/main.py` (search router + auth middleware + phase C health)
+- `apps/api/tests/unit/providers/test_deeplink.py` (new -- 12 tests)
+- `apps/api/tests/unit/utility/test_pareto.py` (new -- 9 tests)
+- `apps/api/tests/unit/utility/test_scoring.py` (new -- 13 tests)
+- `apps/api/tests/unit/agents/test_optimizer.py` (new -- 12 tests)
+- `apps/api/tests/unit/test_main.py` (health phase updated to "C")
+- `apps/api/tests/integration/test_search_endpoint.py` (new -- 9 SSE integration tests)
+- `apps/api/.env.example` (AVIASALES_PARTNER_ID, APP_MODE, DEMO_API_KEY added)
+- `docs/migration-log.md` (this entry)
+
+**Test delta:** +5 test files, +55 new test cases (12 deeplink + 9 pareto + 13 scoring + 12 optimizer + 9 SSE integration)
+**Coverage:** 90.11% (249 tests, all passing)
+**Eval:** eval-quick 100% (20/20 planner examples)

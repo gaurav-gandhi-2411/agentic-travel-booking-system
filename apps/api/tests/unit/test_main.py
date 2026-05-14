@@ -13,7 +13,7 @@ def client() -> TestClient:
 def test_health_returns_ok(client: TestClient) -> None:
     resp = client.get("/health")
     assert resp.status_code == 200
-    assert resp.json() == {"status": "ok", "phase": "0"}
+    assert resp.json() == {"status": "ok", "phase": "C"}
 
 
 def test_health_response_includes_request_id(client: TestClient) -> None:

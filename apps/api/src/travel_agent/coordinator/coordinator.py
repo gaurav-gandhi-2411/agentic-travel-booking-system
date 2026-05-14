@@ -3,13 +3,14 @@
 Phase flow: PLANNING → SEARCHING (parallel flight+hotel) → OPTIMIZING → PRESENTING
 
 Phase B: PLANNING is skipped -- callers must pre-populate state.intent.
-Phases C-F will wire PlannerAgent, OptimizerAgent scoring, and BookingAgent.
+Phase C: OptimizerAgent wired; demo path uses AviasalesAdapter for flights.
 
 References: ADR-0001 (coordinator pattern), ADR-0005 (window search).
 """
 from __future__ import annotations
 
 import asyncio
+import os
 from datetime import timedelta
 
 from travel_agent.agents.flight_hunter import FlightHunterAgent
@@ -22,6 +23,8 @@ from travel_agent.coordinator.state import (
     TravelIntent,
     Window,
 )
+from travel_agent.llm.base import LLMClient
+from travel_agent.providers.aviasales import AviasalesAdapter
 
 
 def _generate_windows(intent: TravelIntent) -> list[Window]:
@@ -40,10 +43,27 @@ def _generate_windows(intent: TravelIntent) -> list[Window]:
 
 
 class Coordinator:
-    def __init__(self) -> None:
-        self._flight_agent = FlightHunterAgent()
+    def __init__(
+        self,
+        llm_client: LLMClient | None = None,
+        optimizer_model: str = "claude-sonnet-4-6",
+        partner_marker: str = "",
+    ) -> None:
+        # Use AviasalesAdapter when APP_MODE=demo, else SyntheticProvider fallback
+        adapter: AviasalesAdapter | None = None
+        try:
+            if os.environ.get("APP_MODE") == "demo":
+                adapter = AviasalesAdapter()
+        except RuntimeError:
+            adapter = None  # key not set — fall back to synthetic
+
+        self._flight_agent = FlightHunterAgent(adapter=adapter)
         self._hotel_agent = HotelHunterAgent()
-        self._optimizer = OptimizerAgent()
+        self._optimizer = OptimizerAgent(
+            client=llm_client,
+            model=optimizer_model,
+            partner_marker=partner_marker,
+        )
 
     async def run(self, state: RequestState) -> RequestState:
         state = state.model_copy(deep=True)
