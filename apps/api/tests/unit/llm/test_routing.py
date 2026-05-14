@@ -1,20 +1,30 @@
 """Verify routing config validity and profile-switching behaviour."""
+from pathlib import Path
+
 import pytest
+import yaml
 
 from travel_agent.llm.routing import (
     AGENT_KEYS,
+    _load_yaml,
     get_active_profile_name,
     get_model_for_agent,
     get_provider,
     load_routing_config,
 )
 
-_EXPECTED_PROFILES = {"local", "free", "eval"}
+_EXPECTED_PROFILES = {"local", "free", "prod", "eval"}
+
+
+@pytest.fixture(autouse=True)
+def _clear_yaml_cache() -> None:
+    """Clear the lru_cache on _load_yaml between tests so env-var overrides work."""
+    _load_yaml.cache_clear()
 
 
 def test_all_profiles_present() -> None:
     config = load_routing_config()
-    assert _EXPECTED_PROFILES == set(config.keys())
+    assert set(config.keys()) == _EXPECTED_PROFILES
 
 
 def test_all_agents_in_all_profiles() -> None:
@@ -72,3 +82,43 @@ def test_local_provider_is_ollama(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_eval_provider_is_anthropic(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("LLM_ROUTING_PROFILE", "eval")
     assert get_provider() == "anthropic"
+
+
+def test_prod_provider_is_anthropic(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LLM_ROUTING_PROFILE", "prod")
+    assert get_provider() == "anthropic"
+
+
+def test_prod_and_eval_use_same_models() -> None:
+    config = load_routing_config()
+    for agent in AGENT_KEYS:
+        assert config["prod"][agent] == config["eval"][agent], (
+            f"Agent {agent!r}: prod model {config['prod'][agent]!r} != "
+            f"eval model {config['eval'][agent]!r}"
+        )
+
+
+def test_config_path_env_override(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """LLM_ROUTING_CONFIG_PATH env var overrides the default config file path."""
+    minimal_config: dict[str, object] = {
+        "profiles": {
+            "local": {
+                "planner": "test-model",
+                "flight_hunter": "test-model",
+                "hotel_hunter": "test-model",
+                "optimizer": "test-model",
+                "booking": "test-model",
+                "conversation": "test-model",
+                "provider": "ollama",
+            }
+        }
+    }
+    config_file = tmp_path / "test_routing.yaml"
+    config_file.write_text(yaml.dump(minimal_config))
+    monkeypatch.setenv("LLM_ROUTING_CONFIG_PATH", str(config_file))
+    _load_yaml.cache_clear()
+    config = load_routing_config()
+    assert "local" in config

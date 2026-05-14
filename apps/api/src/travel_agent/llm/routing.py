@@ -1,60 +1,62 @@
-"""LLM routing — stub implementation backed by a hardcoded table.
+"""LLM routing — loads per-agent model and provider config from llm_routing.yaml.
 
-Phase 2.5 replaces this with YAML-backed routing loaded from
-apps/api/config/llm_routing.yaml. The public API (get_active_profile_name,
-get_active_profile, get_model_for_agent, get_provider, load_routing_config)
-is stable; only the backing store changes.
+The public API (get_active_profile_name, get_active_profile, get_model_for_agent,
+get_provider, load_routing_config) is stable; only the backing store changed from
+a hardcoded dict (Phase 0) to YAML loading (Quick-Win Q10, 2026-05-14).
+
+Override the config file path with the LLM_ROUTING_CONFIG_PATH env var for testing
+or non-standard deployments.
 """
 from __future__ import annotations
 
 import os
+from functools import lru_cache
+from pathlib import Path
+from typing import Any, cast
+
+import yaml
 
 _DEFAULT_PROFILE = "local"
 
-# Routing table mirrors apps/api/config/llm_routing.yaml.
-# Phase 2.5 will load this from the YAML file instead.
-_ROUTING: dict[str, dict[str, str]] = {
-    "local": {
-        "planner": "qwen2.5:7b",
-        "flight_hunter": "qwen2.5:7b",
-        "hotel_hunter": "qwen2.5:7b",
-        "optimizer": "qwen2.5:14b",
-        "booking": "qwen2.5:7b",
-        "conversation": "qwen2.5:14b",
-        "provider": "ollama",
-        "base_url": "http://localhost:11434",
-    },
-    "free": {
-        "planner": "qwen/qwen-2.5-72b-instruct:free",
-        "flight_hunter": "meta-llama/llama-3.3-70b-instruct:free",
-        "hotel_hunter": "meta-llama/llama-3.3-70b-instruct:free",
-        "optimizer": "qwen/qwen-2.5-72b-instruct:free",
-        "booking": "meta-llama/llama-3.3-70b-instruct:free",
-        "conversation": "qwen/qwen-2.5-72b-instruct:free",
-        "provider": "openrouter",
-    },
-    "eval": {
-        "planner": "claude-sonnet-4-6",
-        "flight_hunter": "claude-haiku-4-5-20251001",
-        "hotel_hunter": "claude-haiku-4-5-20251001",
-        "optimizer": "claude-sonnet-4-6",
-        "booking": "claude-haiku-4-5-20251001",
-        "conversation": "claude-sonnet-4-6",
-        "provider": "anthropic",
-    },
-}
+# Path relative to this file: apps/api/src/travel_agent/llm/ → apps/api/config/
+_DEFAULT_CONFIG_PATH = (
+    Path(__file__).parent.parent.parent.parent / "config" / "llm_routing.yaml"
+)
 
 AGENT_KEYS: frozenset[str] = frozenset(
     {"planner", "flight_hunter", "hotel_hunter", "optimizer", "booking", "conversation"}
 )
 
 
-def load_routing_config() -> dict[str, dict[str, str]]:
-    """Return the routing config table.
+def _config_path() -> Path:
+    env = os.environ.get("LLM_ROUTING_CONFIG_PATH")
+    return Path(env) if env else _DEFAULT_CONFIG_PATH
 
-    Phase 2.5: replace with YAML loading from apps/api/config/llm_routing.yaml.
+
+@lru_cache(maxsize=1)
+def _load_yaml(path: str) -> dict[str, Any]:
+    """Load and cache the YAML config. Cached by path string for determinism."""
+    p = Path(path)
+    try:
+        with p.open() as f:
+            return cast("dict[str, Any]", yaml.safe_load(f))
+    except FileNotFoundError:
+        msg = (
+            f"LLM routing config not found at {p}. "
+            "Set LLM_ROUTING_CONFIG_PATH env var to override the path."
+        )
+        raise FileNotFoundError(msg) from None
+
+
+def load_routing_config() -> dict[str, dict[str, str]]:
+    """Return the full routing config as a profile-name → settings dict.
+
+    Profiles can contain non-string values (e.g. fallback_models is a nested
+    dict). Only AGENT_KEYS and 'provider'/'base_url' are read by the lookup
+    functions; extra keys are silently ignored.
     """
-    return _ROUTING
+    raw = _load_yaml(str(_config_path()))
+    return cast("dict[str, dict[str, str]]", raw["profiles"])
 
 
 def get_active_profile_name() -> str:
@@ -75,7 +77,7 @@ def get_active_profile() -> dict[str, str]:
 
 def get_model_for_agent(agent: str) -> str:
     profile = get_active_profile()
-    if agent not in profile:
+    if agent not in AGENT_KEYS or agent not in profile:
         profile_name = get_active_profile_name()
         msg = f"Agent {agent!r} not found in routing profile {profile_name!r}."
         raise ValueError(msg)
