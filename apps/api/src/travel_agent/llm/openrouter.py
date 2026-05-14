@@ -6,7 +6,7 @@ from travel_agent.llm.base import LLMResponse, Message
 
 
 class OpenRouterAdapter:
-    """OpenRouter free-tier adapter — default for cloud deployment. Phase 2.5 implementation target."""
+    """OpenRouter free-tier adapter — default for cloud deployment."""
 
     async def chat(
         self,
@@ -16,6 +16,8 @@ class OpenRouterAdapter:
         max_tokens: int = 2048,
         temperature: float = 0.0,
         system: str | None = None,
+        tools: list[Any] | None = None,
         **kwargs: Any,
     ) -> LLMResponse:
-        raise NotImplementedError("OpenRouterAdapter.chat — implemented in Phase 2.5")
+        msg = "OpenRouterAdapter.chat — implemented in Phase A"
+        raise NotImplementedError(msg)

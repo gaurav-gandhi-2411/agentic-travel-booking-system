@@ -12,7 +12,14 @@ The active provider and per-agent model are resolved from LLM_ROUTING_PROFILE
 from __future__ import annotations
 
 from travel_agent.llm.anthropic import AnthropicAdapter
-from travel_agent.llm.base import LLMClient, LLMError, LLMResponse, Message
+from travel_agent.llm.base import (
+    LLMClient,
+    LLMError,
+    LLMResponse,
+    Message,
+    ToolCall,
+    ToolDefinition,
+)
 from travel_agent.llm.groq import GroqAdapter
 from travel_agent.llm.ollama import OllamaAdapter
 from travel_agent.llm.openrouter import OpenRouterAdapter
@@ -54,5 +61,7 @@ __all__ = [
     "LLMError",
     "LLMResponse",
     "Message",
+    "ToolCall",
+    "ToolDefinition",
     "get_llm_client",
 ]

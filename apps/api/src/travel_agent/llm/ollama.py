@@ -6,7 +6,7 @@ from travel_agent.llm.base import LLMResponse, Message
 
 
 class OllamaAdapter:
-    """Local Ollama adapter — default for development. Phase 2.5 implementation target."""
+    """Local Ollama adapter — default for development."""
 
     async def chat(
         self,
@@ -16,6 +16,8 @@ class OllamaAdapter:
         max_tokens: int = 2048,
         temperature: float = 0.0,
         system: str | None = None,
+        tools: list[Any] | None = None,
         **kwargs: Any,
     ) -> LLMResponse:
-        raise NotImplementedError("OllamaAdapter.chat — implemented in Phase 2.5")
+        msg = "OllamaAdapter.chat — implemented in Phase A"
+        raise NotImplementedError(msg)

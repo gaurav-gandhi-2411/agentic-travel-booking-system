@@ -17,6 +17,8 @@ class VLLMAdapter:
         max_tokens: int = 2048,
         temperature: float = 0.0,
         system: str | None = None,
+        tools: list[Any] | None = None,
         **kwargs: Any,
     ) -> LLMResponse:
-        raise NotImplementedError("VLLMAdapter — implemented when self-hosted serving is required")
+        msg = "VLLMAdapter.chat — implemented in Phase A"
+        raise NotImplementedError(msg)
