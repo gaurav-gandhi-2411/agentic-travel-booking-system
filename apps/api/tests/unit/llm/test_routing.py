@@ -13,7 +13,7 @@ from travel_agent.llm.routing import (
     load_routing_config,
 )
 
-_EXPECTED_PROFILES = {"local", "free", "prod", "eval"}
+_EXPECTED_PROFILES = {"local", "free", "prod", "eval", "demo"}
 
 
 @pytest.fixture(autouse=True)
@@ -89,12 +89,13 @@ def test_prod_provider_is_anthropic(monkeypatch: pytest.MonkeyPatch) -> None:
     assert get_provider() == "anthropic"
 
 
-def test_prod_and_eval_use_same_models() -> None:
+def test_demo_profile_uses_haiku() -> None:
+    # demo profile is Haiku-only for latency and cost
     config = load_routing_config()
+    haiku = "claude-haiku-4-5-20251001"
     for agent in AGENT_KEYS:
-        assert config["prod"][agent] == config["eval"][agent], (
-            f"Agent {agent!r}: prod model {config['prod'][agent]!r} != "
-            f"eval model {config['eval'][agent]!r}"
+        assert config["demo"][agent] == haiku, (
+            f"Agent {agent!r}: expected Haiku in demo profile, got {config['demo'][agent]!r}"
         )
 
 

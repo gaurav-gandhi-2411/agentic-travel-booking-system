@@ -5,9 +5,9 @@ import { Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const EXAMPLES = [
-  'Mumbai to Paris for 7 days in June, budget ₹80k',
-  'Bangalore to Tokyo, 2 travelers, mid-July, prefer direct flights',
-  'Goa to Dubai for the long weekend',
+  'Delhi to Dubai in June',
+  'Delhi to Singapore in June',
+  'Mumbai to Bangkok for 5 days in June',
 ] as const;
 
 interface SearchInputProps {

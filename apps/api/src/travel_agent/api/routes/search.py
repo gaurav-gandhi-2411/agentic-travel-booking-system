@@ -32,7 +32,7 @@ def _build_agents() -> tuple[PlannerAgent, OptimizerAgent]:
     planner = PlannerAgent(llm, "claude-haiku-4-5-20251001")
     optimizer = OptimizerAgent(
         client=llm,
-        model="claude-sonnet-4-6",
+        model="claude-haiku-4-5-20251001",
         partner_marker=os.environ.get("AVIASALES_PARTNER_ID", ""),
     )
     return planner, optimizer

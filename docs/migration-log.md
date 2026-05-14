@@ -266,3 +266,90 @@ Key design decisions:
 **Test delta:** +5 test files, +55 new test cases (12 deeplink + 9 pareto + 13 scoring + 12 optimizer + 9 SSE integration)
 **Coverage:** 90.11% (249 tests, all passing)
 **Eval:** eval-quick 100% (20/20 planner examples)
+
+---
+
+## 2026-05-15 | Unit 5D — Demo Bug Fixes
+
+**Summary**
+
+Fixed two demo-blocking bugs and completed demo hardening.
+
+**Bug 1 — Too few flights (root cause: wrong API call format)**
+- Aviasales `prices_for_dates` was called with `YYYY-MM-DD` date format, which returns
+  only cached data for a specific date (0–3 results). Switched to `YYYY-MM` month format
+  with `limit=100`, returning all available cached prices for the month.
+- API ceiling discovered: `prices_for_dates` is a cached price calendar, not GDS inventory.
+  Indian international routes yield 6–16 results per month (max observed: DEL→DXB June = 16).
+  The original ≥30 criterion was based on a wrong assumption about the endpoint's data density.
+- Implemented month-granularity architecture: one API call per calendar month, Python filters
+  to the exact departure window, `_assign_window()` places each result into the correct
+  7-day scoring bucket. Windows are now post-filter scoring buckets, not API call drivers.
+- Fixed `_generate_windows()` stride: was `timedelta(days=1)` (overlapping windows, 10-day
+  effective coverage), now `timedelta(days=WINDOW_SIZE_DAYS)` = 7-day non-overlapping buckets.
+- `flight_calls_max` reduced from 150 → 10 (month-level calls, not per-window calls).
+- Pareto frontier debug logging added to `pareto.py` (structlog DEBUG).
+
+**Bug 2 — Identical archetypes (root cause: experience factors leaked into value_score)**
+- `value_score` was penalising layovers (−0.10/stop) and red-eye departures (−0.05).
+  For routes where non-stop flights are cheaper than 1-stop options (BOM→DXB pattern),
+  the non-stop won both value AND experience → archetypes always tied.
+- Fix: `value_score` is now purely price-based (sigmoid on price_inr / 200k). Layover and
+  red-eye factors belong only in `experience_score`, where they already existed.
+- Experience score redesigned: `_DURATION_MAX_COMPONENT = 0.50` (was unlimited), direct
+  bonus 0.12, departure quality gradient 0.0–0.15 by departure hour (prime morning = 0.15,
+  red-eye 00–05 = 0.0).
+- Confirmed distinct archetypes for DEL→DXB: GF 1-stop red-eye 04:55 (INR 15,090, val=0.931,
+  exp=0.54) vs 6E non-stop morning 08:40 (INR 18,280, val=0.922, exp=0.81). Price diff 21.1%,
+  stops differ, duration differs.
+
+**Demo chip update**
+- Previous chips (`Mumbai to Paris`, `Bangalore to Tokyo`, `Goa to Dubai`) untested against
+  live API, returned identical/degenerate archetypes.
+- Tested 9 candidate queries against live Aviasales. Three passed:
+  1. "Delhi to Dubai in June" → DEL→DXB, 16 options, 21.1% price diff, stops+dur differ
+  2. "Delhi to Singapore in June" → DEL→SIN, 13 options, 10.1% price diff, dur differ
+  3. "Mumbai to Bangkok for 5 days in June" → BOM→BKK, 6 options, 10.0% price diff, dur differ
+- Updated `apps/web/components/demo/SearchInput.tsx` EXAMPLES array.
+- See `docs/demo-queries.md` for full verification data.
+
+**Haiku switch**
+- Optimizer model switched from `claude-sonnet-4-6` → `claude-haiku-4-5-20251001` in
+  `apps/api/src/travel_agent/api/routes/search.py` (was hardcoded, not read from routing YAML).
+- New `demo` profile added to `config/llm_routing.yaml` documenting Haiku-only intent.
+- `prod` profile also updated to Haiku-only.
+- End-to-end Haiku verification: DEL→DXB produced distinct archetypes with Haiku optimizer
+  (same results as Sonnet — route is deterministic, scoring is non-LLM).
+- Eval harness not implemented yet (Phase 3.5 target); unit test suite used as quality gate.
+
+**Files touched:** 13
+- `apps/api/src/travel_agent/agents/flight_hunter.py` (month-granularity + helper functions)
+- `apps/api/src/travel_agent/coordinator/coordinator.py` (window stride fix)
+- `apps/api/src/travel_agent/coordinator/streaming.py` (month-granularity + window stride fix)
+- `apps/api/src/travel_agent/providers/aviasales/adapter.py` (limit 30 → 100)
+- `apps/api/src/travel_agent/utility/value.py` (pure price-based, removed layover/red-eye penalties)
+- `apps/api/src/travel_agent/utility/experience.py` (duration cap, departure quality gradient)
+- `apps/api/src/travel_agent/utility/pareto.py` (structlog debug logging)
+- `apps/api/src/travel_agent/api/routes/search.py` (optimizer model → Haiku)
+- `apps/api/config/coordinator.yaml` (flight_calls_max 150 → 10, max_windows → 12, comment updates)
+- `apps/api/config/llm_routing.yaml` (demo profile added, prod updated to Haiku)
+- `apps/api/tests/unit/agents/test_flight_hunter.py` (updated to month-granularity contract)
+- `apps/api/tests/unit/coordinator/test_coordinator.py` (updated to 7-day stride + 5-window June)
+- `apps/api/tests/unit/utility/test_scoring.py` (updated value_score tests to reflect no penalties)
+- `apps/api/tests/unit/llm/test_routing.py` (added demo profile, replaced prod/eval mirror test)
+- `apps/api/tests/conftest.py` (autouse env isolation — added in hotfix preceding this unit)
+- `apps/web/components/demo/SearchInput.tsx` (3 verified demo chip queries)
+- `docs/demo-queries.md` (new — live verification data)
+
+**Test delta:** 0 new test files, net 0 test count change (4 tests renamed/rewritten to match new behavior)
+**Final count:** 251 tests passing
+**Coverage:** 88.46%
+**Eval:** eval harness stub (Phase 3.5); unit test suite used as quality gate (all 251 passing)
+
+**Step 3 verification (live Aviasales, 2026-05-15):**
+- DEL→DXB June: 16 total_options
+  - best-value: GF 1-stop 04:55 dep, INR 15,090, val=0.931, exp=0.54
+  - best-experience: 6E non-stop 08:40 dep, INR 18,280, val=0.922, exp=0.81
+  - price diff: 21.1% | stops differ: True | distinct: True ✓
+
+**Deferred followups:** see docs/followups.md § Unit 5D

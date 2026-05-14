@@ -86,3 +86,26 @@ Each item includes the phase where it was noticed and a brief description.
   `FlightHunterAgent()` without an AviasalesAdapter. A VCR-backed integration test that
   injects a real AviasalesAdapter with cassette replay would increase confidence in the
   full Aviasales path end-to-end.
+
+---
+
+## Unit 5D — Demo Bug Fixes (2026-05-15)
+
+- **Free-tier Groq routing profile**: Add a `groq` profile to `config/llm_routing.yaml`
+  for zero-cost CI evaluation using Groq's hosted Llama endpoints (free tier: ~50 req/day).
+  Would allow nightly eval runs without consuming Anthropic credits. Groq base_url and
+  model IDs already supported by the OpenAI-compat adapter.
+
+- **Third archetype consideration**: The Pareto frontier consistently surfaces 3–5 options.
+  Currently only 2 archetypes are shown (best-value, best-experience). A third archetype
+  "best-balance" (nearest to the Pareto knee — minimising the distance to the ideal point)
+  could improve the demo story. Requires UI update (3-card layout) and OptimizerAgent change.
+
+- **Aviasales API ceiling**: The `prices_for_dates` endpoint is a cached price calendar,
+  not GDS inventory. Indian international routes yield 6–16 results per month, not 30+.
+  When a real-time GDS connection (Duffel, Amadeus) is added in Phase E, remove the
+  month-granularity workaround in FlightHunterAgent and replace with per-window calls.
+
+- **Demo chip routes are Delhi-heavy**: BOM and BLR routes lack the non-stop/1-stop price
+  inversion needed for distinct archetypes with the current API data. Revisit when live
+  inventory data (Duffel) replaces the Aviasales price calendar.

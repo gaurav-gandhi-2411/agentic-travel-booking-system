@@ -49,18 +49,19 @@ def test_cheaper_flight_higher_value() -> None:
     assert value_score(cheap) > value_score(expensive)
 
 
-def test_more_layovers_lower_value() -> None:
+def test_layovers_do_not_affect_value() -> None:
+    # value_score is purely price-based; layover penalties belong in experience_score
     direct = _flight(layover_count=0)
     one_stop = _flight(layover_count=1)
     two_stop = _flight(layover_count=2)
-    assert value_score(direct) > value_score(one_stop)
-    assert value_score(one_stop) > value_score(two_stop)
+    assert value_score(direct) == value_score(one_stop) == value_score(two_stop)
 
 
-def test_red_eye_penalised() -> None:
+def test_departure_time_does_not_affect_value() -> None:
+    # red-eye penalty removed from value_score; only experience_score discriminates
     red_eye = _flight(outbound_departure_at="2026-06-01T02:00:00+05:30")
     daytime = _flight(outbound_departure_at="2026-06-01T09:00:00+05:30")
-    assert value_score(daytime) > value_score(red_eye)
+    assert value_score(daytime) == value_score(red_eye)
 
 
 def test_very_cheap_flight_near_top_of_range() -> None:
