@@ -17,7 +17,7 @@ import pytest
 import vcr
 
 from travel_agent.llm.anthropic import AnthropicAdapter
-from travel_agent.llm.base import Message
+from travel_agent.llm.base import Message, ToolDefinition
 from travel_agent.llm.groq import GroqAdapter
 from travel_agent.llm.ollama import OllamaAdapter
 from travel_agent.llm.openrouter import OpenRouterAdapter
@@ -34,6 +34,12 @@ _VCR = vcr.VCR(
 )
 
 _MSG = [Message(role="user", content="Say hi in one word")]
+_TOOL_MSG = [Message(role="user", content="Find flights")]
+_FLIGHT_TOOL = ToolDefinition(
+    name="search_flights",
+    description="Search flights",
+    input_schema={"type": "object", "properties": {"origin": {"type": "string"}}},
+)
 
 
 # ── Anthropic ─────────────────────────────────────────────────────────────────
@@ -122,3 +128,51 @@ async def test_vllm_accepts_custom_base_url() -> None:
         adapter = VLLMAdapter(base_url="http://localhost:8000")
         response = await adapter.chat(_MSG, model="qwen2.5-7b-instruct")
     assert response.content == "Hello from vLLM!"
+
+
+# ── Tool-call path (_openai_compat.py lines 41-42) ────────────────────────────
+
+
+async def test_ollama_tool_call_via_cassette() -> None:
+    with _VCR.use_cassette("ollama/chat_tool_call.yaml"):
+        adapter = OllamaAdapter()
+        response = await adapter.chat(_TOOL_MSG, model="qwen2.5:7b", tools=[_FLIGHT_TOOL])
+    assert len(response.tool_calls) == 1
+    assert response.tool_calls[0].name == "search_flights"
+    assert response.tool_calls[0].input == {"origin": "BOM", "destination": "CDG"}
+    assert response.content == ""
+
+
+async def test_openrouter_tool_call_via_cassette(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test-key")
+    with _VCR.use_cassette("openrouter/chat_tool_call.yaml"):
+        adapter = OpenRouterAdapter()
+        response = await adapter.chat(
+            _TOOL_MSG, model="qwen/qwen-2.5-72b-instruct:free", tools=[_FLIGHT_TOOL]
+        )
+    assert len(response.tool_calls) == 1
+    assert response.tool_calls[0].name == "search_flights"
+    assert response.content == ""
+
+
+async def test_groq_tool_call_via_cassette(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GROQ_API_KEY", "gsk_test-key")
+    with _VCR.use_cassette("groq/chat_tool_call.yaml"):
+        adapter = GroqAdapter()
+        response = await adapter.chat(
+            _TOOL_MSG, model="llama-3.3-70b-versatile", tools=[_FLIGHT_TOOL]
+        )
+    assert len(response.tool_calls) == 1
+    assert response.tool_calls[0].name == "search_flights"
+    assert response.content == ""
+
+
+async def test_vllm_tool_call_via_cassette() -> None:
+    with _VCR.use_cassette("vllm/chat_tool_call.yaml"):
+        adapter = VLLMAdapter()
+        response = await adapter.chat(
+            _TOOL_MSG, model="qwen2.5-7b-instruct", tools=[_FLIGHT_TOOL]
+        )
+    assert len(response.tool_calls) == 1
+    assert response.tool_calls[0].name == "search_flights"
+    assert response.content == ""

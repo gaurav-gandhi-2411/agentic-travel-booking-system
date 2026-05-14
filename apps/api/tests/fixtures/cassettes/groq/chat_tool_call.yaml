@@ -1,0 +1,20 @@
+interactions:
+- request:
+    body: '{"model":"llama-3.3-70b-versatile","messages":[{"role":"user","content":"Find flights"}],"max_tokens":2048,"temperature":0.0,"tools":[{"type":"function","function":{"name":"search_flights","description":"Search flights","parameters":{"type":"object","properties":{"origin":{"type":"string"}}}}}],"tool_choice":"auto"}'
+    headers:
+      Accept:
+      - application/json
+      Content-Type:
+      - application/json
+    method: POST
+    uri: https://api.groq.com/openai/v1/chat/completions
+  response:
+    body:
+      string: '{"id":"chatcmpl-groq-tc-001","object":"chat.completion","created":1715000000,"model":"llama-3.3-70b-versatile","choices":[{"index":0,"message":{"role":"assistant","content":null,"tool_calls":[{"id":"call_groq_001","type":"function","function":{"name":"search_flights","arguments":"{\"origin\": \"BOM\", \"destination\": \"CDG\"}"}}]},"logprobs":null,"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":24,"completion_tokens":16,"total_tokens":40}}'
+    headers:
+      Content-Type:
+      - application/json
+    status:
+      code: 200
+      message: OK
+version: 1

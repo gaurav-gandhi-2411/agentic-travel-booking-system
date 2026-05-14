@@ -1,0 +1,20 @@
+interactions:
+- request:
+    body: '{"model":"qwen2.5-7b-instruct","messages":[{"role":"user","content":"Find flights"}],"max_tokens":2048,"temperature":0.0,"tools":[{"type":"function","function":{"name":"search_flights","description":"Search flights","parameters":{"type":"object","properties":{"origin":{"type":"string"}}}}}],"tool_choice":"auto"}'
+    headers:
+      Accept:
+      - application/json
+      Content-Type:
+      - application/json
+    method: POST
+    uri: http://localhost:8000/v1/chat/completions
+  response:
+    body:
+      string: '{"id":"chatcmpl-vllm-tc-001","object":"chat.completion","created":1715000000,"model":"qwen2.5-7b-instruct","choices":[{"index":0,"message":{"role":"assistant","content":null,"tool_calls":[{"id":"call_vllm_001","type":"function","function":{"name":"search_flights","arguments":"{\"origin\": \"BOM\", \"destination\": \"CDG\"}"}}]},"logprobs":null,"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":25,"completion_tokens":15,"total_tokens":40}}'
+    headers:
+      Content-Type:
+      - application/json
+    status:
+      code: 200
+      message: OK
+version: 1

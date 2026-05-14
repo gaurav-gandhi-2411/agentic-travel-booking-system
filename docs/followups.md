@@ -32,3 +32,30 @@ Each item includes the phase where it was noticed and a brief description.
 
 - **Dockerfile multi-stage**: Current Dockerfile is single-stage. Add a build stage and a
   slim runtime stage in Phase G when the image size starts mattering for Cloud Run cold start.
+
+---
+
+## Unit 2 — Phase A: Remaining LLM Adapters (2026-05-14)
+
+- **`_openai_compat.py` system-message path (line 31)**: `if system: api_messages.append(...)` is
+  untested. Add a cassette with a system message once PlannerAgent system prompts land in Phase C.
+  Phase D prereq.
+
+- **`_openai_compat.py` error path (lines 47-48)**: `except openai.APIError` branch not covered.
+  Add a test that monkeypatches `client.chat.completions.create` to raise `openai.APIError`.
+  Phase D prereq.
+
+---
+
+## Unit 3 — Phase B: Synthetic Provider + Coordinator Skeleton (2026-05-14)
+
+- **`OptimizerAgent` stub**: pass-through for Phase B. Real scoring (value/experience Pareto
+  extraction) lands in Phase D. See `agents/optimizer.py`.
+
+- **`PlannerAgent` stub**: raises `NotImplementedError`. LLM-powered intent parsing lands in
+  Phase C. Coordinator currently requires `state.intent` to be pre-populated.
+
+- **`BookingAgent` / `ConversationManagerAgent` stubs**: Phase E/F work.
+
+- **Destination city mapping** in `coordinator/constants.py` (`IATA_TO_CITY`): only covers
+  CDG/NRT/DPS. Extend before adding new routes in Phase B+.
