@@ -1,4 +1,6 @@
 """Tests for FastAPI application entry point — health endpoint and lifespan guard."""
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -58,3 +60,20 @@ def test_lifespan_guard_local_no_key_required(monkeypatch: pytest.MonkeyPatch) -
     with TestClient(app) as c:
         resp = c.get("/health")
     assert resp.status_code == 200
+
+
+def test_load_dotenv_makes_env_vars_visible(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """load_dotenv() reads vars from a .env file into os.environ."""
+    import os
+
+    from dotenv import load_dotenv
+
+    env_file = tmp_path / ".env"
+    env_file.write_text("TEST_DOTENV_SENTINEL=hello_from_dotenv\n")
+
+    monkeypatch.delenv("TEST_DOTENV_SENTINEL", raising=False)
+    load_dotenv(dotenv_path=env_file, override=True)
+
+    assert os.environ.get("TEST_DOTENV_SENTINEL") == "hello_from_dotenv"

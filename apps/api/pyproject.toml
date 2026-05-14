@@ -12,6 +12,7 @@ dependencies = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",
     "pydantic>=2.10.0",
+    "python-dotenv>=1.0.0",
     "pydantic-settings>=2.7.0",
     "anthropic>=0.40.0",
     "openai>=1.60.0",
@@ -94,7 +95,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101", "ARG001", "ARG002", "PLR2004", "PLC0415", "A002"]
+"tests/**" = ["S101", "ARG001", "ARG002", "PLR2004", "PLC0415", "A002", "PLR0913"]
 # Protocol-mandated signatures on LLM adapters exceed the 5-arg default.
 "src/travel_agent/llm/**" = ["PLR0913"]
 # Provider adapters may have multiple optional search parameters.

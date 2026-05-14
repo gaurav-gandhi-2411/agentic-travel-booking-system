@@ -12,11 +12,14 @@ from contextlib import asynccontextmanager
 
 import structlog
 import structlog.contextvars
+from dotenv import load_dotenv
 from fastapi import FastAPI
 
 from travel_agent.api.middleware.auth import DemoAuthMiddleware
 from travel_agent.api.middleware.request_id import RequestIDMiddleware
 from travel_agent.api.routes.search import router as search_router
+
+load_dotenv()
 
 # ── structlog configuration ───────────────────────────────────────────────────
 structlog.configure(

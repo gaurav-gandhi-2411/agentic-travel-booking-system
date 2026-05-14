@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from travel_agent.coordinator.state import CabinClass, FlightOption, TripType, Window
+from travel_agent.coordinator.state import CabinClass, FlightOption, Window
 from travel_agent.utility.experience import experience_score
 from travel_agent.utility.value import value_score
 

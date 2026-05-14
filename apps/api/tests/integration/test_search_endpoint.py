@@ -15,11 +15,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 from travel_agent.api.main import app
-from travel_agent.coordinator.state import (
-    CoordinatorPhase,
-    RequestState,
-    TravelIntent,
-)
 from travel_agent.llm.base import LLMClient, LLMResponse, ToolCall
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -56,10 +51,10 @@ def _make_planner_response(intent_fields: dict[str, Any]) -> LLMResponse:
 def _parse_sse(raw: str) -> list[dict[str, Any]]:
     """Parse raw SSE text into a list of event dicts."""
     events: list[dict[str, Any]] = []
-    for line in raw.splitlines():
-        line = line.strip()
-        if line.startswith("data:"):
-            payload = line[len("data:"):].strip()
+    for raw_line in raw.splitlines():
+        stripped = raw_line.strip()
+        if stripped.startswith("data:"):
+            payload = stripped[len("data:"):].strip()
             events.append(json.loads(payload))
     return events
 
@@ -228,7 +223,9 @@ def test_search_progress_events_sum_to_total(client: TestClient, mock_llm: LLMCl
     assert total_from_progress == search_done["total_options"]
 
 
-def test_search_without_auth_passes_in_synthetic_mode(client: TestClient, mock_llm: LLMClient) -> None:
+def test_search_without_auth_passes_in_synthetic_mode(
+    client: TestClient, mock_llm: LLMClient
+) -> None:
     """APP_MODE=synthetic (default) — no auth header required."""
     with patch("travel_agent.api.routes.search._build_agents") as mock_build:
         from travel_agent.agents.optimizer import OptimizerAgent
