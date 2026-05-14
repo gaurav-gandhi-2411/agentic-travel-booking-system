@@ -1,0 +1,20 @@
+interactions:
+- request:
+    body: '{"model":"qwen/qwen-2.5-72b-instruct:free","messages":[{"role":"user","content":"Say hi in one word"}],"max_tokens":2048,"temperature":0.0}'
+    headers:
+      Accept:
+      - application/json
+      Content-Type:
+      - application/json
+    method: POST
+    uri: https://openrouter.ai/api/v1/chat/completions
+  response:
+    body:
+      string: '{"id":"chatcmpl-openrouter-001","object":"chat.completion","created":1715000000,"model":"qwen/qwen-2.5-72b-instruct:free","choices":[{"index":0,"message":{"role":"assistant","content":"Hello from OpenRouter!","tool_calls":null},"logprobs":null,"finish_reason":"stop"}],"usage":{"prompt_tokens":12,"completion_tokens":5,"total_tokens":17}}'
+    headers:
+      Content-Type:
+      - application/json
+    status:
+      code: 200
+      message: OK
+version: 1

@@ -1,0 +1,20 @@
+interactions:
+- request:
+    body: '{"model":"qwen2.5-7b-instruct","messages":[{"role":"user","content":"Say hi in one word"}],"max_tokens":2048,"temperature":0.0}'
+    headers:
+      Accept:
+      - application/json
+      Content-Type:
+      - application/json
+    method: POST
+    uri: http://localhost:8000/v1/chat/completions
+  response:
+    body:
+      string: '{"id":"chatcmpl-vllm-001","object":"chat.completion","created":1715000000,"model":"qwen2.5-7b-instruct","choices":[{"index":0,"message":{"role":"assistant","content":"Hello from vLLM!","tool_calls":null},"logprobs":null,"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}'
+    headers:
+      Content-Type:
+      - application/json
+    status:
+      code: 200
+      message: OK
+version: 1

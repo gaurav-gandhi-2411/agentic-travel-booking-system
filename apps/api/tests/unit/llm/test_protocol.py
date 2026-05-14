@@ -2,6 +2,9 @@
 
 Also covers the base dataclasses (Message, ToolDefinition, ToolCall, LLMResponse)
 to keep coverage above the fail_under threshold.
+
+Adapters that require API keys (Anthropic, OpenRouter, Groq) raise RuntimeError
+when instantiated without their respective env vars.
 """
 import pytest
 
@@ -26,16 +29,30 @@ def test_ollama_implements_protocol() -> None:
     assert isinstance(OllamaAdapter(), LLMClient)
 
 
-def test_openrouter_implements_protocol() -> None:
+def test_vllm_implements_protocol() -> None:
+    assert isinstance(VLLMAdapter(), LLMClient)
+
+
+def test_openrouter_implements_protocol(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test-key")
     assert isinstance(OpenRouterAdapter(), LLMClient)
 
 
-def test_groq_implements_protocol() -> None:
+def test_openrouter_raises_without_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    with pytest.raises(RuntimeError, match="OPENROUTER_API_KEY"):
+        OpenRouterAdapter()
+
+
+def test_groq_implements_protocol(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GROQ_API_KEY", "gsk_test-key")
     assert isinstance(GroqAdapter(), LLMClient)
 
 
-def test_vllm_implements_protocol() -> None:
-    assert isinstance(VLLMAdapter(), LLMClient)
+def test_groq_raises_without_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    with pytest.raises(RuntimeError, match="GROQ_API_KEY"):
+        GroqAdapter()
 
 
 def test_anthropic_raises_without_api_key(monkeypatch: pytest.MonkeyPatch) -> None:

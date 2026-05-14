@@ -1,0 +1,124 @@
+"""Integration tests for all five LLM adapters using VCR.py cassettes.
+
+Each test enters the cassette context before creating the adapter so that
+vcrpy can patch the httpx transport prior to client initialisation.
+Cassettes are stored at tests/fixtures/cassettes/{adapter}/chat.yaml.
+No real network calls are made — record_mode="none" enforces this.
+
+To re-record a cassette: delete the .yaml file and run the test with
+LLM_ROUTING_PROFILE set and the appropriate API key in the environment.
+vcrpy will record the interaction on first run and replay on subsequent runs.
+"""
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+import vcr
+
+from travel_agent.llm.anthropic import AnthropicAdapter
+from travel_agent.llm.base import Message
+from travel_agent.llm.groq import GroqAdapter
+from travel_agent.llm.ollama import OllamaAdapter
+from travel_agent.llm.openrouter import OpenRouterAdapter
+from travel_agent.llm.vllm import VLLMAdapter
+
+_CASSETTE_DIR = Path(__file__).parent.parent.parent / "fixtures" / "cassettes"
+
+_VCR = vcr.VCR(
+    cassette_library_dir=str(_CASSETTE_DIR),
+    record_mode="none",
+    filter_headers=["authorization", "x-api-key", "cookie", "set-cookie"],
+    decode_compressed_response=True,
+    match_on=["method", "scheme", "host", "port", "path"],
+)
+
+_MSG = [Message(role="user", content="Say hi in one word")]
+
+
+# ── Anthropic ─────────────────────────────────────────────────────────────────
+
+
+async def test_anthropic_chat_replays_cassette(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-key")
+    with _VCR.use_cassette("anthropic/chat.yaml"):
+        adapter = AnthropicAdapter()
+        response = await adapter.chat(_MSG, model="claude-sonnet-4-6")
+    assert response.content == "Hello from Anthropic!"
+    assert response.model == "claude-sonnet-4-6"
+    assert response.input_tokens == 8
+    assert response.output_tokens == 6
+    assert response.tool_calls == []
+    assert response.latency_ms >= 0
+
+
+# ── Ollama ────────────────────────────────────────────────────────────────────
+
+
+async def test_ollama_chat_replays_cassette() -> None:
+    with _VCR.use_cassette("ollama/chat.yaml"):
+        adapter = OllamaAdapter()
+        response = await adapter.chat(_MSG, model="qwen2.5:7b")
+    assert response.content == "Hello from Ollama!"
+    assert response.model == "qwen2.5:7b"
+    assert response.input_tokens == 10
+    assert response.output_tokens == 6
+    assert response.tool_calls == []
+
+
+async def test_ollama_accepts_custom_base_url() -> None:
+    with _VCR.use_cassette("ollama/chat.yaml"):
+        adapter = OllamaAdapter(base_url="http://localhost:11434")
+        response = await adapter.chat(_MSG, model="qwen2.5:7b")
+    assert response.content == "Hello from Ollama!"
+
+
+# ── OpenRouter ────────────────────────────────────────────────────────────────
+
+
+async def test_openrouter_chat_replays_cassette(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test-key")
+    with _VCR.use_cassette("openrouter/chat.yaml"):
+        adapter = OpenRouterAdapter()
+        response = await adapter.chat(_MSG, model="qwen/qwen-2.5-72b-instruct:free")
+    assert response.content == "Hello from OpenRouter!"
+    assert response.model == "qwen/qwen-2.5-72b-instruct:free"
+    assert response.input_tokens == 12
+    assert response.output_tokens == 5
+    assert response.tool_calls == []
+
+
+# ── Groq ──────────────────────────────────────────────────────────────────────
+
+
+async def test_groq_chat_replays_cassette(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GROQ_API_KEY", "gsk_test-key")
+    with _VCR.use_cassette("groq/chat.yaml"):
+        adapter = GroqAdapter()
+        response = await adapter.chat(_MSG, model="llama-3.3-70b-versatile")
+    assert response.content == "Hello from Groq!"
+    assert response.model == "llama-3.3-70b-versatile"
+    assert response.input_tokens == 11
+    assert response.output_tokens == 4
+    assert response.tool_calls == []
+
+
+# ── vLLM ──────────────────────────────────────────────────────────────────────
+
+
+async def test_vllm_chat_replays_cassette() -> None:
+    with _VCR.use_cassette("vllm/chat.yaml"):
+        adapter = VLLMAdapter()
+        response = await adapter.chat(_MSG, model="qwen2.5-7b-instruct")
+    assert response.content == "Hello from vLLM!"
+    assert response.model == "qwen2.5-7b-instruct"
+    assert response.input_tokens == 10
+    assert response.output_tokens == 5
+    assert response.tool_calls == []
+
+
+async def test_vllm_accepts_custom_base_url() -> None:
+    with _VCR.use_cassette("vllm/chat.yaml"):
+        adapter = VLLMAdapter(base_url="http://localhost:8000")
+        response = await adapter.chat(_MSG, model="qwen2.5-7b-instruct")
+    assert response.content == "Hello from vLLM!"
