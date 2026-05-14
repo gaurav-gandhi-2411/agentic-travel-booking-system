@@ -97,6 +97,10 @@ ignore = [
 "tests/**" = ["S101", "ARG001", "ARG002", "PLR2004", "PLC0415", "A002"]
 # Protocol-mandated signatures on LLM adapters exceed the 5-arg default.
 "src/travel_agent/llm/**" = ["PLR0913"]
+# Provider adapters may have multiple optional search parameters.
+"src/travel_agent/providers/**" = ["PLR0913"]
+# eval runner is a CLI script; print is the correct output mechanism.
+"evals/**" = ["T201"]
 
 [tool.ruff.format]
 quote-style = "double"

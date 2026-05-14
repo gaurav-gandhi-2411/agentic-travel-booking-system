@@ -1,0 +1,7 @@
+{"id":"hh-001","description":"CDG destination maps to Paris","input":{"destination_iata":"CDG","hotel_min_stars":3.0,"trip_duration_days":7},"expected":{"city":"Paris","min_results":1,"provider":"synthetic"}}
+{"id":"hh-002","description":"NRT destination maps to Tokyo","input":{"destination_iata":"NRT","hotel_min_stars":3.0,"trip_duration_days":5},"expected":{"city":"Tokyo","min_results":1,"provider":"synthetic"}}
+{"id":"hh-003","description":"DPS destination maps to Bali","input":{"destination_iata":"DPS","hotel_min_stars":3.0,"trip_duration_days":7},"expected":{"city":"Bali","min_results":1,"provider":"synthetic"}}
+{"id":"hh-004","description":"4-star filter removes lower-rated properties","input":{"destination_iata":"CDG","hotel_min_stars":4.0,"trip_duration_days":7},"expected":{"city":"Paris","all_stars_gte":4.0}}
+{"id":"hh-005","description":"total_price_inr equals price_per_night_inr * nights","input":{"destination_iata":"CDG","hotel_min_stars":3.0,"trip_duration_days":7},"expected":{"total_price_equals_nightly_times_nights":true}}
+{"id":"hh-006","description":"Unknown destination (XXX) returns empty results","input":{"destination_iata":"XXX","hotel_min_stars":3.0,"trip_duration_days":7},"expected":{"min_results":0,"max_results":0}}
+{"id":"hh-007","description":"5-star luxury filter returns only 5-star hotels","input":{"destination_iata":"CDG","hotel_min_stars":5.0,"trip_duration_days":3},"expected":{"all_stars_gte":5.0}}

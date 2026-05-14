@@ -59,3 +59,30 @@ Each item includes the phase where it was noticed and a brief description.
 
 - **Destination city mapping** in `coordinator/constants.py` (`IATA_TO_CITY`): only covers
   CDG/NRT/DPS. Extend before adding new routes in Phase B+.
+
+---
+
+## Unit 4 — Phase C: PlannerAgent + Aviasales + Hunter Agents (2026-05-14)
+
+- **`EXTRACT_FLIGHT_OPTIONS` / `EXTRACT_HOTEL_OPTIONS` tools unused**: These ToolDefinition
+  objects in `agents/tools.py` exist as schema contracts but FlightHunterAgent /
+  HotelHunterAgent do not currently call the LLM to normalize provider output. If
+  provider data quality varies (real Aviasales vs hypothetical Duffel), an LLM normalization
+  pass using these tools could improve consistency. Phase D consideration.
+
+- **AviasalesAdapter `return_at` parameter**: `get_flights()` accepts `return_at` but the
+  current FlightHunterAgent does not pass it. For round-trip searches, passing the return
+  date would narrow results. Wire when OptimizerAgent starts scoring round-trip packages.
+
+- **`_openai_compat.py` system-message path (line 31)**: PlannerAgent system prompts are now
+  live — add a cassette with a non-empty system message for the Ollama/OpenRouter/Groq/vLLM
+  adapters to close this gap.
+
+- **Aviasales `limit` parameter**: hard-coded to 30. If the coordinator searches many windows,
+  per-window limits may be worth tuning. Config value in `coordinator.yaml` would allow easy
+  adjustment.
+
+- **Integration test uses SyntheticProvider only**: `test_coordinator_pipeline.py` wires
+  `FlightHunterAgent()` without an AviasalesAdapter. A VCR-backed integration test that
+  injects a real AviasalesAdapter with cassette replay would increase confidence in the
+  full Aviasales path end-to-end.

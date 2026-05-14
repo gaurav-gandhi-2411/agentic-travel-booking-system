@@ -82,6 +82,7 @@ class TravelIntent(BaseModel):
     hotel_location_hint: str | None = None
     trip_type: TripType = TripType.ROUND_TRIP
     departure_time_constraint: str | None = None  # e.g. "no red-eyes", "mornings only"
+    airline_preference: str | None = None
     raw_query: str = ""
 
 

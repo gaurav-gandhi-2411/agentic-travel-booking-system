@@ -1,10 +1,130 @@
-"""PlannerAgent stub — LLM-powered intent parsing lands in Phase C."""
+"""PlannerAgent — parses raw user text into a structured TravelIntent.
+
+Calls the LLM with the extract_travel_intent tool and forces a tool-call
+response.  The caller must pre-set state.raw_input before calling run().
+
+Phase C: requires state.raw_input; sets state.intent on success.
+"""
 from __future__ import annotations
 
-from travel_agent.coordinator.state import RequestState
+import json
+from datetime import UTC, date, datetime
+from pathlib import Path
+
+from travel_agent.agents.tools import EXTRACT_TRAVEL_INTENT
+from travel_agent.coordinator.state import (
+    CabinClass,
+    CoordinatorPhase,
+    RequestState,
+    TravelIntent,
+    TripType,
+)
+from travel_agent.llm.base import LLMClient, Message
+
+_PROMPT_PATH = Path(__file__).parent / "prompts" / "planner_system.txt"
+
+
+def _load_system_prompt(today: date | None = None) -> str:
+    template = _PROMPT_PATH.read_text()
+    resolved_today = (today or datetime.now(tz=UTC).date()).isoformat()
+    return template.replace("{today}", resolved_today)
 
 
 class PlannerAgent:
-    async def run(self, state: RequestState) -> RequestState:
-        msg = "PlannerAgent LLM parsing lands in Phase C"
-        raise NotImplementedError(msg)
+    def __init__(self, client: LLMClient, model: str) -> None:
+        self._client = client
+        self._model = model
+
+    async def run(
+        self,
+        state: RequestState,
+        *,
+        today: date | None = None,
+    ) -> RequestState:
+        if not state.raw_input:
+            state.phase = CoordinatorPhase.ERROR
+            state.errors.append("PlannerAgent requires non-empty state.raw_input")
+            return state
+
+        system = _load_system_prompt(today)
+        messages = [Message(role="user", content=state.raw_input)]
+
+        response = await self._client.chat(
+            messages,
+            model=self._model,
+            max_tokens=1024,
+            temperature=0.0,
+            system=system,
+            tools=[EXTRACT_TRAVEL_INTENT],
+        )
+
+        if not response.tool_calls:
+            state.phase = CoordinatorPhase.ERROR
+            state.errors.append(
+                f"PlannerAgent: LLM returned no tool call (content={response.content!r})"
+            )
+            return state
+
+        call = response.tool_calls[0]
+        if call.name != EXTRACT_TRAVEL_INTENT.name:
+            state.phase = CoordinatorPhase.ERROR
+            state.errors.append(
+                f"PlannerAgent: unexpected tool '{call.name}'; "
+                f"expected '{EXTRACT_TRAVEL_INTENT.name}'"
+            )
+            return state
+
+        try:
+            intent = _parse_intent(call.input)
+        except (KeyError, ValueError, json.JSONDecodeError) as exc:
+            state.phase = CoordinatorPhase.ERROR
+            state.errors.append(f"PlannerAgent: failed to parse tool input: {exc}")
+            return state
+
+        state.intent = intent
+        return state
+
+
+def _parse_intent(raw: dict[str, object]) -> TravelIntent:
+    budget = raw.get("budget_inr")
+    return TravelIntent(
+        origin_iata=str(raw["origin_iata"]),
+        destination_iata=str(raw["destination_iata"]),
+        earliest_departure=date.fromisoformat(str(raw["earliest_departure"])),
+        latest_departure=date.fromisoformat(str(raw["latest_departure"])),
+        trip_duration_days=_to_int(raw.get("trip_duration_days"), 7),
+        traveler_count=_to_int(raw.get("traveler_count"), 1),
+        cabin_class=CabinClass(str(raw.get("cabin_class", "economy"))),
+        budget_inr=_to_int_opt(budget),
+        hotel_min_stars=_to_float(raw.get("hotel_min_stars"), 3.0),
+        hotel_location_hint=_optional_str(raw.get("hotel_location_hint")),
+        trip_type=TripType(str(raw.get("trip_type", "round_trip"))),
+        airline_preference=_optional_str(raw.get("airline_preference")),
+        departure_time_constraint=_optional_str(raw.get("departure_time_constraint")),
+        raw_query=str(raw["raw_query"]),
+    )
+
+
+def _to_int(val: object, default: int) -> int:
+    if val is None:
+        return default
+    return int(str(val))
+
+
+def _to_int_opt(val: object) -> int | None:
+    if val is None:
+        return None
+    return int(str(val))
+
+
+def _to_float(val: object, default: float) -> float:
+    if val is None:
+        return default
+    return float(str(val))
+
+
+def _optional_str(val: object) -> str | None:
+    if val is None or val == "null":
+        return None
+    s = str(val).strip()
+    return s if s else None

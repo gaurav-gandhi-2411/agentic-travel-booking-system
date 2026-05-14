@@ -88,14 +88,11 @@ jobs:
         run: npm run test --if-present
 
   # ── eval-quick (path-filtered) ────────────────────────────────────────────
-  # Regression gate: runs a 20-example subset of the agent golden datasets.
-  # Fails CI on >2% drop on any metric. Path-filtered so it only runs when
-  # agent logic, LLM wiring, or eval datasets change.
-  #
-  # Currently a dry-run placeholder — becomes load-bearing in Phase C when
-  # agents and golden datasets land. continue-on-error: false is intentional.
+  # Regression gate: 20-example PlannerAgent golden set via VCR cassette replay.
+  # Fails CI if field-level accuracy drops below 95%.
+  # Path-filtered to run only when agent code, LLM wiring, or eval datasets change.
   eval-quick:
-    name: Eval quick (dry run)
+    name: Eval quick (planner golden set)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -114,11 +111,5 @@ jobs:
       - name: Install dependencies
         run: pip install -e ".[dev]"
 
-      - name: Eval quick (dry run — agents not yet implemented)
-        run: |
-          python -c "
-          import sys
-          print('eval-quick: no agents implemented yet (Phase C). '
-                'This job becomes load-bearing when evals/datasets/ is populated.')
-          sys.exit(0)
-          "
+      - name: Eval quick (VCR replay, threshold 95%)
+        run: python -m evals.run --dataset planner --threshold 0.95

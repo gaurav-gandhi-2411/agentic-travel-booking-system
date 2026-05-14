@@ -146,3 +146,65 @@ Key design decisions:
 **Coverage:** 89.91% (118 tests, all passing)
 
 **Deferred followups:** see docs/followups.md
+
+---
+
+## 2026-05-14 | Unit 4 — Phase C: PlannerAgent + Aviasales Adapter + Hunter Agents + Integration
+
+**Summary**
+Full Phase C implementation: tool schemas, prompt files, PlannerAgent with LLM eval,
+Aviasales adapter with VCR tests, FlightHunterAgent updated to use Aviasales,
+HotelHunterAgent unit tests, end-to-end integration test.
+
+Key design decisions:
+- Three ToolDefinition objects in `agents/tools.py` (`EXTRACT_TRAVEL_INTENT`,
+  `EXTRACT_FLIGHT_OPTIONS`, `EXTRACT_HOTEL_OPTIONS`) use strict JSON Schema
+  (`additionalProperties: false`, enum constraints, pattern validation).
+- PlannerAgent loads its system prompt from `agents/prompts/planner_system.txt`
+  at init time (5-line header comment, `{today}` placeholder replaced at call time).
+  Forces tool-call via `extract_travel_intent`; parses with `_parse_intent()`.
+- 20 golden examples in `evals/datasets/planner/golden.jsonl`; 20 matching VCR
+  cassettes at `tests/fixtures/cassettes/eval/planner/p-{id}.yaml`.
+  `evals/run.py` replaced the eval-quick CI dry-run; scores SCORED + OPTIONAL fields,
+  exits 0 if accuracy >= 95%.  PlannerAgent hit 100% accuracy on VCR replay.
+- Aviasales adapter: httpx.AsyncClient wrapper over Travelpayouts
+  `/aviasales/v3/prices_for_dates`; custom error hierarchy
+  (`AviasalesError` > `AviasalesRateLimitError` | `AviasalesServerError` |
+  `AviasalesClientError`).  Three VCR cassettes (happy path, 429, 5xx).
+- FlightHunterAgent accepts optional `AviasalesAdapter`; if provided, calls it
+  async and maps raw list[dict] to `FlightOption` via `_map_raw_to_flight_option()`
+  (computes arrival times from departure + duration_to/duration_back).
+  Falls back to SyntheticProvider when no adapter injected.
+- HotelHunterAgent unchanged architecturally; full unit test coverage added.
+- Integration test (`tests/integration/test_coordinator_pipeline.py`): mocked
+  LLMClient -> PlannerAgent -> Coordinator -> FlightHunterAgent (Synthetic) +
+  HotelHunterAgent end-to-end.  Covers BOM-CDG, BOM-NRT, BOM-DPS, star filters,
+  budget tracking, planner error handling.
+
+**Files touched:** 22
+- `apps/api/src/travel_agent/agents/tools.py` (new)
+- `apps/api/src/travel_agent/agents/prompts/planner_system.txt` (new)
+- `apps/api/src/travel_agent/agents/planner.py` (implemented from stub)
+- `apps/api/src/travel_agent/agents/flight_hunter.py` (updated -- Aviasales support + mapping)
+- `apps/api/src/travel_agent/coordinator/state.py` (airline_preference field added to TravelIntent)
+- `apps/api/src/travel_agent/providers/aviasales.py` (new)
+- `apps/api/evals/run.py` (new)
+- `apps/api/evals/datasets/planner/golden.jsonl` (new -- 20 examples)
+- `apps/api/evals/datasets/flight_hunter/golden.jsonl` (new -- 7 examples)
+- `apps/api/evals/datasets/hotel_hunter/golden.jsonl` (new -- 7 examples)
+- `apps/api/tests/fixtures/cassettes/aviasales/{flights_happy_path,flights_429,flights_5xx}.yaml` (3 new)
+- `apps/api/tests/fixtures/cassettes/eval/planner/p-{001..020}.yaml` (20 new)
+- `apps/api/tests/unit/agents/test_planner.py` (new -- 29 tests, mock LLMClient)
+- `apps/api/tests/unit/agents/test_flight_hunter.py` (new -- 20 tests)
+- `apps/api/tests/unit/agents/test_hotel_hunter.py` (new -- 20 tests)
+- `apps/api/tests/unit/providers/test_aviasales.py` (new -- 6 tests, VCR)
+- `apps/api/tests/integration/test_coordinator_pipeline.py` (new -- 9 integration tests)
+- `apps/api/.env.example` (AVIASALES_API_KEY added)
+- `apps/api/pyproject.toml` (PLR0913 ignore for providers/**)
+- `.github/workflows/ci.yml` (eval-quick wired to evals/run.py)
+- `docs/migration-log.md` (this entry)
+
+**Test delta:** +5 test files, +76 new test cases (29 planner + 20 flight hunter + 20 hotel hunter + 6 aviasales + 9 integration + ~1 tools)
+**Coverage:** 92.64% (194 tests, all passing)
+
+**Deferred followups:** see docs/followups.md

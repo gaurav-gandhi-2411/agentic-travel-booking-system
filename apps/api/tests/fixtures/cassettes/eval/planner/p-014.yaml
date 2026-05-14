@@ -1,0 +1,18 @@
+interactions:
+- request:
+    body: null
+    headers:
+      Content-Type:
+      - application/json
+    method: POST
+    uri: https://api.anthropic.com/v1/messages
+  response:
+    body:
+      string: '{"id":"msg_eval_p-014","type":"message","role":"assistant","content":[{"type":"tool_use","id":"toolu_p-014","name":"extract_travel_intent","input":{"origin_iata":"BOM","destination_iata":"DPS","earliest_departure":"2026-07-01","latest_departure":"2026-07-31","trip_duration_days":7,"traveler_count":2,"cabin_class":"economy","budget_inr":null,"hotel_min_stars":3,"hotel_location_hint":null,"trip_type":"round_trip","airline_preference":null,"departure_time_constraint":"morning flights only","raw_query":"BOM to DPS 2 people economy, any date in July 2026, morning flights only"}}],"model":"claude-haiku-4-5-20251001","stop_reason":"tool_use","usage":{"input_tokens":450,"output_tokens":90}}'
+    headers:
+      Content-Type:
+      - application/json
+    status:
+      code: 200
+      message: OK
+version: 1

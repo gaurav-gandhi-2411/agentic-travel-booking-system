@@ -1,0 +1,18 @@
+interactions:
+- request:
+    body: null
+    headers:
+      Content-Type:
+      - application/json
+    method: POST
+    uri: https://api.anthropic.com/v1/messages
+  response:
+    body:
+      string: '{"id":"msg_eval_p-015","type":"message","role":"assistant","content":[{"type":"tool_use","id":"toolu_p-015","name":"extract_travel_intent","input":{"origin_iata":"BOM","destination_iata":"CDG","earliest_departure":"2026-06-01","latest_departure":"2026-06-30","trip_duration_days":7,"traveler_count":2,"cabin_class":"business","budget_inr":600000,"hotel_min_stars":5,"hotel_location_hint":null,"trip_type":"round_trip","airline_preference":null,"departure_time_constraint":null,"raw_query":"Luxury trip to Paris, 5-star hotels only, flying business class, budget around 3 lakhs per person, 2 people"}}],"model":"claude-haiku-4-5-20251001","stop_reason":"tool_use","usage":{"input_tokens":450,"output_tokens":90}}'
+    headers:
+      Content-Type:
+      - application/json
+    status:
+      code: 200
+      message: OK
+version: 1

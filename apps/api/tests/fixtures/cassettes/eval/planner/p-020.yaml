@@ -1,0 +1,18 @@
+interactions:
+- request:
+    body: null
+    headers:
+      Content-Type:
+      - application/json
+    method: POST
+    uri: https://api.anthropic.com/v1/messages
+  response:
+    body:
+      string: '{"id":"msg_eval_p-020","type":"message","role":"assistant","content":[{"type":"tool_use","id":"toolu_p-020","name":"extract_travel_intent","input":{"origin_iata":"BOM","destination_iata":"NRT","earliest_departure":"2026-11-01","latest_departure":"2026-11-30","trip_duration_days":7,"traveler_count":2,"cabin_class":"business","budget_inr":800000,"hotel_min_stars":3,"hotel_location_hint":null,"trip_type":"round_trip","airline_preference":null,"departure_time_constraint":null,"raw_query":"I want to take my parents to Tokyo for their anniversary in November 2026, business class, budget 8 lakhs total"}}],"model":"claude-haiku-4-5-20251001","stop_reason":"tool_use","usage":{"input_tokens":450,"output_tokens":90}}'
+    headers:
+      Content-Type:
+      - application/json
+    status:
+      code: 200
+      message: OK
+version: 1

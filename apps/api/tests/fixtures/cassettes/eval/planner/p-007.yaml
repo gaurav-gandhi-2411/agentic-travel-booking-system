@@ -1,0 +1,18 @@
+interactions:
+- request:
+    body: null
+    headers:
+      Content-Type:
+      - application/json
+    method: POST
+    uri: https://api.anthropic.com/v1/messages
+  response:
+    body:
+      string: '{"id":"msg_eval_p-007","type":"message","role":"assistant","content":[{"type":"tool_use","id":"toolu_p-007","name":"extract_travel_intent","input":{"origin_iata":"BOM","destination_iata":"CDG","earliest_departure":"2026-06-01","latest_departure":"2026-06-30","trip_duration_days":7,"traveler_count":2,"cabin_class":"business","budget_inr":1000000,"hotel_min_stars":3,"hotel_location_hint":null,"trip_type":"round_trip","airline_preference":null,"departure_time_constraint":"no red-eyes","raw_query":"Our team of 2 needs business class to Paris, no red-eye flights, budget is 5 lakhs each"}}],"model":"claude-haiku-4-5-20251001","stop_reason":"tool_use","usage":{"input_tokens":450,"output_tokens":90}}'
+    headers:
+      Content-Type:
+      - application/json
+    status:
+      code: 200
+      message: OK
+version: 1
