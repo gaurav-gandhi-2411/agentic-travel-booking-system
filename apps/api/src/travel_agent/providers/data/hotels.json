@@ -1,0 +1,204 @@
+{
+  "hotels": [
+    {
+      "id_prefix": "syn-cdg-001",
+      "name": "Budget Palace Montmartre",
+      "city": "Paris",
+      "stars": 3.0,
+      "review_score": 6.5,
+      "price_per_night_inr": 12000,
+      "location_description": "Montmartre, scenic but 40 min from city centre",
+      "is_refundable": false
+    },
+    {
+      "id_prefix": "syn-cdg-002",
+      "name": "Le Petit Bijou",
+      "city": "Paris",
+      "stars": 4.0,
+      "review_score": 9.2,
+      "price_per_night_inr": 4200,
+      "location_description": "Le Marais, exceptional value boutique property",
+      "is_refundable": true
+    },
+    {
+      "id_prefix": "syn-cdg-003",
+      "name": "Hotel des Artistes",
+      "city": "Paris",
+      "stars": 3.0,
+      "review_score": 7.6,
+      "price_per_night_inr": 5200,
+      "location_description": "Pigalle, walkable to Moulin Rouge",
+      "is_refundable": false
+    },
+    {
+      "id_prefix": "syn-cdg-004",
+      "name": "Citadines Republique",
+      "city": "Paris",
+      "stars": 3.0,
+      "review_score": 8.0,
+      "price_per_night_inr": 5800,
+      "location_description": "Republique, metro access, studio apartments",
+      "is_refundable": true
+    },
+    {
+      "id_prefix": "syn-cdg-005",
+      "name": "Ibis Paris Gare de Lyon",
+      "city": "Paris",
+      "stars": 3.0,
+      "review_score": 7.4,
+      "price_per_night_inr": 4800,
+      "location_description": "Gare de Lyon, RER B to CDG airport",
+      "is_refundable": false
+    },
+    {
+      "id_prefix": "syn-cdg-006",
+      "name": "Novotel Paris Les Halles",
+      "city": "Paris",
+      "stars": 4.0,
+      "review_score": 8.4,
+      "price_per_night_inr": 9500,
+      "location_description": "Les Halles, central location near Pompidou",
+      "is_refundable": true
+    },
+    {
+      "id_prefix": "syn-cdg-007",
+      "name": "Le Marais Boutique Hotel",
+      "city": "Paris",
+      "stars": 4.0,
+      "review_score": 8.7,
+      "price_per_night_inr": 10800,
+      "location_description": "Le Marais historic district, walking distance to Louvre",
+      "is_refundable": true
+    },
+    {
+      "id_prefix": "syn-cdg-008",
+      "name": "Grand Hotel Paris Opera",
+      "city": "Paris",
+      "stars": 5.0,
+      "review_score": 9.2,
+      "price_per_night_inr": 24000,
+      "location_description": "Opera district, 19th-century grand facade",
+      "is_refundable": true
+    },
+    {
+      "id_prefix": "syn-nrt-001",
+      "name": "Tokyo Central Hostel Business",
+      "city": "Tokyo",
+      "stars": 3.0,
+      "review_score": 6.2,
+      "price_per_night_inr": 4800,
+      "location_description": "Shinjuku, 2 min walk from JR Shinjuku Station",
+      "is_refundable": false
+    },
+    {
+      "id_prefix": "syn-nrt-002",
+      "name": "APA Hotel Kabukicho Shinjuku",
+      "city": "Tokyo",
+      "stars": 3.0,
+      "review_score": 7.9,
+      "price_per_night_inr": 5200,
+      "location_description": "Shinjuku, compact rooms, excellent transit access",
+      "is_refundable": false
+    },
+    {
+      "id_prefix": "syn-nrt-003",
+      "name": "Toyo Inn Asakusa",
+      "city": "Tokyo",
+      "stars": 3.0,
+      "review_score": 7.3,
+      "price_per_night_inr": 4500,
+      "location_description": "Asakusa, near Senso-ji temple",
+      "is_refundable": false
+    },
+    {
+      "id_prefix": "syn-nrt-004",
+      "name": "Dormy Inn Premium Ginza",
+      "city": "Tokyo",
+      "stars": 3.0,
+      "review_score": 8.1,
+      "price_per_night_inr": 5500,
+      "location_description": "Ginza, natural hot spring onsen on-site",
+      "is_refundable": true
+    },
+    {
+      "id_prefix": "syn-nrt-005",
+      "name": "Mitsui Garden Hotel Shinjuku",
+      "city": "Tokyo",
+      "stars": 4.0,
+      "review_score": 8.6,
+      "price_per_night_inr": 8800,
+      "location_description": "Shinjuku, modern rooms with city views",
+      "is_refundable": true
+    },
+    {
+      "id_prefix": "syn-nrt-006",
+      "name": "Grand Hyatt Tokyo Roppongi",
+      "city": "Tokyo",
+      "stars": 5.0,
+      "review_score": 9.3,
+      "price_per_night_inr": 31000,
+      "location_description": "Roppongi Hills, connected to arts complex",
+      "is_refundable": true
+    },
+    {
+      "id_prefix": "syn-nrt-007",
+      "name": "The Okura Tokyo",
+      "city": "Tokyo",
+      "stars": 5.0,
+      "review_score": 9.5,
+      "price_per_night_inr": 35500,
+      "location_description": "Toranomon, iconic Japanese aesthetics",
+      "is_refundable": true
+    },
+    {
+      "id_prefix": "syn-dps-001",
+      "name": "Kuta Budget Inn",
+      "city": "Bali",
+      "stars": 3.0,
+      "review_score": 7.0,
+      "price_per_night_inr": 2800,
+      "location_description": "Kuta Beach, 5 min walk to beach",
+      "is_refundable": false
+    },
+    {
+      "id_prefix": "syn-dps-002",
+      "name": "Legian Beach Hotel",
+      "city": "Bali",
+      "stars": 3.0,
+      "review_score": 7.5,
+      "price_per_night_inr": 3500,
+      "location_description": "Legian, beachfront location",
+      "is_refundable": false
+    },
+    {
+      "id_prefix": "syn-dps-003",
+      "name": "Seminyak Villas & Spa",
+      "city": "Bali",
+      "stars": 4.0,
+      "review_score": 8.7,
+      "price_per_night_inr": 7000,
+      "location_description": "Seminyak, private pool villas",
+      "is_refundable": true
+    },
+    {
+      "id_prefix": "syn-dps-004",
+      "name": "The Mulia Bali",
+      "city": "Bali",
+      "stars": 5.0,
+      "review_score": 9.4,
+      "price_per_night_inr": 19500,
+      "location_description": "Nusa Dua, private beach stretch",
+      "is_refundable": true
+    },
+    {
+      "id_prefix": "syn-dps-005",
+      "name": "Alila Seminyak",
+      "city": "Bali",
+      "stars": 5.0,
+      "review_score": 9.6,
+      "price_per_night_inr": 23000,
+      "location_description": "Seminyak beachfront, contemporary design",
+      "is_refundable": true
+    }
+  ]
+}

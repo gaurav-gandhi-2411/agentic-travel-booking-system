@@ -19,6 +19,12 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
+from travel_agent.coordinator.constants import (
+    FLIGHT_CALLS_MAX,
+    HOTEL_CALLS_MAX,
+    LLM_CALLS_MAX,
+)
+
 # ── enumerations ──────────────────────────────────────────────────────────────
 
 
@@ -170,9 +176,9 @@ class CallBudget(BaseModel):
     flight_calls_used: int = 0
     hotel_calls_used: int = 0
     llm_calls_used: int = 0
-    flight_calls_max: int = 150
-    hotel_calls_max: int = 100
-    llm_calls_max: int = 20
+    flight_calls_max: int = FLIGHT_CALLS_MAX
+    hotel_calls_max: int = HOTEL_CALLS_MAX
+    llm_calls_max: int = LLM_CALLS_MAX
 
     def can_call_flight(self) -> bool:
         return self.flight_calls_used < self.flight_calls_max
