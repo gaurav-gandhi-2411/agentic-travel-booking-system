@@ -39,7 +39,11 @@ def _build_agents() -> tuple[PlannerAgent, OptimizerAgent]:
 
 
 async def _sse_generator(query: str) -> AsyncGenerator[str, None]:
-    planner, optimizer = _build_agents()
+    try:
+        planner, optimizer = _build_agents()
+    except Exception as exc:
+        yield f"data: {json.dumps({'type': 'error', 'message': str(exc)})}\n\n"
+        return
     async for event in stream_search(query, planner, optimizer):
         yield f"data: {json.dumps(event)}\n\n"
 
