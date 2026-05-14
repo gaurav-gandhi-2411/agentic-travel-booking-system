@@ -1,6 +1,10 @@
 # LLM routing config — per-agent model and provider selection.
 # Active profile selected via LLM_ROUTING_PROFILE env var (default: local).
-# Phase 2.5: travel_agent.llm.routing will load this file directly.
+# Loaded at runtime by travel_agent.llm.routing.load_routing_config().
+#
+# Model IDs verified against Anthropic SDK accepted strings (2026-05-14):
+#   claude-sonnet-4-6          → Claude Sonnet 4.6
+#   claude-haiku-4-5-20251001  → Claude Haiku 4.5
 
 profiles:
 
@@ -36,6 +40,20 @@ profiles:
       optimizer:      llama-3.3-70b-versatile
       booking:        llama-3.3-70b-versatile
       conversation:   llama-3.3-70b-versatile
+
+  # ── prod ──────────────────────────────────────────────────────────────────────
+  # B2B production profile. Tenants supply their own ANTHROPIC_API_KEY; the SDK
+  # authenticates using the tenant key so inference cost is attributed to them.
+  # Mirrors the eval profile — same models, same provider, explicit prod label.
+  # See plan.md §18 open decisions and the Phase E auth ADR (TBD).
+  prod:
+    planner:        claude-sonnet-4-6
+    flight_hunter:  claude-haiku-4-5-20251001
+    hotel_hunter:   claude-haiku-4-5-20251001
+    optimizer:      claude-sonnet-4-6
+    booking:        claude-haiku-4-5-20251001
+    conversation:   claude-sonnet-4-6
+    provider:       anthropic
 
   # ── eval ─────────────────────────────────────────────────────────────────────
   # Frontier models for baseline benchmarks. Requires ANTHROPIC_API_KEY.
