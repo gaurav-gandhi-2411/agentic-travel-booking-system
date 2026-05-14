@@ -11,6 +11,9 @@ COPY src/ src/
 COPY config/ config/
 RUN pip install --no-cache-dir .
 
+ENV COORDINATOR_CONFIG_PATH=/app/config/coordinator.yaml
+ENV LLM_ROUTING_CONFIG_PATH=/app/config/llm_routing.yaml
+
 # Run as non-root.
 RUN groupadd --system appgroup && \
     useradd --system --gid appgroup --no-create-home appuser

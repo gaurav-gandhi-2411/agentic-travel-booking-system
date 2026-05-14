@@ -5,18 +5,25 @@ Phase D will tune these values — centralised here so callers need no updates.
 
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-_CONFIG_PATH = Path(__file__).parent.parent.parent.parent / "config" / "coordinator.yaml"
+_DEFAULT_CONFIG_PATH = Path(__file__).parent.parent.parent.parent / "config" / "coordinator.yaml"
+
+
+def _config_path() -> Path:
+    env = os.environ.get("COORDINATOR_CONFIG_PATH")
+    return Path(env) if env else _DEFAULT_CONFIG_PATH
 
 
 @lru_cache(maxsize=1)
 def _load_config() -> dict[str, Any]:
-    with _CONFIG_PATH.open() as f:
+    p = _config_path()
+    with p.open() as f:
         data: dict[str, Any] = yaml.safe_load(f)
         return data
 
