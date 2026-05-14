@@ -11,11 +11,12 @@ from __future__ import annotations
 
 import os
 import time
-from typing import Any, cast
+from typing import Any
 
 import anthropic
 
-from travel_agent.llm.base import LLMError, LLMResponse, Message, ToolCall, ToolDefinition
+from travel_agent.llm._tool_translation import parse_anthropic_tool_calls, to_anthropic_tools
+from travel_agent.llm.base import LLMError, LLMResponse, Message, ToolDefinition
 
 
 class AnthropicAdapter:
@@ -62,16 +63,7 @@ class AnthropicAdapter:
                 }
             ]
 
-        tools_param: list[dict[str, Any]] | None = None
-        if tools:
-            tools_param = [
-                {
-                    "name": t.name,
-                    "description": t.description,
-                    "input_schema": t.input_schema,
-                }
-                for t in tools
-            ]
+        tools_param: list[dict[str, Any]] | None = to_anthropic_tools(tools) if tools else None
 
         create_kwargs: dict[str, Any] = {
             "model": model,
@@ -91,19 +83,10 @@ class AnthropicAdapter:
 
         latency_ms = (time.monotonic() - start) * 1000
 
-        content_text = ""
-        tool_calls: list[ToolCall] = []
-        for block in response.content:
-            if block.type == "text":
-                content_text = block.text
-            elif block.type == "tool_use":
-                tool_calls.append(
-                    ToolCall(
-                        name=block.name,
-                        input=cast(dict[str, Any], block.input),
-                        id=block.id,
-                    )
-                )
+        content_text = next(
+            (block.text for block in response.content if block.type == "text"), ""
+        )
+        tool_calls = parse_anthropic_tool_calls(list(response.content))
 
         return LLMResponse(
             content=content_text,
