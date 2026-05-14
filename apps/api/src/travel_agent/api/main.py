@@ -14,6 +14,7 @@ import structlog
 import structlog.contextvars
 from dotenv import load_dotenv
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from travel_agent.api.middleware.auth import DemoAuthMiddleware
 from travel_agent.api.middleware.request_id import RequestIDMiddleware
@@ -45,7 +46,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     profile = os.environ.get("LLM_ROUTING_PROFILE", "local")
     app_mode = os.environ.get("APP_MODE", "synthetic")
 
-    if profile in {"eval", "prod"} and not os.environ.get("ANTHROPIC_API_KEY"):
+    if profile in {"eval", "prod", "demo"} and not os.environ.get("ANTHROPIC_API_KEY"):
         msg = (
             "LLM_ROUTING_PROFILE=eval|prod requires ANTHROPIC_API_KEY. "
             "Eval is for manual baseline runs only. "
@@ -72,6 +73,16 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://agentic-travel-booking-system.vercel.app",
+        "http://localhost:3000",
+    ],
+    allow_origin_regex=r"https://.*\.vercel\.app",
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "X-API-Key"],
+)
 app.add_middleware(DemoAuthMiddleware)
 app.add_middleware(RequestIDMiddleware)
 

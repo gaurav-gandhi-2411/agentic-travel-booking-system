@@ -60,6 +60,13 @@ jobs:
           image: ${{ vars.CLOUD_RUN_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.ARTIFACT_REGISTRY_REPO }}/api:${{ github.sha }}
           env_vars: |
             APP_ENV=staging
+            APP_MODE=demo
+            LLM_ROUTING_PROFILE=demo
+          secrets: |
+            ANTHROPIC_API_KEY=anthropic-api-key:latest
+            AVIASALES_API_KEY=travelpayouts-api-token:latest
+            AVIASALES_PARTNER_ID=travelpayouts-aviasales-marker:latest
+            DEMO_API_KEY=demo-api-key:latest
           flags: |
             --min-instances=0
             --max-instances=5
@@ -67,4 +74,13 @@ jobs:
             --cpu=1
             --timeout=300
 
-# TODO(Phase 1): re-add health endpoint smoke test after /health ships
+      - name: Staging health check
+        run: |
+          URL="https://agentic-travel-booking-api-staging-rqyyasfwaa-el.a.run.app/health"
+          for i in 1 2 3 4 5; do
+            STATUS=$(curl -sf "$URL" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('status',''))" 2>/dev/null || echo "")
+            if [ "$STATUS" = "ok" ]; then echo "Health check passed"; exit 0; fi
+            echo "Attempt $i failed, retrying in 10s..."
+            sleep 10
+          done
+          echo "Health check failed after 5 attempts" && exit 1
