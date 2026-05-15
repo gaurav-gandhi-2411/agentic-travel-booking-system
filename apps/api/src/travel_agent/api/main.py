@@ -67,7 +67,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     if app_mode == "demo" and not os.environ.get("GROQ_API_KEY"):
         logger.warning(
-            "GROQ_API_KEY not set — X-LLM-Profile: demo-free requests will fail at runtime."
+            "GROQ_API_KEY not set — X-LLM-Profile: demo-llama requests will fail at runtime."
+        )
+
+    if app_mode == "demo" and not os.environ.get("OPENROUTER_API_KEY"):
+        logger.warning(
+            "OPENROUTER_API_KEY not set — X-LLM-Profile: demo-qwen requests will fail at runtime."
         )
 
     logger.info("startup", llm_routing_profile=profile, app_mode=app_mode, phase="C")

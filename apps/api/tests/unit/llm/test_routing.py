@@ -17,7 +17,7 @@ from travel_agent.llm.routing import (
     load_routing_config,
 )
 
-_EXPECTED_PROFILES = {"local", "free", "prod", "eval", "demo", "demo-haiku", "demo-free"}
+_EXPECTED_PROFILES = {"local", "free", "prod", "eval", "demo", "demo-haiku", "demo-llama", "demo-qwen"}
 
 
 @pytest.fixture(autouse=True)
@@ -113,15 +113,22 @@ def test_demo_haiku_profile_matches_demo() -> None:
     assert config["demo-haiku"]["provider"] == "anthropic"
 
 
-def test_demo_free_profile_uses_groq() -> None:
+def test_demo_llama_profile_uses_groq() -> None:
     config = load_routing_config()
-    assert config["demo-free"]["provider"] == "groq"
-    assert "llama" in config["demo-free"]["planner"]
-    assert "llama" in config["demo-free"]["optimizer"]
+    assert config["demo-llama"]["provider"] == "groq"
+    assert "llama" in config["demo-llama"]["planner"]
+    assert "llama" in config["demo-llama"]["optimizer"]
+
+
+def test_demo_qwen_profile_uses_openrouter() -> None:
+    config = load_routing_config()
+    assert config["demo-qwen"]["provider"] == "openrouter"
+    assert "qwen" in config["demo-qwen"]["planner"].lower()
+    assert "qwen" in config["demo-qwen"]["optimizer"].lower()
 
 
 def test_get_profile_by_name() -> None:
-    profile = get_profile_by_name("demo-free")
+    profile = get_profile_by_name("demo-llama")
     assert profile["provider"] == "groq"
 
 
@@ -131,13 +138,14 @@ def test_get_profile_by_name_unknown_raises() -> None:
 
 
 def test_get_model_for_agent_in_profile() -> None:
-    model = get_model_for_agent_in_profile("planner", "demo-free")
+    model = get_model_for_agent_in_profile("planner", "demo-llama")
     assert "llama" in model.lower()
 
 
 def test_get_provider_for_profile() -> None:
     assert get_provider_for_profile("demo-haiku") == "anthropic"
-    assert get_provider_for_profile("demo-free") == "groq"
+    assert get_provider_for_profile("demo-llama") == "groq"
+    assert get_provider_for_profile("demo-qwen") == "openrouter"
 
 
 def test_config_path_env_override(

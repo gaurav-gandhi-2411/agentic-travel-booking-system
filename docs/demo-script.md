@@ -10,10 +10,13 @@
 
 - [ ] Backend is running (`uvicorn travel_agent.api.main:app --reload`)
 - [ ] Frontend is running (`npm run dev`) or production URL is live
-- [ ] Run Query 1 ("Delhi to Dubai in June") once yourself — absorbs cold start
+- [ ] Run Query 1 ("Delhi to Dubai in June") once yourself on Anthropic Haiku — absorbs cold start
 - [ ] Confirm both archetype cards render with "Why this?" button visible
 - [ ] Confirm "Make it cheaper" chip appears after results load
 - [ ] Confirm "Skip red-eyes" and "Non-stop only" chips also work
+- [ ] Toggle to "Llama 3.3 70B" and run one query — confirm results appear (GROQ_API_KEY wired)
+- [ ] Toggle to "Qwen 2.5 72B" and run one query — confirm results appear (OPENROUTER_API_KEY wired)
+- [ ] Switch back to "Anthropic Haiku" before the live demo
 
 ---
 
@@ -91,9 +94,9 @@ Optional if time allows — type in the free-text box: **"I prefer morning depar
 
 After Query 2 results appear (Bangkok), point to the toggle in the top-right corner.
 
-> *"One more thing. See this toggle — 'Premium' vs 'Open-source'? Right now we're running on Anthropic Haiku. Same query, different model."*
+> *"One more thing. See this 3-way toggle? Right now we're on Anthropic Haiku. Same query, three different providers."*
 
-Click **"Open-source (Llama via Groq)"**.
+Click **"Llama 3.3 70B"**.
 
 > *"Llama 3.3 70B via Groq. Open-source. Free tier. Same architecture."*
 
@@ -103,13 +106,21 @@ Click the **"Make it cheaper"** chip (refinement section, still visible).
 
 When the new archetypes appear:
 
-> *"Two valid recommendations. Production tenants choose their own provider — cost-sensitive deployments run open-source via Groq or self-hosted vLLM; quality-sensitive deployments use Anthropic or OpenAI. The agent protocol is provider-agnostic."*
+> *"Two valid recommendations. Now watch this."*
 
-Switch back to "Premium" before the next query to return to baseline.
+Click **"Qwen 2.5 72B"**.
+
+> *"Qwen 2.5 72B via OpenRouter. Different provider, different model family — same agent code, same results shape."*
+
+Click **"Make it cheaper"** again.
+
+> *"Three providers, three model families, zero code changes. Production tenants choose their own provider — cost-sensitive deployments run open-source (Llama, Qwen, or self-hosted vLLM); quality-sensitive deployments use Anthropic or OpenAI. Multi-provider redundancy means no single LLM provider can take the system down."*
+
+Switch back to "Anthropic Haiku" before the next query to return to baseline.
 
 **Talking points when asked about model choice:**
 - "The routing is config-driven — you change one YAML value, the entire pipeline switches."
-- "For the demo, Haiku is faster and more reliable on complex tool calling. Llama is free and 90% of the quality."
+- "For the demo, Haiku is faster and more reliable on complex tool calling. Llama and Qwen are free and 85-90% of the quality."
 - "In production, tenants supply their own API key. We don't see their data."
 
 ---
@@ -158,8 +169,8 @@ Switch back to "Premium" before the next query to return to baseline.
 > Switch to: **"Delhi to Kuala Lumpur in June"** — verified to return live results.
 
 **Optimizer error / generic failure:**
-> *"One of the agents hit a timeout — this happens occasionally with the free-tier LLM endpoint. Let me retry."*  
-> Hit the retry button. If it fails again, switch to a different query.
+> *"One of the agents hit a timeout — this happens occasionally with the free-tier LLM endpoint. Let me switch providers."*  
+> If on Llama (Groq), switch to Qwen (OpenRouter) or vice versa. If both free tiers fail, switch to Anthropic Haiku (paid path is always available).
 
 **Refinement shows no change:**
 > *"The filter applied, but the top options happen to be the same flights — they were already the cheapest non-stop options available. Let me try a different refinement."*  
@@ -172,13 +183,14 @@ Switch back to "Premium" before the next query to return to baseline.
 
 ## 3-query walkthrough (for a non-engineer co-presenter)
 
-1. Go to [demo URL], you'll see a text input and a "Premium / Open-source" toggle in the top-right. Leave toggle on **Premium**.
+1. Go to [demo URL], you'll see a text input and a 3-button toggle in the top-right (**Anthropic Haiku / Llama 3.3 70B / Qwen 2.5 72B**). Leave toggle on **Anthropic Haiku**.
 2. Type `Delhi to Dubai in June` and press Enter or click search.
 3. Watch the three progress steps: Understanding → Searching → Ranking.
 4. Two cards appear. Click "Why this?" on the left (teal) card. Read the comparison text aloud.
 5. Scroll down. Click "Make it cheaper". Point out the lower prices when new cards appear (< 2 seconds).
 6. Type `Delhi to Bangkok in June` in the main search box. Wait for results.
-7. **Toggle moment**: click "Open-source (Llama via Groq)" in the top-right. Then click "Make it cheaper". New results appear from a different model. Say: "Same architecture, different provider."
-8. Switch back to "Premium". Done.
+7. **Toggle moment**: click **"Llama 3.3 70B"** in the top-right. Then click "Make it cheaper". New results appear from a different model. Say: "Same architecture, different provider."
+8. Click **"Qwen 2.5 72B"**. Click "Make it cheaper" again. Say: "Three providers. One YAML config. No code changes."
+9. Switch back to **"Anthropic Haiku"**. Done.
 
 **Total time: 10–12 minutes at a relaxed pace.**

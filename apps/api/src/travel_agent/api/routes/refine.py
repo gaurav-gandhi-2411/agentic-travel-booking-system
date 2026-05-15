@@ -41,7 +41,7 @@ router = APIRouter()
 _RED_EYE_CUTOFF_HOUR = 6
 
 
-_ALLOWED_PROFILES: frozenset[str] = frozenset({"demo-haiku", "demo-free"})
+_ALLOWED_PROFILES: frozenset[str] = frozenset({"demo-haiku", "demo-llama", "demo-qwen"})
 
 
 def _resolve_profile(requested: str | None) -> str:

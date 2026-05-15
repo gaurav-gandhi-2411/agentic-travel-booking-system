@@ -5,7 +5,8 @@ Response: text/event-stream, one JSON event per line.
 
 The X-LLM-Profile request header selects the LLM provider for this request:
   demo-haiku  → Anthropic Claude Haiku (default when env profile is "demo")
-  demo-free   → Groq Llama 3.3 70B (free tier)
+  demo-llama  → Groq Llama 3.3 70B (free tier)
+  demo-qwen   → OpenRouter Qwen 2.5 72B (free tier)
   (absent)    → falls back to LLM_ROUTING_PROFILE env var
 
 See coordinator/streaming.py for the full event sequence spec.
@@ -28,7 +29,7 @@ from travel_agent.llm import get_llm_client_and_model
 
 router = APIRouter()
 
-_ALLOWED_PROFILES: frozenset[str] = frozenset({"demo-haiku", "demo-free"})
+_ALLOWED_PROFILES: frozenset[str] = frozenset({"demo-haiku", "demo-llama", "demo-qwen"})
 
 
 def _resolve_profile(requested: str | None) -> str:

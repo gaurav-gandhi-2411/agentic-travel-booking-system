@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 
-export type LLMProfile = 'demo-haiku' | 'demo-free';
+export type LLMProfile = 'demo-haiku' | 'demo-llama' | 'demo-qwen';
 
 const STORAGE_KEY = 'preferred_llm_profile';
 const DEFAULT_PROFILE: LLMProfile = 'demo-haiku';
@@ -14,8 +14,8 @@ export function useProfilePreference(): [LLMProfile, (p: LLMProfile) => void] {
   useEffect(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored === 'demo-haiku' || stored === 'demo-free') {
-        setProfile(stored);
+      if (stored === 'demo-haiku' || stored === 'demo-llama' || stored === 'demo-qwen') {
+        setProfile(stored as LLMProfile);
       }
     } catch {
       // localStorage unavailable (SSR or private browsing)
@@ -42,14 +42,20 @@ const OPTIONS: Array<{
 }> = [
   {
     value: 'demo-haiku',
-    label: 'Premium',
+    label: 'Anthropic Haiku',
     sublabel: 'Anthropic Haiku',
     hint: '≈ $0.01/query',
   },
   {
-    value: 'demo-free',
-    label: 'Open-source',
-    sublabel: 'Llama via Groq',
+    value: 'demo-llama',
+    label: 'Llama 3.3 70B',
+    sublabel: 'Open-source (Groq)',
+    hint: 'Free tier',
+  },
+  {
+    value: 'demo-qwen',
+    label: 'Qwen 2.5 72B',
+    sublabel: 'Open-source (OpenRouter)',
     hint: 'Free tier',
   },
 ];

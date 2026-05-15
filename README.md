@@ -11,6 +11,11 @@ affiliate booking links.  Stream the full agent pipeline over SSE with a single 
 Type a natural-language query and watch two specialist agents stream their reasoning in
 real time, then surface two ranked flight options with one-click affiliate booking links.
 
+Three LLM profiles selectable per-request via the toggle:
+- **Anthropic Haiku** — paid, fastest, most reliable (≈ $0.01/query)
+- **Llama 3.3 70B via Groq** — open-source, free tier
+- **Qwen 2.5 72B via OpenRouter** — open-source, free tier
+
 Queries verified against live Aviasales (May 2026):
 
 | Query | Route | Options | Trade-off |
@@ -73,9 +78,9 @@ data: {"type": "done"}
 | `AVIASALES_PARTNER_ID` | When `APP_MODE=demo` | Travelpayouts affiliate partner ID |
 | `APP_MODE` | No (default: `synthetic`) | `synthetic` = no real API calls; `demo` = real Aviasales |
 | `DEMO_API_KEY` | When `APP_MODE=demo` | Secret checked against `X-API-Key` header |
-| `LLM_ROUTING_PROFILE` | No (default: `local`) | `local` \| `free` \| `prod` \| `eval` |
-| `OPENROUTER_API_KEY` | When profile=`free` | OpenRouter key |
-| `GROQ_API_KEY` | Optional (free profile fallback) | Groq key |
+| `LLM_ROUTING_PROFILE` | No (default: `local`) | `local` \| `free` \| `prod` \| `eval` \| `demo-haiku` \| `demo-llama` \| `demo-qwen` |
+| `OPENROUTER_API_KEY` | When profile=`free` or `demo-qwen` | OpenRouter key |
+| `GROQ_API_KEY` | When profile=`demo-llama` (free profile fallback) | Groq key |
 
 See `apps/api/.env.example` for the full list.
 

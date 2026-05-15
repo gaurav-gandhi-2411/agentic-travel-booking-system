@@ -63,11 +63,11 @@ profiles:
     conversation:   claude-haiku-4-5-20251001
     provider:       anthropic
 
-  # ── demo-free ────────────────────────────────────────────────────────────────
+  # ── demo-llama ───────────────────────────────────────────────────────────────
   # Free-tier demo profile. Groq + Llama 3.3 70B for reasoning agents.
   # Requires GROQ_API_KEY (free at console.groq.com).
-  # Activated per-request via X-LLM-Profile: demo-free header.
-  demo-free:
+  # Activated per-request via X-LLM-Profile: demo-llama header.
+  demo-llama:
     planner:        llama-3.3-70b-versatile
     flight_hunter:  llama-3.1-8b-instant
     hotel_hunter:   llama-3.1-8b-instant
@@ -75,6 +75,19 @@ profiles:
     booking:        llama-3.1-8b-instant
     conversation:   llama-3.3-70b-versatile
     provider:       groq
+
+  # ── demo-qwen ────────────────────────────────────────────────────────────────
+  # Free-tier demo profile. OpenRouter + Qwen 2.5 72B.
+  # Requires OPENROUTER_API_KEY (free at openrouter.ai).
+  # Activated per-request via X-LLM-Profile: demo-qwen header.
+  demo-qwen:
+    planner:        qwen/qwen-2.5-72b-instruct:free
+    flight_hunter:  qwen/qwen-2.5-72b-instruct:free
+    hotel_hunter:   qwen/qwen-2.5-72b-instruct:free
+    optimizer:      qwen/qwen-2.5-72b-instruct:free
+    booking:        qwen/qwen-2.5-72b-instruct:free
+    conversation:   qwen/qwen-2.5-72b-instruct:free
+    provider:       openrouter
 
   # ── prod ──────────────────────────────────────────────────────────────────────
   # B2B production profile. Tenants supply their own ANTHROPIC_API_KEY; the SDK
