@@ -47,6 +47,12 @@ export interface Archetype {
   };
 }
 
+export interface RouteAlternative {
+  origin_iata: string;
+  destination_iata: string;
+  label: string;
+}
+
 export interface SseEvent {
   type: string;
   intent?: TravelIntent;
@@ -59,6 +65,10 @@ export interface SseEvent {
   request_id?: string;
   refinement?: string;
   change_type?: string;
+  // no_data_for_route fields
+  origin_iata?: string;
+  destination_iata?: string;
+  alternatives?: RouteAlternative[];
 }
 
 /**
@@ -138,6 +148,15 @@ export function buildProgressRows(events: SseEvent[]): ProgressRow[] {
         if (row) {
           row.isDone = true;
           row.title = 'Results ready';
+          row.subtitle = null;
+        }
+        break;
+      }
+      case 'no_data_for_route': {
+        const row = find('search');
+        if (row) {
+          row.isDone = true;
+          row.title = 'No flights found';
           row.subtitle = null;
         }
         break;

@@ -42,21 +42,21 @@ const OPTIONS: Array<{
 }> = [
   {
     value: 'demo-haiku',
-    label: 'Anthropic Haiku',
+    label: 'Haiku',
     sublabel: 'Anthropic Haiku',
     hint: '≈ $0.01/query',
   },
   {
     value: 'demo-llama',
-    label: 'Llama 3.3 70B',
+    label: 'Llama',
     sublabel: 'Open-source (Groq)',
-    hint: 'Free tier',
+    hint: 'Free',
   },
   {
     value: 'demo-qwen',
-    label: 'Qwen 2.5 72B',
+    label: 'Qwen',
     sublabel: 'Open-source (OpenRouter)',
-    hint: 'Free tier',
+    hint: 'Free',
   },
 ];
 

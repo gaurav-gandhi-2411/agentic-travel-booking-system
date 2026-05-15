@@ -240,3 +240,65 @@ def test_search_without_auth_passes_in_synthetic_mode(
         resp = client.post("/search", json={"query": "BOM to CDG next month next month"})
 
     assert resp.status_code == 200
+
+
+def test_search_no_data_emits_no_data_for_route(client: TestClient) -> None:
+    """When the provider returns zero flights, emits no_data_for_route (not error)."""
+    from travel_agent.llm.base import LLMResponse, ToolCall
+
+    empty_intent_fields = {
+        "origin_iata": "DEL",
+        "destination_iata": "SIN",
+        "earliest_departure": "2026-06-01",
+        "latest_departure": "2026-06-30",
+        "trip_duration_days": 7,
+        "traveler_count": 1,
+        "cabin_class": "economy",
+        "trip_type": "one_way",
+        "raw_query": "Delhi to Singapore",
+    }
+    empty_response = LLMResponse(
+        content="",
+        model="claude-haiku-4-5-20251001",
+        input_tokens=30,
+        output_tokens=80,
+        latency_ms=0.0,
+        tool_calls=[ToolCall(name="extract_travel_intent", input=empty_intent_fields, id="tc-nd-001")],
+    )
+
+    from unittest.mock import AsyncMock
+
+    empty_llm: LLMClient = AsyncMock(spec=LLMClient)
+    empty_llm.chat = AsyncMock(return_value=empty_response)  # type: ignore[method-assign]
+
+    with patch("travel_agent.api.routes.search._build_agents") as mock_build:
+        from travel_agent.agents.optimizer import OptimizerAgent
+        from travel_agent.agents.planner import PlannerAgent
+
+        # SyntheticProvider returns 0 flights for routes with no data seeds (DEL→SIN)
+        # but we patch the synthetic provider's get_flights to return empty list
+        from travel_agent.providers.synthetic import SyntheticProvider
+
+        with patch.object(SyntheticProvider, "get_flights", return_value=[]):
+            planner = PlannerAgent(empty_llm, "claude-haiku-4-5-20251001")
+            optimizer = OptimizerAgent(client=None)
+            mock_build.return_value = (planner, optimizer)
+
+            resp = client.post("/search", json={"query": "Delhi to Singapore in June"})
+
+    assert resp.status_code == 200
+    events = _parse_sse(resp.text)
+    types = [e["type"] for e in events]
+
+    assert "no_data_for_route" in types
+    assert "error" not in types
+
+    no_data_event = next(e for e in events if e["type"] == "no_data_for_route")
+    assert no_data_event["origin_iata"] == "DEL"
+    assert no_data_event["destination_iata"] == "SIN"
+    assert "alternatives" in no_data_event
+    assert len(no_data_event["alternatives"]) > 0
+    for alt in no_data_event["alternatives"]:
+        assert alt["origin_iata"] == "DEL"
+        assert alt["destination_iata"] != "SIN"
+        assert "label" in alt

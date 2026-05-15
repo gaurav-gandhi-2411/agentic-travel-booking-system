@@ -45,6 +45,37 @@ from travel_agent.providers.synthetic import SyntheticProvider
 
 _synthetic = SyntheticProvider()
 
+# Popular destinations used for route alternatives when no data found.
+_POPULAR_DESTINATIONS: list[str] = ["BKK", "DXB", "KUL", "CMB", "SIN", "DEL", "BOM"]
+_DESTINATION_NAMES: dict[str, str] = {
+    "BKK": "Bangkok",
+    "DXB": "Dubai",
+    "KUL": "Kuala Lumpur",
+    "CMB": "Colombo",
+    "SIN": "Singapore",
+    "DEL": "Delhi",
+    "BOM": "Mumbai",
+    "CDG": "Paris",
+    "LHR": "London",
+    "NRT": "Tokyo",
+}
+
+
+def _suggest_alternatives(origin: str, destination: str) -> list[dict[str, str]]:
+    candidates = [d for d in _POPULAR_DESTINATIONS if d not in {destination, origin}]
+    origin_name = _DESTINATION_NAMES.get(origin, origin)
+    results: list[dict[str, str]] = []
+    for dest in candidates[:3]:
+        dest_name = _DESTINATION_NAMES.get(dest, dest)
+        results.append(
+            {
+                "origin_iata": origin,
+                "destination_iata": dest,
+                "label": f"Try {origin_name} to {dest_name}",
+            }
+        )
+    return results
+
 
 def _generate_windows(intent: TravelIntent) -> list[Window]:
     windows: list[Window] = []
@@ -162,12 +193,14 @@ async def stream_search(  # noqa: PLR0912, PLR0915
 
     if not all_flights:
         yield {
-            "type": "error",
+            "type": "no_data_for_route",
+            "origin_iata": intent.origin_iata,
+            "destination_iata": intent.destination_iata,
             "message": (
-                f"No flights found for {intent.origin_iata} → "
-                f"{intent.destination_iata}. "
-                "Try a different date range or route."
+                f"No flights found for {intent.origin_iata} → {intent.destination_iata} "
+                "in our database."
             ),
+            "alternatives": _suggest_alternatives(intent.origin_iata, intent.destination_iata),
         }
         return
 

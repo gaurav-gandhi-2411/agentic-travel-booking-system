@@ -1,9 +1,16 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
-import type { SseEvent, Archetype } from '@/lib/event-map';
+import type { SseEvent, Archetype, RouteAlternative } from '@/lib/event-map';
 
 export type SearchStatus = 'idle' | 'streaming' | 'done' | 'error';
+
+export interface NoDataState {
+  origin_iata: string;
+  destination_iata: string;
+  message: string;
+  alternatives: RouteAlternative[];
+}
 
 export interface SearchStream {
   start: (query: string, profile?: string) => void;
@@ -12,6 +19,7 @@ export interface SearchStream {
   archetypes: Archetype[];
   status: SearchStatus;
   error: string | null;
+  noData: NoDataState | null;
   reset: () => void;
   lastQuery: string;
   requestId: string | null;
@@ -80,6 +88,11 @@ async function consumeStream(
 
     for (const event of parsed) {
       if (event.type === 'done') sawDone = true;
+      if (event.type === 'no_data_for_route') {
+        onEvent(event);
+        sawDone = true; // graceful end — not a stream error
+        return;
+      }
       if (event.type === 'error') {
         onError(event.message ?? 'Unknown error');
         return;
@@ -99,6 +112,7 @@ export function useSearchStream(): SearchStream {
   const [archetypes, setArchetypes] = useState<Archetype[]>([]);
   const [status, setStatus] = useState<SearchStatus>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [noData, setNoData] = useState<NoDataState | null>(null);
   const [lastQuery, setLastQuery] = useState('');
   const [requestId, setRequestId] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -109,6 +123,7 @@ export function useSearchStream(): SearchStream {
     setArchetypes([]);
     setStatus('idle');
     setError(null);
+    setNoData(null);
     setRequestId(null);
   }, []);
 
@@ -126,6 +141,7 @@ export function useSearchStream(): SearchStream {
       setEvents([]);
       setArchetypes([]);
       setError(null);
+      setNoData(null);
     } else {
       // For refine: keep prior events, clear archetypes to show new ones
       setArchetypes([]);
@@ -144,6 +160,14 @@ export function useSearchStream(): SearchStream {
           }
           if (event.type === 'done' && event.request_id) {
             setRequestId(event.request_id);
+          }
+          if (event.type === 'no_data_for_route') {
+            setNoData({
+              origin_iata: event.origin_iata ?? '',
+              destination_iata: event.destination_iata ?? '',
+              message: event.message ?? 'No flights found.',
+              alternatives: event.alternatives ?? [],
+            });
           }
         },
         () => setStatus('done'),
@@ -171,5 +195,5 @@ export function useSearchStream(): SearchStream {
     await _runStream('/api/refine', { request_id: requestId, refinement }, true, profile);
   }, [_runStream, requestId]);
 
-  return { start, refine, events, archetypes, status, error, reset, lastQuery, requestId };
+  return { start, refine, events, archetypes, status, error, noData, reset, lastQuery, requestId };
 }

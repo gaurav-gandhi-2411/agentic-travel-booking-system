@@ -1,12 +1,12 @@
 'use client';
 
 import { useEffect, useCallback, useState } from 'react';
-import { useSearchStream } from '@/hooks/useSearchStream';
+import { useSearchStream, type NoDataState } from '@/hooks/useSearchStream';
 import SearchInput from '@/components/demo/SearchInput';
 import AgentProgressFeed from '@/components/demo/AgentProgressFeed';
 import ArchetypeCard from '@/components/demo/ArchetypeCard';
 import ErrorBanner from '@/components/demo/ErrorBanner';
-import ProfileToggle, { useProfilePreference } from '@/components/demo/ProfileToggle';
+import ProfileToggle, { useProfilePreference, type LLMProfile } from '@/components/demo/ProfileToggle';
 import { cn } from '@/lib/utils';
 
 const REFINE_CHIPS = [
@@ -14,6 +14,42 @@ const REFINE_CHIPS = [
   { label: 'Skip red-eyes', value: 'skip_red_eyes' },
   { label: 'Non-stop only', value: 'non_stop' },
 ] as const;
+
+function NoDataBanner({
+  noData,
+  onAlternativeClick,
+}: {
+  noData: NoDataState;
+  onAlternativeClick: (query: string) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border border-border/50 bg-muted/20 px-4 py-4">
+      <p className="text-sm font-medium text-foreground">
+        No flights found for {noData.origin_iata} → {noData.destination_iata}
+      </p>
+      <p className="text-xs text-muted-foreground">
+        We don&apos;t have data for this route. Try one of these instead:
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {noData.alternatives.map(alt => (
+          <button
+            key={alt.destination_iata}
+            onClick={() => onAlternativeClick(
+              `${alt.origin_iata} to ${alt.destination_iata} in June`
+            )}
+            className={cn(
+              'inline-flex items-center rounded-full border px-3.5 py-1.5 text-xs font-medium',
+              'bg-background hover:bg-muted/60 border-border/60 text-foreground/80',
+              'transition-colors duration-150',
+            )}
+          >
+            {alt.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function ArchetypeSkeleton() {
   return (
@@ -33,8 +69,9 @@ function ArchetypeSkeleton() {
 }
 
 export default function DemoClient() {
-  const { start, refine, events, archetypes, status, error, reset, lastQuery, requestId } = useSearchStream();
+  const { start, refine, events, archetypes, status, error, noData, reset, lastQuery, requestId } = useSearchStream();
   const [profile, setProfile] = useProfilePreference();
+  const [activeProfile, setActiveProfile] = useState<LLMProfile>('demo-haiku');
   const [refineInput, setRefineInput] = useState('');
 
   // Cmd+K / Ctrl+K focuses the search textarea
@@ -53,9 +90,17 @@ export default function DemoClient() {
 
   const isStreaming = status === 'streaming';
 
+  const handleSearch = useCallback((query: string) => {
+    setActiveProfile(profile);
+    start(query, profile);
+  }, [start, profile]);
+
   const handleRetry = useCallback(() => {
     reset();
-    if (lastQuery) start(lastQuery, profile);
+    if (lastQuery) {
+      setActiveProfile(profile);
+      start(lastQuery, profile);
+    }
   }, [reset, start, lastQuery, profile]);
 
   const handleChip = useCallback((chipValue: string) => {
@@ -96,11 +141,23 @@ export default function DemoClient() {
       </div>
 
       {/* Search input */}
-      <SearchInput onSearch={q => start(q, profile)} disabled={isStreaming} />
+      <SearchInput onSearch={handleSearch} disabled={isStreaming} />
+
+      {/* Pending profile hint — shown when toggle changed after results rendered */}
+      {status === 'done' && profile !== activeProfile && (
+        <p className="text-[11px] text-center text-muted-foreground/50 -mt-4">
+          Profile changed — applies to your next search
+        </p>
+      )}
 
       {/* Error banner */}
       {status === 'error' && error && (
         <ErrorBanner message={error} onRetry={handleRetry} />
+      )}
+
+      {/* No-data banner with alternative route chips */}
+      {noData && status === 'done' && (
+        <NoDataBanner noData={noData} onAlternativeClick={handleSearch} />
       )}
 
       {/* Agent progress feed — stays visible once shown */}
