@@ -63,6 +63,26 @@ def test_lifespan_guard_local_no_key_required(monkeypatch: pytest.MonkeyPatch) -
     assert resp.status_code == 200
 
 
+def test_startup_fails_with_empty_demo_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Startup fails when APP_MODE=demo and DEMO_API_KEY is not set."""
+    monkeypatch.setenv("APP_MODE", "demo")
+    monkeypatch.setenv("AVIASALES_API_KEY", "test-key")
+    monkeypatch.delenv("DEMO_API_KEY", raising=False)
+
+    with pytest.raises(RuntimeError, match="DEMO_API_KEY"), TestClient(app):
+        pass
+
+
+def test_startup_fails_with_sentinel_demo_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Startup fails when APP_MODE=demo and DEMO_API_KEY is the default sentinel value."""
+    monkeypatch.setenv("APP_MODE", "demo")
+    monkeypatch.setenv("AVIASALES_API_KEY", "test-key")
+    monkeypatch.setenv("DEMO_API_KEY", "change-me-before-demo")
+
+    with pytest.raises(RuntimeError, match="DEMO_API_KEY"), TestClient(app):
+        pass
+
+
 def test_load_dotenv_makes_env_vars_visible(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

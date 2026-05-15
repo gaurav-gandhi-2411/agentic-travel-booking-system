@@ -65,6 +65,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         )
         raise RuntimeError(msg)
 
+    _DEMO_KEY_SENTINEL = "change-me-before-demo"
+    if app_mode == "demo":
+        demo_key = os.environ.get("DEMO_API_KEY", "")
+        if not demo_key or demo_key == _DEMO_KEY_SENTINEL:
+            msg = (
+                "APP_MODE=demo requires DEMO_API_KEY to be set to a non-default value. "
+                "Set the env var to a secret string. "
+                "The default 'change-me-before-demo' is not accepted."
+            )
+            raise RuntimeError(msg)
+
     if app_mode == "demo" and not os.environ.get("GROQ_API_KEY"):
         logger.warning(
             "GROQ_API_KEY not set — X-LLM-Profile: demo-llama requests will fail at runtime."
