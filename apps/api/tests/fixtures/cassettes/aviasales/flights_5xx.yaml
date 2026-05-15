@@ -7,7 +7,43 @@ interactions:
       Connection:
       - keep-alive
     method: GET
-    uri: https://api.travelpayouts.com/aviasales/v3/prices_for_dates?origin=BOM&destination=CDG&departure_at=2026-06-01&currency=inr&sorting=price&limit=30&unique=false
+    uri: https://api.travelpayouts.com/aviasales/v3/prices_for_dates?origin=BOM&destination=CDG&departure_at=2026-06-01&currency=inr&sorting=price&limit=100&unique=false
+  response:
+    body:
+      string: '{"error":"Internal Server Error","message":"Unexpected server error. Please try again later."}'
+    headers:
+      Content-Type:
+      - application/json
+    status:
+      code: 503
+      message: Service Unavailable
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Connection:
+      - keep-alive
+    method: GET
+    uri: https://api.travelpayouts.com/aviasales/v3/prices_for_dates?origin=BOM&destination=CDG&departure_at=2026-06-01&currency=inr&sorting=price&limit=100&unique=false
+  response:
+    body:
+      string: '{"error":"Internal Server Error","message":"Unexpected server error. Please try again later."}'
+    headers:
+      Content-Type:
+      - application/json
+    status:
+      code: 503
+      message: Service Unavailable
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Connection:
+      - keep-alive
+    method: GET
+    uri: https://api.travelpayouts.com/aviasales/v3/prices_for_dates?origin=BOM&destination=CDG&departure_at=2026-06-01&currency=inr&sorting=price&limit=100&unique=false
   response:
     body:
       string: '{"error":"Internal Server Error","message":"Unexpected server error. Please try again later."}'

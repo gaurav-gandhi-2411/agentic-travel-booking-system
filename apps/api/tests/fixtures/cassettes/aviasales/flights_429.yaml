@@ -7,7 +7,47 @@ interactions:
       Connection:
       - keep-alive
     method: GET
-    uri: https://api.travelpayouts.com/aviasales/v3/prices_for_dates?origin=BOM&destination=CDG&departure_at=2026-06-01&currency=inr&sorting=price&limit=30&unique=false
+    uri: https://api.travelpayouts.com/aviasales/v3/prices_for_dates?origin=BOM&destination=CDG&departure_at=2026-06-01&currency=inr&sorting=price&limit=100&unique=false
+  response:
+    body:
+      string: '{"error":"Too Many Requests","message":"Rate limit exceeded. Please retry after 60 seconds."}'
+    headers:
+      Content-Type:
+      - application/json
+      Retry-After:
+      - '60'
+    status:
+      code: 429
+      message: Too Many Requests
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Connection:
+      - keep-alive
+    method: GET
+    uri: https://api.travelpayouts.com/aviasales/v3/prices_for_dates?origin=BOM&destination=CDG&departure_at=2026-06-01&currency=inr&sorting=price&limit=100&unique=false
+  response:
+    body:
+      string: '{"error":"Too Many Requests","message":"Rate limit exceeded. Please retry after 60 seconds."}'
+    headers:
+      Content-Type:
+      - application/json
+      Retry-After:
+      - '60'
+    status:
+      code: 429
+      message: Too Many Requests
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Connection:
+      - keep-alive
+    method: GET
+    uri: https://api.travelpayouts.com/aviasales/v3/prices_for_dates?origin=BOM&destination=CDG&departure_at=2026-06-01&currency=inr&sorting=price&limit=100&unique=false
   response:
     body:
       string: '{"error":"Too Many Requests","message":"Rate limit exceeded. Please retry after 60 seconds."}'

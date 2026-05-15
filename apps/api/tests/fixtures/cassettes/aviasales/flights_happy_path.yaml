@@ -7,7 +7,7 @@ interactions:
       Connection:
       - keep-alive
     method: GET
-    uri: https://api.travelpayouts.com/aviasales/v3/prices_for_dates?origin=BOM&destination=CDG&departure_at=2026-06-01&currency=inr&sorting=price&limit=30&unique=false
+    uri: https://api.travelpayouts.com/aviasales/v3/prices_for_dates?origin=BOM&destination=CDG&departure_at=2026-06-01&currency=inr&sorting=price&limit=100&unique=false
   response:
     body:
       string: '{"success":true,"data":[{"origin":"BOM","destination":"CDG","origin_airport":"BOM","destination_airport":"CDG","price":47500,"airline":"6E","flight_number":1452,"departure_at":"2026-06-01T02:30:00+05:30","return_at":"2026-06-08T10:00:00+05:30","transfers":2,"return_transfers":2,"duration":1020,"duration_to":510,"duration_back":510,"link":"/search/BOM0106CDG08062026"},{"origin":"BOM","destination":"CDG","origin_airport":"BOM","destination_airport":"CDG","price":91500,"airline":"AI","flight_number":142,"departure_at":"2026-06-02T09:00:00+05:30","return_at":"2026-06-09T14:00:00+05:30","transfers":0,"return_transfers":0,"duration":540,"duration_to":270,"duration_back":270,"link":"/search/BOM0206CDG09062026"}],"currency":"inr"}'
