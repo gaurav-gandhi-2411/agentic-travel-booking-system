@@ -30,12 +30,14 @@ from travel_agent.agents.flight_hunter import (
 )
 from travel_agent.agents.optimizer import OptimizerAgent
 from travel_agent.agents.planner import PlannerAgent
+from travel_agent.api.cache import search_cache
 from travel_agent.coordinator.constants import MAX_WINDOWS, WINDOW_SIZE_DAYS
 from travel_agent.coordinator.state import (
     CoordinatorPhase,
     FlightOption,
     RequestState,
     TravelIntent,
+    TripType,
     Window,
 )
 from travel_agent.providers.aviasales import AviasalesAdapter
@@ -94,18 +96,28 @@ async def stream_search(  # noqa: PLR0912, PLR0915
     all_flights: list[FlightOption] = []
     state.phase = CoordinatorPhase.SEARCHING
 
+    intent = state.intent
+    is_round_trip = intent.trip_type == TripType.ROUND_TRIP
+
     if adapter is not None:
         # Month-granularity: one call per calendar month, then filter to horizon.
-        months = _months_in_range(state.intent.earliest_departure, state.intent.latest_departure)
+        # Pass return_at when round-trip so Aviasales prices include the return leg.
+        return_month: str | None = None
+        if is_round_trip:
+            return_date = intent.earliest_departure + timedelta(days=intent.trip_duration_days)
+            return_month = return_date.strftime("%Y-%m")
+
+        months = _months_in_range(intent.earliest_departure, intent.latest_departure)
         for idx, month in enumerate(months):
             if not state.call_budget.can_call_flight():
                 state.is_partial = True
                 break
             try:
                 raw_flights = await adapter.get_flights(
-                    state.intent.origin_iata,
-                    state.intent.destination_iata,
+                    intent.origin_iata,
+                    intent.destination_iata,
                     month,
+                    return_at=return_month,
                 )
             except Exception as exc:
                 yield {"type": "error", "message": f"Flight search error (month {month}): {exc}"}
@@ -113,10 +125,10 @@ async def stream_search(  # noqa: PLR0912, PLR0915
             month_flights: list[FlightOption] = []
             for r in raw_flights:
                 dep = _date_from_raw(r)
-                if state.intent.earliest_departure <= dep <= state.intent.latest_departure:
+                if intent.earliest_departure <= dep <= intent.latest_departure:
                     window = _assign_window(dep, windows)
                     month_flights.append(
-                        _map_raw_to_flight_option(r, window, state.intent.cabin_class)
+                        _map_raw_to_flight_option(r, window, intent.cabin_class)
                     )
             all_flights.extend(month_flights)
             state.call_budget.flight_calls_used += 1
@@ -126,16 +138,18 @@ async def stream_search(  # noqa: PLR0912, PLR0915
                 "flights_found": len(month_flights),
             }
     else:
-        # Synthetic provider — per-window calls.
+        # Synthetic provider — per-window calls; pass trip_type and duration.
         for idx, window in enumerate(windows):
             if not state.call_budget.can_call_flight():
                 state.is_partial = True
                 break
             try:
                 window_flights = _synthetic.get_flights(
-                    state.intent.origin_iata,
-                    state.intent.destination_iata,
+                    intent.origin_iata,
+                    intent.destination_iata,
                     window,
+                    trip_type=intent.trip_type,
+                    trip_duration_days=intent.trip_duration_days,
                 )
             except Exception as exc:
                 yield {"type": "error", "message": f"Flight search error (window {idx}): {exc}"}
@@ -152,14 +166,19 @@ async def stream_search(  # noqa: PLR0912, PLR0915
         yield {
             "type": "error",
             "message": (
-                f"No flights found for {state.intent.origin_iata} → "
-                f"{state.intent.destination_iata}. "
+                f"No flights found for {intent.origin_iata} → "
+                f"{intent.destination_iata}. "
                 "Try a different date range or route."
             ),
         }
         return
 
     state.flight_options = all_flights
+
+    # Cache for /refine — keyed by request_id, no external deps needed
+    request_id = str(state.request_id)
+    search_cache.put(request_id, intent, all_flights)
+
     yield {"type": "search_done", "total_options": len(all_flights)}
 
     # ── Optimizer ──────────────────────────────────────────────────────────────
@@ -176,7 +195,7 @@ async def stream_search(  # noqa: PLR0912, PLR0915
         yield {"type": "archetype_ready", "archetype": archetype.model_dump(mode="json")}
 
     state.phase = CoordinatorPhase.PRESENTING
-    yield {"type": "done"}
+    yield {"type": "done", "request_id": request_id}
 
 
 def _get_adapter() -> AviasalesAdapter | None:

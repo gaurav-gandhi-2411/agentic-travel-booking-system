@@ -20,8 +20,8 @@ class DemoAuthMiddleware(BaseHTTPMiddleware):
         if app_mode != "demo":
             return await call_next(request)
 
-        # Only guard /search — health check must remain open for Cloud Run probes
-        if not request.url.path.startswith("/search"):
+        # Guard /search and /refine; health check must remain open for Cloud Run probes
+        if not request.url.path.startswith(("/search", "/refine")):
             return await call_next(request)
 
         expected_key = os.environ.get("DEMO_API_KEY", "")

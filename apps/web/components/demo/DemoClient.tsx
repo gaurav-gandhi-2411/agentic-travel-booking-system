@@ -1,11 +1,19 @@
 'use client';
 
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import { useSearchStream } from '@/hooks/useSearchStream';
 import SearchInput from '@/components/demo/SearchInput';
 import AgentProgressFeed from '@/components/demo/AgentProgressFeed';
 import ArchetypeCard from '@/components/demo/ArchetypeCard';
 import ErrorBanner from '@/components/demo/ErrorBanner';
+import ProfileToggle, { useProfilePreference } from '@/components/demo/ProfileToggle';
+import { cn } from '@/lib/utils';
+
+const REFINE_CHIPS = [
+  { label: 'Make it cheaper', value: 'cheaper' },
+  { label: 'Skip red-eyes', value: 'skip_red_eyes' },
+  { label: 'Non-stop only', value: 'non_stop' },
+] as const;
 
 function ArchetypeSkeleton() {
   return (
@@ -25,7 +33,9 @@ function ArchetypeSkeleton() {
 }
 
 export default function DemoClient() {
-  const { start, events, archetypes, status, error, reset, lastQuery } = useSearchStream();
+  const { start, refine, events, archetypes, status, error, reset, lastQuery, requestId } = useSearchStream();
+  const [profile, setProfile] = useProfilePreference();
+  const [refineInput, setRefineInput] = useState('');
 
   // Cmd+K / Ctrl+K focuses the search textarea
   useEffect(() => {
@@ -41,30 +51,52 @@ export default function DemoClient() {
     return () => document.removeEventListener('keydown', handler);
   }, []);
 
+  const isStreaming = status === 'streaming';
+
   const handleRetry = useCallback(() => {
     reset();
-    if (lastQuery) start(lastQuery);
-  }, [reset, start, lastQuery]);
+    if (lastQuery) start(lastQuery, profile);
+  }, [reset, start, lastQuery, profile]);
 
+  const handleChip = useCallback((chipValue: string) => {
+    if (!requestId || isStreaming) return;
+    refine(chipValue, profile);
+  }, [requestId, isStreaming, refine, profile]);
+
+  const handleRefineSubmit = useCallback((e: React.FormEvent) => {
+    e.preventDefault();
+    const text = refineInput.trim();
+    if (!text || !requestId || isStreaming) return;
+    refine(text, profile);
+    setRefineInput('');
+  }, [refineInput, requestId, isStreaming, refine, profile]);
   const optimizerStarted = events.some(e => e.type === 'optimizer_started');
-  const showSkeletons = status === 'streaming' && optimizerStarted && archetypes.length === 0;
+  const showSkeletons = isStreaming && optimizerStarted && archetypes.length === 0;
   const showResults = archetypes.length > 0 || showSkeletons;
+  const showRefinement = status === 'done' && archetypes.length > 0 && !!requestId;
 
   return (
     <div className="max-w-3xl mx-auto px-6 py-12 flex flex-col gap-8">
       {/* Page header */}
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">DealHunter</h1>
-        <p className="text-sm text-muted-foreground">
-          Tell me where you want to go.{' '}
-          <kbd className="inline-flex items-center rounded border border-border/60 bg-muted px-1 py-0.5 font-mono text-[10px] text-muted-foreground/70">
-            ⌘K
-          </kbd>
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">DealHunter</h1>
+          <p className="text-sm text-muted-foreground">
+            Tell me where you want to go.{' '}
+            <kbd className="inline-flex items-center rounded border border-border/60 bg-muted px-1 py-0.5 font-mono text-[10px] text-muted-foreground/70">
+              ⌘K
+            </kbd>
+          </p>
+        </div>
+        <ProfileToggle
+          value={profile}
+          onChange={setProfile}
+          disabled={isStreaming}
+        />
       </div>
 
       {/* Search input */}
-      <SearchInput onSearch={start} disabled={status === 'streaming'} />
+      <SearchInput onSearch={q => start(q, profile)} disabled={isStreaming} />
 
       {/* Error banner */}
       {status === 'error' && error && (
@@ -87,6 +119,61 @@ export default function DemoClient() {
               ? archetypes.map(a => <ArchetypeCard key={a.label} archetype={a} />)
               : [0, 1].map(i => <ArchetypeSkeleton key={i} />)}
           </div>
+        </div>
+      )}
+
+      {/* Refinement section — appears after first results */}
+      {showRefinement && (
+        <div className="flex flex-col gap-3 pt-2 border-t border-border/40">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
+            Refine your search
+          </p>
+
+          {/* Quick-action chips */}
+          <div className="flex flex-wrap gap-2">
+            {REFINE_CHIPS.map(chip => (
+              <button
+                key={chip.value}
+                onClick={() => handleChip(chip.value)}
+                disabled={isStreaming}
+                className={cn(
+                  'inline-flex items-center rounded-full border px-3.5 py-1.5 text-xs font-medium',
+                  'bg-background hover:bg-muted/60 border-border/60 text-foreground/80',
+                  'transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed',
+                )}
+              >
+                {chip.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Free-text refinement */}
+          <form onSubmit={handleRefineSubmit} className="flex gap-2">
+            <input
+              type="text"
+              value={refineInput}
+              onChange={e => setRefineInput(e.target.value)}
+              placeholder="Or describe what you'd like to change…"
+              disabled={isStreaming}
+              className={cn(
+                'flex-1 rounded-lg border border-border/60 bg-background px-3 py-2',
+                'text-sm placeholder:text-muted-foreground/50',
+                'focus:outline-none focus:ring-2 focus:ring-ring/30',
+                'disabled:opacity-40 disabled:cursor-not-allowed',
+              )}
+            />
+            <button
+              type="submit"
+              disabled={!refineInput.trim() || isStreaming}
+              className={cn(
+                'rounded-lg px-4 py-2 text-sm font-medium',
+                'bg-foreground text-background hover:bg-foreground/90',
+                'transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed',
+              )}
+            >
+              Go
+            </button>
+          </form>
         </div>
       )}
     </div>

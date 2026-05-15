@@ -12,7 +12,7 @@ from __future__ import annotations
 from datetime import UTC, date, datetime
 from pathlib import Path
 
-from travel_agent.agents.tools import GENERATE_ARCHETYPE_EXPLANATION
+from travel_agent.agents.tools import GENERATE_ARCHETYPE_COMPARISONS, GENERATE_ARCHETYPE_EXPLANATION
 from travel_agent.coordinator.state import (
     Archetype,
     ArchetypeLabel,
@@ -69,23 +69,32 @@ class OptimizerAgent:
 
         system = _load_system_prompt(today)
 
-        archetypes: list[Archetype] = []
-        for label, flight in [
-            (ArchetypeLabel.BEST_VALUE, best_value),
-            (ArchetypeLabel.BEST_EXPERIENCE, best_exp),
-        ]:
-            explanation = await self._explain(flight, label, system)
-            deeplink = self._build_deeplink(flight, label)
-            breakdown = _score_breakdown(flight)
-            archetypes.append(
-                Archetype(
-                    label=label,
-                    flight=flight,
-                    explanation=explanation,
-                    deeplink_url=deeplink,
-                    score_breakdown=breakdown,
-                )
-            )
+        value_explanation = await self._explain(best_value, ArchetypeLabel.BEST_VALUE, system)
+        exp_explanation = await self._explain(best_exp, ArchetypeLabel.BEST_EXPERIENCE, system)
+
+        # Single LLM call for both comparison strings (different flights only)
+        value_comparison, exp_comparison = await self._generate_comparisons(
+            best_value, best_exp, system
+        )
+
+        archetypes: list[Archetype] = [
+            Archetype(
+                label=ArchetypeLabel.BEST_VALUE,
+                flight=best_value,
+                explanation=value_explanation,
+                comparison_to_alternative=value_comparison,
+                deeplink_url=self._build_deeplink(best_value, ArchetypeLabel.BEST_VALUE),
+                score_breakdown=_score_breakdown(best_value),
+            ),
+            Archetype(
+                label=ArchetypeLabel.BEST_EXPERIENCE,
+                flight=best_exp,
+                explanation=exp_explanation,
+                comparison_to_alternative=exp_comparison,
+                deeplink_url=self._build_deeplink(best_exp, ArchetypeLabel.BEST_EXPERIENCE),
+                score_breakdown=_score_breakdown(best_exp),
+            ),
+        ]
 
         state.archetypes = archetypes
         return state
@@ -113,6 +122,39 @@ class OptimizerAgent:
             raw = response.tool_calls[0].input
             return str(raw.get("explanation", "")).strip() or _fallback_explanation(flight, label)
         return _fallback_explanation(flight, label)
+
+    async def _generate_comparisons(
+        self,
+        value_flight: FlightOption,
+        exp_flight: FlightOption,
+        system: str,
+    ) -> tuple[str, str]:
+        if self._client is None or value_flight.id == exp_flight.id:
+            return ("", "")
+
+        value_summary = _flight_summary(value_flight, ArchetypeLabel.BEST_VALUE)
+        exp_summary = _flight_summary(exp_flight, ArchetypeLabel.BEST_EXPERIENCE)
+        content = (
+            "Generate comparisons for these two archetypes:\n\n"
+            f"=== BEST VALUE ===\n{value_summary}\n\n"
+            f"=== BEST EXPERIENCE ===\n{exp_summary}"
+        )
+        messages = [Message(role="user", content=content)]
+        response = await self._client.chat(
+            messages,
+            model=self._model,
+            max_tokens=512,
+            temperature=0.3,
+            system=system,
+            tools=[GENERATE_ARCHETYPE_COMPARISONS],
+        )
+        if response.tool_calls:
+            raw = response.tool_calls[0].input
+            return (
+                str(raw.get("best_value_comparison", "")).strip(),
+                str(raw.get("best_experience_comparison", "")).strip(),
+            )
+        return ("", "")
 
     def _build_deeplink(self, flight: FlightOption, label: ArchetypeLabel) -> str:
         if not self._partner_marker:

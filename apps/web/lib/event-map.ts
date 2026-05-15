@@ -39,6 +39,7 @@ export interface Archetype {
   label: 'best-value' | 'best-experience';
   flight: FlightOption;
   explanation: string;
+  comparison_to_alternative: string;
   deeplink_url: string;
   score_breakdown: {
     value_score: number;
@@ -55,6 +56,9 @@ export interface SseEvent {
   total_options?: number;
   archetype?: Archetype;
   message?: string;
+  request_id?: string;
+  refinement?: string;
+  change_type?: string;
 }
 
 /**
@@ -71,6 +75,16 @@ export function buildProgressRows(events: SseEvent[]): ProgressRow[] {
 
   for (const event of events) {
     switch (event.type) {
+      case 'refine_started': {
+        if (!find('refine')) {
+          const label = event.change_type === 'cheaper' ? 'Make it cheaper'
+            : event.change_type === 'skip_red_eyes' ? 'Skip red-eyes'
+            : event.change_type === 'non_stop' ? 'Non-stop only'
+            : (event.refinement ?? 'Refining…');
+          rows.push({ id: 'refine', iconName: 'Sparkles', title: `Refining: ${label}`, subtitle: null, isDone: true });
+        }
+        break;
+      }
       case 'planner_started': {
         if (!find('planner')) {
           rows.push({ id: 'planner', iconName: 'Brain', title: 'Understanding your trip', subtitle: null, isDone: false });

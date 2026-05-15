@@ -147,6 +147,7 @@ class Archetype(BaseModel):
     label: ArchetypeLabel
     flight: FlightOption
     explanation: str
+    comparison_to_alternative: str = ""  # "Why this over the other?" text
     deeplink_url: str
     score_breakdown: dict[str, float] = Field(default_factory=dict)
 

@@ -126,6 +126,8 @@ class FlightHunterAgent:
                     state.intent.origin_iata,
                     state.intent.destination_iata,
                     window,
+                    trip_type=state.intent.trip_type,
+                    trip_duration_days=state.intent.trip_duration_days,
                 )
                 all_flights.extend(flights)
                 state.call_budget.flight_calls_used += 1

@@ -1,4 +1,7 @@
-import { ExternalLink } from 'lucide-react';
+'use client';
+
+import { useState } from 'react';
+import { ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
 import type { Archetype } from '@/lib/event-map';
 import { cn } from '@/lib/utils';
 
@@ -41,18 +44,22 @@ const LABEL_CONFIG = {
     badgeBg: 'bg-teal-100 text-teal-700',
     cardBg: 'bg-teal-50/60 border-teal-200/80',
     btnBg: 'bg-teal-600 hover:bg-teal-700',
+    comparisonBg: 'bg-teal-50 border-teal-100',
   },
   'best-experience': {
     label: 'Best Experience',
     badgeBg: 'bg-blue-100 text-blue-700',
     cardBg: 'bg-blue-50/60 border-blue-200/80',
     btnBg: 'bg-blue-600 hover:bg-blue-700',
+    comparisonBg: 'bg-blue-50 border-blue-100',
   },
 } as const;
 
 export default function ArchetypeCard({ archetype }: ArchetypeCardProps) {
-  const { flight, explanation, deeplink_url, label } = archetype;
+  const { flight, explanation, comparison_to_alternative, deeplink_url, label } = archetype;
   const config = LABEL_CONFIG[label];
+  const [comparisonOpen, setComparisonOpen] = useState(false);
+  const hasComparison = !!comparison_to_alternative;
 
   return (
     <div
@@ -97,6 +104,27 @@ export default function ArchetypeCard({ archetype }: ArchetypeCardProps) {
       <p className="text-sm text-foreground/80 leading-relaxed border-t border-black/5 pt-3">
         {explanation}
       </p>
+
+      {/* "Why this?" comparison — expand on click */}
+      {hasComparison && (
+        <div className="flex flex-col gap-2">
+          <button
+            onClick={() => setComparisonOpen(v => !v)}
+            className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors w-fit"
+          >
+            {comparisonOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            Why this over the other?
+          </button>
+          {comparisonOpen && (
+            <p className={cn(
+              'text-xs text-muted-foreground leading-relaxed italic rounded-lg border px-3 py-2',
+              config.comparisonBg,
+            )}>
+              {comparison_to_alternative}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Book button */}
       {deeplink_url ? (

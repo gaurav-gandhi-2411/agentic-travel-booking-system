@@ -264,6 +264,44 @@ EXTRACT_HOTEL_OPTIONS = ToolDefinition(
 
 # ── OptimizerAgent ────────────────────────────────────────────────────────────
 
+GENERATE_ARCHETYPE_COMPARISONS = ToolDefinition(
+    name="generate_archetype_comparisons",
+    description=(
+        "Given both flight archetypes (best-value and best-experience), generate a "
+        "2-3 sentence comparison for EACH explaining why you'd choose it over the other. "
+        "Be specific: mention percentage price difference, stops saved/added, departure time impact. "
+        "Output must be 80-350 characters per comparison — plain text, no markdown."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "best_value_comparison": {
+                "type": "string",
+                "minLength": 60,
+                "maxLength": 380,
+                "description": (
+                    "Why pick best-value OVER best-experience. Lead with the price saving "
+                    "(e.g. '21% cheaper'), then name the tradeoff accepted "
+                    "(extra stop, red-eye departure, longer flight). "
+                    "End with: 'Pick Best Experience if you want [opposite benefit].'"
+                ),
+            },
+            "best_experience_comparison": {
+                "type": "string",
+                "minLength": 60,
+                "maxLength": 380,
+                "description": (
+                    "Why pick best-experience OVER best-value. Lead with the comfort/time benefit "
+                    "(fewer stops, shorter flight, morning arrival), then name the premium paid. "
+                    "End with: 'Pick Best Value if budget is the priority.'"
+                ),
+            },
+        },
+        "required": ["best_value_comparison", "best_experience_comparison"],
+        "additionalProperties": False,
+    },
+)
+
 GENERATE_ARCHETYPE_EXPLANATION = ToolDefinition(
     name="generate_archetype_explanation",
     description=(
