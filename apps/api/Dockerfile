@@ -22,4 +22,4 @@ USER appuser
 EXPOSE 8080
 
 CMD ["uvicorn", "travel_agent.api.main:app", \
-     "--host", "0.0.0.0", "--port", "8080", "--workers", "1"]
+     "--host", "0.0.0.0", "--port", "8080", "--workers", "4"]
