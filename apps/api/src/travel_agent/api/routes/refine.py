@@ -14,7 +14,7 @@ stream_search so the user never gets a dead end.
 Event sequence (same SSE schema as /search):
   refine_started  {refinement, change_type}
   optimizer_started
-  archetype_ready {archetype}   (×2)
+  archetype_ready {archetype}   (x2)
   done            {request_id}
   error           {message}
 """
@@ -58,11 +58,20 @@ class RefineRequest(BaseModel):
 
 def _parse_change_type(text: str) -> str:
     lower = text.lower()
-    if any(w in lower for w in ["cheap", "cheaper", "budget", "affordable", "less expensive", "lower price"]):
+    cheap_kws = ["cheap", "cheaper", "budget", "affordable", "less expensive", "lower price"]
+    if any(w in lower for w in cheap_kws):
         return "cheaper"
-    if any(w in lower for w in ["red-eye", "red eye", "redeye", "red_eye", "skip_red_eyes", "skip early", "no early", "no red"]):
+    red_eye_kws = [
+        "red-eye", "red eye", "redeye", "red_eye", "skip_red_eyes",
+        "skip early", "no early", "no red",
+    ]
+    if any(w in lower for w in red_eye_kws):
         return "skip_red_eyes"
-    if any(w in lower for w in ["non-stop", "nonstop", "non_stop", "direct", "no stop", "no layover", "without stop"]):
+    nonstop_kws = [
+        "non-stop", "nonstop", "non_stop", "direct",
+        "no stop", "no layover", "without stop",
+    ]
+    if any(w in lower for w in nonstop_kws):
         return "non_stop"
     return "full_search"
 

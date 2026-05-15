@@ -83,7 +83,8 @@ class SyntheticProvider:
 
             options.append(
                 FlightOption(
-                    id=f"{tmpl['id_prefix']}-{window.start_date.isoformat()}-{'ow' if is_one_way else f'rt{trip_duration_days}'}",
+                    id=f"{tmpl['id_prefix']}-{window.start_date.isoformat()}"
+                    f"-{'ow' if is_one_way else f'rt{trip_duration_days}'}",
                     window=window,
                     provider="synthetic",
                     origin_iata=origin,
