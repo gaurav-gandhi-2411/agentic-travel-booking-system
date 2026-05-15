@@ -25,6 +25,7 @@ from travel_agent.coordinator.state import (
 )
 from travel_agent.llm.base import LLMClient, Message
 from travel_agent.observability.langfuse_client import get_langfuse, get_request_trace
+from travel_agent.observability.pricing import compute_cost
 
 _logger = structlog.get_logger(__name__)
 
@@ -65,7 +66,24 @@ class PlannerAgent:
             tools=[EXTRACT_TRAVEL_INTENT],
         )
 
-        # Langfuse generation — optional, never breaks the agent
+        # Cost telemetry + Langfuse generation — optional, never breaks the agent
+        cost = compute_cost(
+            response.model,
+            response.input_tokens,
+            response.output_tokens,
+            response.cache_read_input_tokens,
+            response.cache_creation_input_tokens,
+        )
+        _logger.info(
+            "llm_call",
+            model=response.model,
+            input_tokens=response.input_tokens,
+            output_tokens=response.output_tokens,
+            cache_read_tokens=response.cache_read_input_tokens,
+            cache_write_tokens=response.cache_creation_input_tokens,
+            latency_ms=round(response.latency_ms, 1),
+            cost_usd=cost,
+        )
         with contextlib.suppress(Exception):
             trace = get_request_trace()
             if trace is not None:
@@ -87,6 +105,9 @@ class PlannerAgent:
                         metadata={
                             "latency_ms": round(response.latency_ms, 1),
                             "adapter": type(self._client).__name__,
+                            "cost_usd": cost,
+                            "cache_read_tokens": response.cache_read_input_tokens,
+                            "cache_write_tokens": response.cache_creation_input_tokens,
                         },
                     ).end()
 

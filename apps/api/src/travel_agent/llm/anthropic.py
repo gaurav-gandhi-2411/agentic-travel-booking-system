@@ -87,6 +87,10 @@ class AnthropicAdapter:
         content_text = next((block.text for block in response.content if block.type == "text"), "")
         tool_calls = parse_anthropic_tool_calls(list(response.content))
 
+        # Capture prompt-caching token counts (Anthropic-specific; 0 if absent)
+        cache_read = getattr(response.usage, "cache_read_input_tokens", 0) or 0
+        cache_write = getattr(response.usage, "cache_creation_input_tokens", 0) or 0
+
         return LLMResponse(
             content=content_text,
             model=response.model,
@@ -94,4 +98,6 @@ class AnthropicAdapter:
             output_tokens=response.usage.output_tokens,
             latency_ms=latency_ms,
             tool_calls=tool_calls,
+            cache_read_input_tokens=cache_read,
+            cache_creation_input_tokens=cache_write,
         )
