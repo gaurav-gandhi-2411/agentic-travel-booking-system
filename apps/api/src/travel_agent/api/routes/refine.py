@@ -131,7 +131,7 @@ async def _refine_generator(
     refinement: str,
     profile: str,
 ) -> AsyncGenerator[str, None]:
-    def _event(data: dict) -> str:
+    def _event(data: dict[str, object]) -> str:
         return f"data: {json.dumps(data)}\n\n"
 
     cached = search_cache.get(request_id)
