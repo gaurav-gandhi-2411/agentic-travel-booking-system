@@ -175,7 +175,7 @@ async def stream_search(  # noqa: PLR0912, PLR0915
 
     # Cache for /refine — keyed by request_id, no external deps needed
     request_id = str(state.request_id)
-    search_cache.put(request_id, intent, all_flights)
+    await search_cache.put(request_id, intent, all_flights)
 
     yield {"type": "search_done", "total_options": len(all_flights)}
 

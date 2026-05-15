@@ -2,6 +2,7 @@
 
 Phase 0 baseline: single /health endpoint, startup guard, request-ID middleware.
 Phase C (demo): /search SSE endpoint, demo auth middleware, Aviasales startup guard.
+Phase 2B: Langfuse observability bootstrap, Redis cache, cost telemetry.
 """
 
 from __future__ import annotations
@@ -16,12 +17,15 @@ import structlog.contextvars
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
+from travel_agent.api.cache import search_cache
 from travel_agent.api.middleware.auth import DemoAuthMiddleware
 from travel_agent.api.middleware.llm_profile import LLMProfileMiddleware
 from travel_agent.api.middleware.request_id import RequestIDMiddleware
 from travel_agent.api.routes.refine import router as refine_router
 from travel_agent.api.routes.search import router as search_router
+from travel_agent.observability.langfuse_client import get_langfuse
 
 load_dotenv()
 
@@ -67,11 +71,29 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     if app_mode == "demo" and not os.environ.get("GROQ_API_KEY"):
         logger.warning(
-            "GROQ_API_KEY not set — X-LLM-Profile: demo-free requests will fail at runtime."
+            "GROQ_API_KEY not set — X-LLM-Profile: demo-llama requests will fail at runtime."
         )
+
+    if app_mode == "demo" and not os.environ.get("OPENROUTER_API_KEY"):
+        logger.warning(
+            "OPENROUTER_API_KEY not set — X-LLM-Profile: demo-qwen requests will fail at runtime."
+        )
+
+    # Langfuse observability — optional; never raises on missing keys
+    lf = get_langfuse()
+    if lf is not None:
+        logger.info("observability enabled", provider="langfuse")
+    else:
+        logger.warning("observability disabled — set LANGFUSE_PUBLIC_KEY to enable")
 
     logger.info("startup", llm_routing_profile=profile, app_mode=app_mode, phase="C")
     yield
+    # Flush Langfuse on shutdown so buffered events are not lost
+    if lf is not None:
+        import contextlib  # noqa: PLC0415
+
+        with contextlib.suppress(Exception):
+            lf.flush()
     logger.info("shutdown")
 
 
@@ -100,6 +122,20 @@ app.include_router(search_router)
 app.include_router(refine_router)
 
 
-@app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok", "phase": "C"}
+@app.get("/health", response_model=None)
+async def health() -> JSONResponse:
+    app_mode = os.environ.get("APP_MODE", "synthetic")
+    cache_ok = await search_cache.ping()
+    if not cache_ok and app_mode == "prod":
+        return JSONResponse(
+            {"status": "degraded", "phase": "C", "cache": "unreachable"},
+            status_code=503,
+        )
+    if not cache_ok:
+        logger.warning("cache_ping_failed", mode=app_mode)
+    payload: dict[str, object] = {
+        "status": "ok",
+        "phase": "C",
+        "cache": "ok" if cache_ok else "degraded",
+    }
+    return JSONResponse(payload)

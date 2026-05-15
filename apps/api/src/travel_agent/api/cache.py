@@ -4,10 +4,14 @@ Keyed by request_id (str UUID). Stores (TravelIntent, list[FlightOption]) so
 the /refine endpoint can filter and re-optimize without re-running the search.
 
 Capacity: 50 entries, TTL: 30 minutes. No external dependencies.
+
+When UPSTASH_REDIS_URL is set, a Redis-backed cache is used instead of the
+in-memory LRU (via ``travel_agent.cache.redis_cache.RedisSearchCache``).
 """
 
 from __future__ import annotations
 
+import os
 import time
 from collections import OrderedDict
 
@@ -23,14 +27,16 @@ class _SearchCache:
     def __init__(self) -> None:
         self._store: OrderedDict[str, _CacheEntry] = OrderedDict()
 
-    def put(self, request_id: str, intent: TravelIntent, flights: list[FlightOption]) -> None:
+    async def put(
+        self, request_id: str, intent: TravelIntent, flights: list[FlightOption]
+    ) -> None:
         if request_id in self._store:
             del self._store[request_id]
         if len(self._store) >= _MAX_ENTRIES:
             self._store.popitem(last=False)
         self._store[request_id] = (time.monotonic(), intent, flights)
 
-    def get(self, request_id: str) -> tuple[TravelIntent, list[FlightOption]] | None:
+    async def get(self, request_id: str) -> tuple[TravelIntent, list[FlightOption]] | None:
         if request_id not in self._store:
             return None
         ts, intent, flights = self._store[request_id]
@@ -40,5 +46,22 @@ class _SearchCache:
         self._store.move_to_end(request_id)
         return intent, flights
 
+    async def ping(self) -> bool:
+        """In-memory cache is always available."""
+        return True
 
-search_cache = _SearchCache()
+
+def _make_cache() -> _SearchCache:
+    """Factory: return RedisSearchCache if UPSTASH_REDIS_URL is set, else in-memory."""
+    url = os.environ.get("UPSTASH_REDIS_URL", "").strip()
+    if url:
+        import contextlib  # noqa: PLC0415
+
+        with contextlib.suppress(Exception):
+            from travel_agent.cache.redis_cache import RedisSearchCache  # noqa: PLC0415
+
+            return RedisSearchCache(url)  # type: ignore[return-value]
+    return _SearchCache()
+
+
+search_cache: _SearchCache = _make_cache()
