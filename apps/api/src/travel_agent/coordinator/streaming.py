@@ -31,15 +31,13 @@ from travel_agent.agents.flight_hunter import (
 from travel_agent.agents.optimizer import OptimizerAgent
 from travel_agent.agents.planner import PlannerAgent
 from travel_agent.api.cache import search_cache
-from travel_agent.coordinator.constants import MAX_WINDOWS, WINDOW_SIZE_DAYS
 from travel_agent.coordinator.state import (
     CoordinatorPhase,
     FlightOption,
     RequestState,
-    TravelIntent,
     TripType,
-    Window,
 )
+from travel_agent.coordinator.windows import generate_windows
 from travel_agent.providers.aviasales import AviasalesAdapter
 from travel_agent.providers.synthetic import SyntheticProvider
 
@@ -77,20 +75,6 @@ def _suggest_alternatives(origin: str, destination: str) -> list[dict[str, str]]
     return results
 
 
-def _generate_windows(intent: TravelIntent) -> list[Window]:
-    windows: list[Window] = []
-    current = intent.earliest_departure
-    while current <= intent.latest_departure and len(windows) < MAX_WINDOWS:
-        windows.append(
-            Window(
-                start_date=current,
-                end_date=current + timedelta(days=WINDOW_SIZE_DAYS - 1),
-            )
-        )
-        current += timedelta(days=WINDOW_SIZE_DAYS)
-    return windows
-
-
 async def stream_search(  # noqa: PLR0912, PLR0915
     query: str,
     planner: PlannerAgent,
@@ -115,7 +99,7 @@ async def stream_search(  # noqa: PLR0912, PLR0915
     yield {"type": "planner_done", "intent": state.intent.model_dump(mode="json")}
 
     # ── Window search ──────────────────────────────────────────────────────────
-    windows = _generate_windows(state.intent)
+    windows = generate_windows(state.intent)
     state.candidate_windows = windows
 
     yield {

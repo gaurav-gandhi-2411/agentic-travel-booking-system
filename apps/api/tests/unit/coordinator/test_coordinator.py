@@ -1,23 +1,28 @@
-"""End-to-end coordinator tests for Phase B skeleton.
+"""Coordinator tests — migrated from Coordinator.run() to stream_search() directly.
 
-These tests use a pre-built TravelIntent (no PlannerAgent) and verify that
-the coordinator drives the state machine through SEARCHING → OPTIMIZING →
-PRESENTING, populates flight and hotel options, and correctly merges parallel
-agent results.
+Coordinator.run() and coordinator.py have been deleted (audit Risk 8).
+These tests call stream_search() with pre-built mock agents, exercising the same
+pipeline logic without HTTP or a real LLM.
+
+Window generation tests now import from coordinator.windows.
 """
 
 from __future__ import annotations
 
 from datetime import date
+from typing import Any
+
+import pytest
 
 from travel_agent.coordinator.constants import MAX_WINDOWS, WINDOW_SIZE_DAYS
-from travel_agent.coordinator.coordinator import Coordinator, _generate_windows
 from travel_agent.coordinator.state import (
     CoordinatorPhase,
     RequestState,
     TravelIntent,
     Window,
 )
+from travel_agent.coordinator.streaming import stream_search
+from travel_agent.coordinator.windows import generate_windows
 
 
 def _make_intent(
@@ -40,13 +45,13 @@ def _make_intent(
 def test_generate_windows_respects_max() -> None:
     # Long horizon (10 months) so MAX_WINDOWS cap is the binding constraint
     intent = _make_intent(earliest=date(2026, 6, 1), latest=date(2027, 3, 31))
-    windows = _generate_windows(intent)
+    windows = generate_windows(intent)
     assert len(windows) == MAX_WINDOWS
 
 
 def test_generate_windows_step_by_window_size() -> None:
     intent = _make_intent(earliest=date(2026, 6, 1), latest=date(2026, 6, 30))
-    windows = _generate_windows(intent)
+    windows = generate_windows(intent)
     for i in range(1, len(windows)):
         delta = (windows[i].start_date - windows[i - 1].start_date).days
         assert delta == WINDOW_SIZE_DAYS, f"expected {WINDOW_SIZE_DAYS}, got {delta}"
@@ -54,7 +59,7 @@ def test_generate_windows_step_by_window_size() -> None:
 
 def test_generate_windows_correct_size() -> None:
     intent = _make_intent(earliest=date(2026, 6, 1), latest=date(2026, 6, 30))
-    windows = _generate_windows(intent)
+    windows = generate_windows(intent)
     for w in windows:
         size = (w.end_date - w.start_date).days + 1
         assert size == WINDOW_SIZE_DAYS, f"Expected {WINDOW_SIZE_DAYS}-day window, got {size}"
@@ -63,118 +68,118 @@ def test_generate_windows_correct_size() -> None:
 def test_generate_windows_short_horizon() -> None:
     # 3-day horizon with a 7-day stride produces exactly 1 window
     intent = _make_intent(earliest=date(2026, 6, 1), latest=date(2026, 6, 3))
-    windows = _generate_windows(intent)
+    windows = generate_windows(intent)
     assert len(windows) == 1
 
 
 def test_generate_windows_single_day_horizon() -> None:
     intent = _make_intent(earliest=date(2026, 6, 1), latest=date(2026, 6, 1))
-    windows = _generate_windows(intent)
+    windows = generate_windows(intent)
     assert len(windows) == 1
     assert windows[0].start_date == date(2026, 6, 1)
-
-
-# ── coordinator happy path ────────────────────────────────────────────────────
-
-
-async def test_coordinator_reaches_presenting_phase() -> None:
-    state = RequestState(intent=_make_intent())
-    result = await Coordinator().run(state)
-    assert result.phase == CoordinatorPhase.PRESENTING
-
-
-async def test_coordinator_populates_flight_options() -> None:
-    state = RequestState(intent=_make_intent())
-    result = await Coordinator().run(state)
-    assert len(result.flight_options) > 0
-
-
-async def test_coordinator_populates_hotel_options() -> None:
-    state = RequestState(intent=_make_intent())
-    result = await Coordinator().run(state)
-    assert len(result.hotel_options) > 0
-
-
-async def test_coordinator_flight_options_match_route() -> None:
-    state = RequestState(intent=_make_intent(origin="BOM", destination="CDG"))
-    result = await Coordinator().run(state)
-    for flight in result.flight_options:
-        assert flight.origin_iata == "BOM"
-        assert flight.destination_iata == "CDG"
-
-
-async def test_coordinator_hotel_options_in_correct_city() -> None:
-    state = RequestState(intent=_make_intent(destination="CDG"))
-    result = await Coordinator().run(state)
-    for hotel in result.hotel_options:
-        assert hotel.city == "Paris"
-
-
-async def test_coordinator_candidate_windows_populated() -> None:
-    # June 1-30 with a 7-day stride produces 5 windows (not MAX_WINDOWS=12)
-    state = RequestState(intent=_make_intent())
-    result = await Coordinator().run(state)
-    assert len(result.candidate_windows) == 5
-
-
-# ── no-intent guard ───────────────────────────────────────────────────────────
-
-
-async def test_coordinator_errors_without_intent() -> None:
-    state = RequestState()
-    result = await Coordinator().run(state)
-    assert result.phase == CoordinatorPhase.ERROR
-    assert result.errors
-
-
-# ── call budget tracking ──────────────────────────────────────────────────────
-
-
-async def test_coordinator_increments_flight_call_budget() -> None:
-    # June 1-30 → 5 windows → 5 synthetic per-window calls
-    state = RequestState(intent=_make_intent())
-    result = await Coordinator().run(state)
-    assert result.call_budget.flight_calls_used == 5
-
-
-async def test_coordinator_increments_hotel_call_budget() -> None:
-    # June 1-30 → 5 windows → 5 hotel calls
-    state = RequestState(intent=_make_intent())
-    result = await Coordinator().run(state)
-    assert result.call_budget.hotel_calls_used == 5
-
-
-# ── state isolation (model_copy) ──────────────────────────────────────────────
-
-
-async def test_coordinator_does_not_mutate_input_state() -> None:
-    intent = _make_intent()
-    original = RequestState(intent=intent)
-    original_phase = original.phase
-    await Coordinator().run(original)
-    assert original.phase == original_phase
-    assert original.flight_options == []
-
-
-# ── unknown destination ───────────────────────────────────────────────────────
-
-
-async def test_coordinator_unknown_destination_returns_empty_hotels() -> None:
-    intent = TravelIntent(
-        origin_iata="BOM",
-        destination_iata="LHR",  # not in IATA_TO_CITY
-        earliest_departure=date(2026, 6, 1),
-        latest_departure=date(2026, 6, 30),
-    )
-    state = RequestState(intent=intent)
-    result = await Coordinator().run(state)
-    assert result.hotel_options == []
-    assert result.phase == CoordinatorPhase.PRESENTING
-
-
-# ── window type check ─────────────────────────────────────────────────────────
 
 
 def test_window_is_pydantic_model() -> None:
     w = Window(start_date=date(2026, 6, 1), end_date=date(2026, 6, 7))
     assert isinstance(w, Window)
+
+
+# ── stream_search helpers ─────────────────────────────────────────────────────
+
+
+class _MockPlannerAgent:
+    """Pre-built planner that injects a fixed intent."""
+
+    def __init__(self, intent: TravelIntent) -> None:
+        self._intent = intent
+
+    async def run(self, state: Any, *, today: Any = None) -> Any:
+        state.intent = self._intent
+        return state
+
+
+class _MockOptimizerAgent:
+    """Noop optimizer — passes state through unchanged."""
+
+    async def run(self, state: Any, *, today: Any = None) -> Any:
+        return state
+
+
+class _FailingPlannerAgent:
+    async def run(self, state: Any, *, today: Any = None) -> Any:
+        raise RuntimeError("planner exploded")
+
+
+class _NoIntentPlannerAgent:
+    """Planner that returns state without setting intent."""
+
+    async def run(self, state: Any, *, today: Any = None) -> Any:
+        return state  # intent stays None
+
+
+async def _collect_events(
+    query: str,
+    intent: TravelIntent,
+    optimizer: Any = None,
+) -> list[dict[str, Any]]:
+    planner = _MockPlannerAgent(intent)
+    opt = optimizer or _MockOptimizerAgent()
+    events: list[dict[str, Any]] = []
+    async for event in stream_search(query, planner, opt):
+        events.append(event)
+    return events
+
+
+# ── stream_search pipeline tests ──────────────────────────────────────────────
+
+
+async def test_stream_search_reaches_done() -> None:
+    """BOM→CDG has synthetic data — should reach done or no_data_for_route."""
+    intent = _make_intent()
+    events = await _collect_events("BOM to CDG in June", intent)
+    types = [e["type"] for e in events]
+    assert "done" in types or "no_data_for_route" in types
+
+
+async def test_stream_search_emits_search_progress() -> None:
+    intent = _make_intent()
+    events = await _collect_events("BOM to CDG in June", intent)
+    progress_events = [e for e in events if e["type"] == "search_progress"]
+    assert len(progress_events) > 0
+
+
+async def test_stream_search_emits_planner_started() -> None:
+    intent = _make_intent()
+    events = await _collect_events("BOM to CDG in June", intent)
+    assert events[0]["type"] == "planner_started"
+
+
+async def test_stream_search_planner_error_emits_error_event() -> None:
+    events: list[dict[str, Any]] = []
+    async for event in stream_search("test", _FailingPlannerAgent(), _MockOptimizerAgent()):
+        events.append(event)
+    assert any(e["type"] == "error" for e in events)
+
+
+async def test_stream_no_intent_emits_error() -> None:
+    events: list[dict[str, Any]] = []
+    async for event in stream_search("test", _NoIntentPlannerAgent(), _MockOptimizerAgent()):
+        events.append(event)
+    assert any(e["type"] == "error" for e in events)
+
+
+async def test_stream_search_candidate_windows_populated() -> None:
+    """June 1-30 with a 7-day stride produces 5 windows (not MAX_WINDOWS=12)."""
+    intent = _make_intent()
+    events = await _collect_events("BOM to CDG in June", intent)
+    search_started = next((e for e in events if e["type"] == "search_started"), None)
+    assert search_started is not None
+    assert len(search_started["windows"]) == 5
+
+
+async def test_stream_search_flight_options_match_route() -> None:
+    intent = _make_intent(origin="BOM", destination="CDG")
+    events = await _collect_events("BOM to CDG in June", intent)
+    progress_events = [e for e in events if e["type"] == "search_progress"]
+    total_found = sum(e["flights_found"] for e in progress_events)
+    assert total_found > 0

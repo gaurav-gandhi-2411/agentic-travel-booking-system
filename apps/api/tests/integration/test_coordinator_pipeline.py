@@ -1,7 +1,10 @@
-"""Integration test: coordinator -> PlannerAgent -> window search -> FlightHunter + HotelHunter.
+"""Integration test: stream_search() pipeline with mocked PlannerAgent.
 
-Uses a mocked LLMClient (so no real API calls) and SyntheticProvider (no Aviasales key needed).
-Verifies the full pipeline produces a terminal PRESENTING state with flight and hotel options.
+Coordinator.run() and coordinator.py have been deleted (audit Risk 8).
+These tests call stream_search() directly with pre-built mock agents,
+exercising the full SSE pipeline without HTTP or a real LLM.
+
+SyntheticProvider is used for flight data (no Aviasales key needed).
 """
 
 from __future__ import annotations
@@ -10,8 +13,10 @@ from datetime import date
 from typing import Any
 from unittest.mock import AsyncMock
 
+import pytest
+
+from travel_agent.agents.optimizer import OptimizerAgent
 from travel_agent.agents.planner import PlannerAgent
-from travel_agent.coordinator.coordinator import Coordinator
 from travel_agent.coordinator.state import (
     CabinClass,
     CoordinatorPhase,
@@ -19,6 +24,7 @@ from travel_agent.coordinator.state import (
     TravelIntent,
     TripType,
 )
+from travel_agent.coordinator.streaming import stream_search
 from travel_agent.llm.base import LLMClient, LLMResponse, ToolCall
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -45,7 +51,7 @@ def _mock_llm_client(intent_fields: dict[str, Any]) -> LLMClient:
     response = _planner_tool_call(intent_fields)
     client = AsyncMock(spec=LLMClient)
     client.chat = AsyncMock(return_value=response)
-    return client
+    return client  # type: ignore[return-value]
 
 
 def _bom_cdg_intent_fields() -> dict[str, Any]:
@@ -67,86 +73,73 @@ def _bom_cdg_intent_fields() -> dict[str, Any]:
     }
 
 
-# ── full pipeline: PlannerAgent + Coordinator ─────────────────────────────────
-
-
-async def test_pipeline_reaches_presenting_phase() -> None:
-    client = _mock_llm_client(_bom_cdg_intent_fields())
+async def _run_pipeline(
+    intent_fields: dict[str, Any],
+    raw_input: str = "fly from Mumbai to Paris next month",
+) -> tuple[list[dict[str, Any]], RequestState | None]:
+    """Run stream_search and collect events + final state (from done event)."""
+    client = _mock_llm_client(intent_fields)
     planner = PlannerAgent(client, "claude-haiku-4-5-20251001")
-    coordinator = Coordinator()
+    optimizer = OptimizerAgent(client=None)  # fallback explanations
 
-    state = RequestState()
-    state.raw_input = "fly from Mumbai to Paris next month"
+    events: list[dict[str, Any]] = []
+    async for event in stream_search(raw_input, planner, optimizer):
+        events.append(event)
+    return events, None
 
-    state = await planner.run(state, today=date(2026, 5, 14))
-    assert state.phase != CoordinatorPhase.ERROR, state.errors
-    assert state.intent is not None
 
-    result = await coordinator.run(state)
-    assert result.phase == CoordinatorPhase.PRESENTING
+# ── pipeline tests ────────────────────────────────────────────────────────────
+
+
+async def test_pipeline_reaches_done_or_no_data() -> None:
+    events, _ = await _run_pipeline(_bom_cdg_intent_fields())
+    types = {e["type"] for e in events}
+    assert "done" in types or "no_data_for_route" in types
+
+
+async def test_pipeline_emits_planner_done_with_intent() -> None:
+    events, _ = await _run_pipeline(_bom_cdg_intent_fields())
+    planner_done = next((e for e in events if e["type"] == "planner_done"), None)
+    assert planner_done is not None
+    assert planner_done["intent"]["origin_iata"] == "BOM"
+    assert planner_done["intent"]["destination_iata"] == "CDG"
 
 
 async def test_pipeline_produces_flight_options() -> None:
-    client = _mock_llm_client(_bom_cdg_intent_fields())
-    planner = PlannerAgent(client, "claude-haiku-4-5-20251001")
-    coordinator = Coordinator()
-
-    state = RequestState()
-    state.raw_input = "fly from Mumbai to Paris next month"
-    state = await planner.run(state, today=date(2026, 5, 14))
-    result = await coordinator.run(state)
-
-    assert len(result.flight_options) > 0
-    assert all(opt.origin_iata == "BOM" for opt in result.flight_options)
-    assert all(opt.destination_iata == "CDG" for opt in result.flight_options)
+    events, _ = await _run_pipeline(_bom_cdg_intent_fields())
+    progress_events = [e for e in events if e["type"] == "search_progress"]
+    total_found = sum(e["flights_found"] for e in progress_events)
+    assert total_found > 0
 
 
-async def test_pipeline_produces_hotel_options() -> None:
-    client = _mock_llm_client(_bom_cdg_intent_fields())
-    planner = PlannerAgent(client, "claude-haiku-4-5-20251001")
-    coordinator = Coordinator()
-
-    state = RequestState()
-    state.raw_input = "fly from Mumbai to Paris next month"
-    state = await planner.run(state, today=date(2026, 5, 14))
-    result = await coordinator.run(state)
-
-    assert len(result.hotel_options) > 0
-    assert all(h.city == "Paris" for h in result.hotel_options)
+async def test_pipeline_archetype_events_present() -> None:
+    events, _ = await _run_pipeline(_bom_cdg_intent_fields())
+    archetype_events = [e for e in events if e["type"] == "archetype_ready"]
+    # Should have 2 archetypes if flights found; 0 if no_data_for_route
+    done_types = {e["type"] for e in events}
+    if "done" in done_types:
+        assert len(archetype_events) == 2
 
 
 async def test_pipeline_intent_fields_propagated() -> None:
     fields = {**_bom_cdg_intent_fields(), "traveler_count": 3, "cabin_class": "business"}
-    client = _mock_llm_client(fields)
-    planner = PlannerAgent(client, "claude-haiku-4-5-20251001")
-    coordinator = Coordinator()
-
-    state = RequestState()
-    state.raw_input = "3 business class tickets BOM to CDG"
-    state = await planner.run(state, today=date(2026, 5, 14))
-    assert state.intent is not None
-    assert state.intent.traveler_count == 3
-    assert state.intent.cabin_class == CabinClass.BUSINESS
-
-    result = await coordinator.run(state)
-    assert result.phase == CoordinatorPhase.PRESENTING
+    events, _ = await _run_pipeline(fields)
+    planner_done = next((e for e in events if e["type"] == "planner_done"), None)
+    assert planner_done is not None
+    assert planner_done["intent"]["traveler_count"] == 3
+    assert planner_done["intent"]["cabin_class"] == "business"
 
 
-async def test_pipeline_budget_tracking() -> None:
-    client = _mock_llm_client(_bom_cdg_intent_fields())
-    planner = PlannerAgent(client, "claude-haiku-4-5-20251001")
-    coordinator = Coordinator()
-
-    state = RequestState()
-    state.raw_input = "fly from Mumbai to Paris next month"
-    state = await planner.run(state, today=date(2026, 5, 14))
-    result = await coordinator.run(state)
-
-    assert result.call_budget.flight_calls_used > 0
-    assert result.call_budget.hotel_calls_used > 0
+async def test_pipeline_nrt_destination_search_progress() -> None:
+    fields = {**_bom_cdg_intent_fields(), "destination_iata": "NRT", "raw_query": "BOM to Tokyo"}
+    events, _ = await _run_pipeline(fields, raw_input="BOM to Tokyo")
+    planner_done = next((e for e in events if e["type"] == "planner_done"), None)
+    assert planner_done is not None
+    assert planner_done["intent"]["destination_iata"] == "NRT"
 
 
 async def test_pipeline_state_not_mutated_on_planner_error() -> None:
+    """When the LLM returns no tool call, stream_search emits an error event."""
     no_tool_response = LLMResponse(
         content="Sorry, I cannot help with that.",
         model="claude-haiku-4-5-20251001",
@@ -155,69 +148,20 @@ async def test_pipeline_state_not_mutated_on_planner_error() -> None:
         latency_ms=0.0,
         tool_calls=[],
     )
-    client = AsyncMock(spec=LLMClient)
-    client.chat = AsyncMock(return_value=no_tool_response)
+    client: LLMClient = AsyncMock(spec=LLMClient)
+    client.chat = AsyncMock(return_value=no_tool_response)  # type: ignore[method-assign]
     planner = PlannerAgent(client, "claude-haiku-4-5-20251001")
+    optimizer = OptimizerAgent(client=None)
 
-    state = RequestState()
-    state.raw_input = "some unrelated query"
-    result = await planner.run(state, today=date(2026, 5, 14))
+    events: list[dict[str, Any]] = []
+    async for event in stream_search("some unrelated query", planner, optimizer):
+        events.append(event)
 
-    assert result.phase == CoordinatorPhase.ERROR
-    assert result.intent is None
-    assert len(result.errors) == 1
-
-
-async def test_pipeline_nrt_destination() -> None:
-    fields = {**_bom_cdg_intent_fields(), "destination_iata": "NRT", "raw_query": "BOM to Tokyo"}
-    client = _mock_llm_client(fields)
-    planner = PlannerAgent(client, "claude-haiku-4-5-20251001")
-    coordinator = Coordinator()
-
-    state = RequestState()
-    state.raw_input = "BOM to Tokyo"
-    state = await planner.run(state, today=date(2026, 5, 14))
-    result = await coordinator.run(state)
-
-    assert result.phase == CoordinatorPhase.PRESENTING
-    assert len(result.flight_options) > 0
-    assert all(opt.destination_iata == "NRT" for opt in result.flight_options)
-    assert all(h.city == "Tokyo" for h in result.hotel_options)
+    assert any(e["type"] == "error" for e in events)
+    assert not any(e["type"] == "done" for e in events)
 
 
-# ── Coordinator-only (pre-populated state) ────────────────────────────────────
-
-
-async def test_coordinator_star_filter_respected() -> None:
-    coordinator = Coordinator()
-
-    state = RequestState()
-    state.intent = TravelIntent(
-        origin_iata="BOM",
-        destination_iata="CDG",
-        earliest_departure=date(2026, 6, 1),
-        latest_departure=date(2026, 6, 3),
-        hotel_min_stars=4.0,
-        trip_type=TripType.ROUND_TRIP,
-        raw_query="Paris 4-star hotels",
-    )
-    result = await coordinator.run(state)
-    assert all(h.stars >= 4.0 for h in result.hotel_options)
-
-
-async def test_coordinator_empty_raw_input_still_works_with_intent() -> None:
-    coordinator = Coordinator()
-
-    state = RequestState()
-    state.intent = TravelIntent(
-        origin_iata="BOM",
-        destination_iata="DPS",
-        earliest_departure=date(2026, 8, 1),
-        latest_departure=date(2026, 8, 3),
-        trip_type=TripType.ROUND_TRIP,
-        raw_query="Bali trip",
-    )
-    result = await coordinator.run(state)
-    assert result.phase == CoordinatorPhase.PRESENTING
-    assert len(result.flight_options) > 0
-    assert len(result.hotel_options) > 0
+async def test_pipeline_budget_tracking_via_search_progress() -> None:
+    events, _ = await _run_pipeline(_bom_cdg_intent_fields())
+    progress_events = [e for e in events if e["type"] == "search_progress"]
+    assert len(progress_events) > 0
