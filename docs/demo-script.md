@@ -52,7 +52,7 @@ Point to the explanation text on each card.
 
 ## Query 2 — Different route (2 minutes)
 
-Type: **"Delhi to Singapore in June"**  
+Type: **"Delhi to Bangkok in June"**  
 Hit search.
 
 > *"Same system, different route. Pareto frontier recalculated on new data."*
@@ -65,7 +65,7 @@ When cards appear:
 
 ## The Wow Moment — Refinement (3 minutes)
 
-While still on the Singapore results, point to the refinement section below the cards.
+While still on the Bangkok results, point to the refinement section below the cards.
 
 > *"Now here's what makes this different from a search engine. You can reason with it."*
 
@@ -89,7 +89,7 @@ Optional if time allows — type in the free-text box: **"I prefer morning depar
 
 ## Showing architectural flexibility — the toggle moment (2 minutes)
 
-After Query 2 results appear (Singapore), point to the toggle in the top-right corner.
+After Query 2 results appear (Bangkok), point to the toggle in the top-right corner.
 
 > *"One more thing. See this toggle — 'Premium' vs 'Open-source'? Right now we're running on Anthropic Haiku. Same query, different model."*
 
@@ -155,7 +155,7 @@ Switch back to "Premium" before the next query to return to baseline.
 
 **Empty results ("No flights found"):**
 > *"This route has limited cached data in the demo provider. Let me try a different route."*  
-> Switch to: **"Mumbai to Paris in July"** — guaranteed to have synthetic data.
+> Switch to: **"Delhi to Kuala Lumpur in June"** — verified to return live results.
 
 **Optimizer error / generic failure:**
 > *"One of the agents hit a timeout — this happens occasionally with the free-tier LLM endpoint. Let me retry."*  
@@ -177,7 +177,7 @@ Switch back to "Premium" before the next query to return to baseline.
 3. Watch the three progress steps: Understanding → Searching → Ranking.
 4. Two cards appear. Click "Why this?" on the left (teal) card. Read the comparison text aloud.
 5. Scroll down. Click "Make it cheaper". Point out the lower prices when new cards appear (< 2 seconds).
-6. Type `Delhi to Singapore in June` in the main search box. Wait for results.
+6. Type `Delhi to Bangkok in June` in the main search box. Wait for results.
 7. **Toggle moment**: click "Open-source (Llama via Groq)" in the top-right. Then click "Make it cheaper". New results appear from a different model. Say: "Same architecture, different provider."
 8. Switch back to "Premium". Done.
 

@@ -60,9 +60,9 @@ def _parse_change_type(text: str) -> str:
     lower = text.lower()
     if any(w in lower for w in ["cheap", "cheaper", "budget", "affordable", "less expensive", "lower price"]):
         return "cheaper"
-    if any(w in lower for w in ["red-eye", "red eye", "redeye", "skip early", "no early", "no red"]):
+    if any(w in lower for w in ["red-eye", "red eye", "redeye", "red_eye", "skip_red_eyes", "skip early", "no early", "no red"]):
         return "skip_red_eyes"
-    if any(w in lower for w in ["non-stop", "nonstop", "direct", "no stop", "no layover", "without stop"]):
+    if any(w in lower for w in ["non-stop", "nonstop", "non_stop", "direct", "no stop", "no layover", "without stop"]):
         return "non_stop"
     return "full_search"
 
