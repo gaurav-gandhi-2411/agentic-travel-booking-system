@@ -62,14 +62,25 @@ def _parse_change_type(text: str) -> str:
     if any(w in lower for w in cheap_kws):
         return "cheaper"
     red_eye_kws = [
-        "red-eye", "red eye", "redeye", "red_eye", "skip_red_eyes",
-        "skip early", "no early", "no red",
+        "red-eye",
+        "red eye",
+        "redeye",
+        "red_eye",
+        "skip_red_eyes",
+        "skip early",
+        "no early",
+        "no red",
     ]
     if any(w in lower for w in red_eye_kws):
         return "skip_red_eyes"
     nonstop_kws = [
-        "non-stop", "nonstop", "non_stop", "direct",
-        "no stop", "no layover", "without stop",
+        "non-stop",
+        "nonstop",
+        "non_stop",
+        "direct",
+        "no stop",
+        "no layover",
+        "without stop",
     ]
     if any(w in lower for w in nonstop_kws):
         return "non_stop"
@@ -86,11 +97,13 @@ def _filter_flights(flights: list[FlightOption], change_type: str) -> list[Fligh
         return filtered if filtered else flights
 
     if change_type == "skip_red_eyes":
+
         def _hour(iso: str) -> int:
             try:
                 return int(iso[11:13])
             except (ValueError, IndexError):
                 return 12
+
         filtered = [f for f in flights if _hour(f.outbound_departure_at) >= _RED_EYE_CUTOFF_HOUR]
         return filtered if filtered else flights
 

@@ -127,9 +127,7 @@ async def stream_search(  # noqa: PLR0912, PLR0915
                 dep = _date_from_raw(r)
                 if intent.earliest_departure <= dep <= intent.latest_departure:
                     window = _assign_window(dep, windows)
-                    month_flights.append(
-                        _map_raw_to_flight_option(r, window, intent.cabin_class)
-                    )
+                    month_flights.append(_map_raw_to_flight_option(r, window, intent.cabin_class))
             all_flights.extend(month_flights)
             state.call_budget.flight_calls_used += 1
             yield {
