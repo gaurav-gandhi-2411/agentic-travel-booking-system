@@ -9,21 +9,12 @@ SyntheticProvider is used for flight data (no Aviasales key needed).
 
 from __future__ import annotations
 
-from datetime import date
 from typing import Any
 from unittest.mock import AsyncMock
 
-import pytest
-
 from travel_agent.agents.optimizer import OptimizerAgent
 from travel_agent.agents.planner import PlannerAgent
-from travel_agent.coordinator.state import (
-    CabinClass,
-    CoordinatorPhase,
-    RequestState,
-    TravelIntent,
-    TripType,
-)
+from travel_agent.coordinator.state import RequestState
 from travel_agent.coordinator.streaming import stream_search
 from travel_agent.llm.base import LLMClient, LLMResponse, ToolCall
 

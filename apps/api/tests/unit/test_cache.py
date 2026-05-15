@@ -5,8 +5,6 @@ from __future__ import annotations
 import asyncio
 from datetime import date
 
-import pytest
-
 from travel_agent.api.cache import _SearchCache
 from travel_agent.coordinator.state import TravelIntent
 

@@ -65,10 +65,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         )
         raise RuntimeError(msg)
 
-    _DEMO_KEY_SENTINEL = "change-me-before-demo"
+    _demo_key_sentinel = "change-me-before-demo"
     if app_mode == "demo":
         demo_key = os.environ.get("DEMO_API_KEY", "")
-        if not demo_key or demo_key == _DEMO_KEY_SENTINEL:
+        if not demo_key or demo_key == _demo_key_sentinel:
             msg = (
                 "APP_MODE=demo requires DEMO_API_KEY to be set to a non-default value. "
                 "Set the env var to a secret string. "

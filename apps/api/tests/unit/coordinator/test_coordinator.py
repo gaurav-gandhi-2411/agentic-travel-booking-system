@@ -12,12 +12,8 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
-import pytest
-
 from travel_agent.coordinator.constants import MAX_WINDOWS, WINDOW_SIZE_DAYS
 from travel_agent.coordinator.state import (
-    CoordinatorPhase,
-    RequestState,
     TravelIntent,
     Window,
 )
@@ -107,7 +103,8 @@ class _MockOptimizerAgent:
 
 class _FailingPlannerAgent:
     async def run(self, state: Any, *, today: Any = None) -> Any:
-        raise RuntimeError("planner exploded")
+        msg = "planner exploded"
+        raise RuntimeError(msg)
 
 
 class _NoIntentPlannerAgent:
