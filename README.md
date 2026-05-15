@@ -62,7 +62,7 @@ data: {"type": "done"}
 | Layer | Technology |
 |---|---|
 | Backend | Python 3.12, FastAPI, Pydantic v2, httpx |
-| LLM | Anthropic claude-haiku-4-5 (planner) + claude-sonnet-4-6 (optimizer) |
+| LLM | Anthropic claude-haiku-4-5 (all agents in demo/prod; sonnet-4-6 for eval baseline) |
 | Flight data | Aviasales / Travelpayouts Data API |
 | Scoring | Pareto frontier on (value\_score, experience\_score) axes |
 | Affiliate | Travelpayouts deep-link with per-archetype sub-ID |
@@ -90,7 +90,7 @@ See `apps/api/.env.example` for the full list.
 POST /search
   └─ PlannerAgent (haiku-4-5)      — parse NL query → TravelIntent
   └─ per-window flight search       — Aviasales API or SyntheticProvider
-  └─ OptimizerAgent (sonnet-4-6)   — Pareto frontier → 2 archetypes + NL explanations
+  └─ OptimizerAgent (haiku-4-5)    — Pareto frontier → 2 archetypes + NL explanations
   └─ SSE stream                     — one event per phase transition
 ```
 
@@ -133,6 +133,16 @@ Key upcoming work:
 - **Conversational refinement** — `BookingAgent` and `ConversationManagerAgent` stubs in `agents/`
 - **Open-source model track** — Qwen 2.5 7B/14B QLoRA fine-tuning per agent, eval harness in `evals/`
 - **Third archetype** — "best-balance" option surfaced from Pareto frontier
+
+## Known Limitations
+
+These are intentionally deferred to Phase 3 and later:
+
+- **Hotel data**: `HotelHunterAgent` returns synthetic data only. Real hotel provider (Booking.com / Agoda) pending affiliate approval.
+- **Booking**: `BookingAgent` is a stub (`NotImplementedError`). HITL booking flow is Phase E.
+- **Conversation**: `ConversationManagerAgent` is a stub. Multi-turn refinement beyond `/refine` keyword matching is Phase F.
+- **Multi-tenancy**: Single shared `DEMO_API_KEY`. Per-tenant auth and Postgres RLS are Phase 3.
+- **Flexible destination**: Queries like "anywhere warm" are not supported. Destination must be a specific city.
 
 ## License
 
