@@ -10,11 +10,14 @@ from travel_agent.llm.routing import (
     _load_yaml,
     get_active_profile_name,
     get_model_for_agent,
+    get_model_for_agent_in_profile,
+    get_profile_by_name,
     get_provider,
+    get_provider_for_profile,
     load_routing_config,
 )
 
-_EXPECTED_PROFILES = {"local", "free", "prod", "eval", "demo"}
+_EXPECTED_PROFILES = {"local", "free", "prod", "eval", "demo", "demo-haiku", "demo-free"}
 
 
 @pytest.fixture(autouse=True)
@@ -98,6 +101,43 @@ def test_demo_profile_uses_haiku() -> None:
         assert config["demo"][agent] == haiku, (
             f"Agent {agent!r}: expected Haiku in demo profile, got {config['demo'][agent]!r}"
         )
+
+
+def test_demo_haiku_profile_matches_demo() -> None:
+    config = load_routing_config()
+    haiku = "claude-haiku-4-5-20251001"
+    for agent in AGENT_KEYS:
+        assert config["demo-haiku"][agent] == haiku, (
+            f"Agent {agent!r}: expected Haiku in demo-haiku profile"
+        )
+    assert config["demo-haiku"]["provider"] == "anthropic"
+
+
+def test_demo_free_profile_uses_groq() -> None:
+    config = load_routing_config()
+    assert config["demo-free"]["provider"] == "groq"
+    assert "llama" in config["demo-free"]["planner"]
+    assert "llama" in config["demo-free"]["optimizer"]
+
+
+def test_get_profile_by_name() -> None:
+    profile = get_profile_by_name("demo-free")
+    assert profile["provider"] == "groq"
+
+
+def test_get_profile_by_name_unknown_raises() -> None:
+    with pytest.raises(ValueError, match="Unknown routing profile"):
+        get_profile_by_name("nonexistent")
+
+
+def test_get_model_for_agent_in_profile() -> None:
+    model = get_model_for_agent_in_profile("planner", "demo-free")
+    assert "llama" in model.lower()
+
+
+def test_get_provider_for_profile() -> None:
+    assert get_provider_for_profile("demo-haiku") == "anthropic"
+    assert get_provider_for_profile("demo-free") == "groq"
 
 
 def test_config_path_env_override(

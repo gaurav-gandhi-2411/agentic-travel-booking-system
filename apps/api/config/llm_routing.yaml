@@ -41,9 +41,10 @@ profiles:
       booking:        llama-3.3-70b-versatile
       conversation:   llama-3.3-70b-versatile
 
-  # ── demo ─────────────────────────────────────────────────────────────────────
-  # Live demo profile. Haiku for all agents — lower latency, lower cost.
-  # search.py hardcodes these model IDs; this profile documents the intent.
+  # ── demo / demo-haiku ────────────────────────────────────────────────────────
+  # Live demo profile (premium track). Haiku for all agents.
+  # "demo" is kept as the env-default alias; "demo-haiku" is the explicit name
+  # used by the X-LLM-Profile header toggle.
   demo:
     planner:        claude-haiku-4-5-20251001
     flight_hunter:  claude-haiku-4-5-20251001
@@ -52,6 +53,28 @@ profiles:
     booking:        claude-haiku-4-5-20251001
     conversation:   claude-haiku-4-5-20251001
     provider:       anthropic
+
+  demo-haiku:
+    planner:        claude-haiku-4-5-20251001
+    flight_hunter:  claude-haiku-4-5-20251001
+    hotel_hunter:   claude-haiku-4-5-20251001
+    optimizer:      claude-haiku-4-5-20251001
+    booking:        claude-haiku-4-5-20251001
+    conversation:   claude-haiku-4-5-20251001
+    provider:       anthropic
+
+  # ── demo-free ────────────────────────────────────────────────────────────────
+  # Free-tier demo profile. Groq + Llama 3.3 70B for reasoning agents.
+  # Requires GROQ_API_KEY (free at console.groq.com).
+  # Activated per-request via X-LLM-Profile: demo-free header.
+  demo-free:
+    planner:        llama-3.3-70b-versatile
+    flight_hunter:  llama-3.1-8b-instant
+    hotel_hunter:   llama-3.1-8b-instant
+    optimizer:      llama-3.3-70b-versatile
+    booking:        llama-3.1-8b-instant
+    conversation:   llama-3.3-70b-versatile
+    provider:       groq
 
   # ── prod ──────────────────────────────────────────────────────────────────────
   # B2B production profile. Tenants supply their own ANTHROPIC_API_KEY; the SDK

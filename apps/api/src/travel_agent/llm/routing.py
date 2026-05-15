@@ -84,3 +84,25 @@ def get_model_for_agent(agent: str) -> str:
 
 def get_provider() -> str:
     return get_active_profile()["provider"]
+
+
+def get_profile_by_name(name: str) -> dict[str, str]:
+    """Return a routing profile by explicit name, bypassing env-var resolution."""
+    config = load_routing_config()
+    if name not in config:
+        msg = f"Unknown routing profile {name!r}. Valid profiles: {sorted(config.keys())}"
+        raise ValueError(msg)
+    return config[name]
+
+
+def get_model_for_agent_in_profile(agent: str, profile_name: str) -> str:
+    """Return the model ID for *agent* in a specific named profile."""
+    profile = get_profile_by_name(profile_name)
+    if agent not in AGENT_KEYS or agent not in profile:
+        msg = f"Agent {agent!r} not found in routing profile {profile_name!r}."
+        raise ValueError(msg)
+    return profile[agent]
+
+
+def get_provider_for_profile(profile_name: str) -> str:
+    return get_profile_by_name(profile_name)["provider"]

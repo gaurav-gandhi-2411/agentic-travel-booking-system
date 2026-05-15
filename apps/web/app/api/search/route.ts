@@ -32,6 +32,7 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   const apiBase = process.env.API_BASE_URL ?? 'http://localhost:8000';
   const apiKey = process.env.DEMO_API_KEY ?? '';
+  const llmProfile = req.headers.get('X-LLM-Profile') ?? '';
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 30_000);
@@ -42,6 +43,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       headers: {
         'Content-Type': 'application/json',
         ...(apiKey ? { 'X-API-Key': apiKey } : {}),
+        ...(llmProfile ? { 'X-LLM-Profile': llmProfile } : {}),
       },
       body: JSON.stringify({ query }),
       signal: controller.signal,

@@ -89,3 +89,5 @@ logs/
 *.cert
 *.p12
 *.whl
+
+.vercel

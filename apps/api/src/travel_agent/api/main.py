@@ -18,7 +18,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from travel_agent.api.middleware.auth import DemoAuthMiddleware
+from travel_agent.api.middleware.llm_profile import LLMProfileMiddleware
 from travel_agent.api.middleware.request_id import RequestIDMiddleware
+from travel_agent.api.routes.refine import router as refine_router
 from travel_agent.api.routes.search import router as search_router
 
 load_dotenv()
@@ -47,9 +49,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     profile = os.environ.get("LLM_ROUTING_PROFILE", "local")
     app_mode = os.environ.get("APP_MODE", "synthetic")
 
-    if profile in {"eval", "prod", "demo"} and not os.environ.get("ANTHROPIC_API_KEY"):
+    if profile in {"eval", "prod", "demo", "demo-haiku"} and not os.environ.get("ANTHROPIC_API_KEY"):
         msg = (
-            "LLM_ROUTING_PROFILE=eval|prod requires ANTHROPIC_API_KEY. "
+            f"LLM_ROUTING_PROFILE={profile} requires ANTHROPIC_API_KEY. "
             "Eval is for manual baseline runs only. "
             "Prod expects a tenant-supplied key."
         )
@@ -61,6 +63,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             "Set the env var or switch APP_MODE=synthetic to use synthetic data."
         )
         raise RuntimeError(msg)
+
+    if app_mode == "demo" and not os.environ.get("GROQ_API_KEY"):
+        logger.warning(
+            "GROQ_API_KEY not set — X-LLM-Profile: demo-free requests will fail at runtime."
+        )
 
     logger.info("startup", llm_routing_profile=profile, app_mode=app_mode, phase="C")
     yield
@@ -82,12 +89,14 @@ app.add_middleware(
     ],
     allow_origin_regex=r"https://.*\.vercel\.app",
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type", "X-API-Key"],
+    allow_headers=["Content-Type", "X-API-Key", "X-LLM-Profile"],
 )
+app.add_middleware(LLMProfileMiddleware)
 app.add_middleware(DemoAuthMiddleware)
 app.add_middleware(RequestIDMiddleware)
 
 app.include_router(search_router)
+app.include_router(refine_router)
 
 
 @app.get("/health")
