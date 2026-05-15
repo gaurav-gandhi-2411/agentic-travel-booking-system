@@ -268,3 +268,39 @@ async def test_planner_passes_system_prompt() -> None:
     _, kwargs = client.chat.call_args
     assert kwargs.get("system") is not None
     assert "2026-05-14" in kwargs["system"]
+
+
+# ── ANY destination fallback ──────────────────────────────────────────────────
+
+
+async def test_flexible_destination_query_graceful_in_synthetic() -> None:
+    """When the LLM historically returns ANY for destination_iata (legacy behaviour),
+    stream_search should not crash — it emits no_data_for_route or error, not done."""
+    from travel_agent.coordinator.state import TravelIntent
+    from travel_agent.coordinator.streaming import stream_search
+
+    intent = TravelIntent(
+        origin_iata="DEL",
+        destination_iata="ANY",  # legacy/unexpected value — schema no longer allows it
+        earliest_departure=date(2026, 6, 1),
+        latest_departure=date(2026, 6, 30),
+    )
+
+    class _PrebuiltPlanner:
+        async def run(self, state: Any, *, today: Any = None) -> Any:
+            state.intent = intent
+            return state
+
+    class _NoopOptimizer:
+        async def run(self, state: Any, *, today: Any = None) -> Any:
+            return state
+
+    events = []
+    async for event in stream_search(
+        "where can I go from Delhi for $300", _PrebuiltPlanner(), _NoopOptimizer()
+    ):
+        events.append(event)
+
+    types = {e["type"] for e in events}
+    assert "no_data_for_route" in types or "error" in types
+    assert "done" not in types  # must not complete normally

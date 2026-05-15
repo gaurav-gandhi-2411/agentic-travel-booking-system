@@ -31,11 +31,10 @@ EXTRACT_TRAVEL_INTENT = ToolDefinition(
             },
             "destination_iata": {
                 "type": "string",
-                "pattern": "^([A-Z]{3}|ANY)$",
-                "description": (
-                    "3-letter IATA code for destination, or the literal string 'ANY' "
-                    "when the user is flexible on destination."
-                ),
+                "pattern": "^[A-Z]{3}$",
+                # ANY was intentionally removed — flexible-destination queries should
+                # resolve to a specific IATA code via the planner system prompt.
+                "description": "3-letter IATA code for destination airport (e.g. DXB for Dubai).",
             },
             "earliest_departure": {
                 "type": "string",

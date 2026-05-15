@@ -242,6 +242,18 @@ def test_search_without_auth_passes_in_synthetic_mode(
     assert resp.status_code == 200
 
 
+def test_long_query_returns_422(client: TestClient) -> None:
+    """A query exceeding 1000 characters must be rejected with HTTP 422."""
+    resp = client.post("/search", json={"query": "x" * 5000})
+    assert resp.status_code == 422
+
+
+def test_short_query_returns_422(client: TestClient) -> None:
+    """A query shorter than 3 characters must be rejected with HTTP 422."""
+    resp = client.post("/search", json={"query": "ab"})
+    assert resp.status_code == 422
+
+
 def test_search_no_data_emits_no_data_for_route(client: TestClient) -> None:
     """When the provider returns zero flights, emits no_data_for_route (not error)."""
     from travel_agent.llm.base import LLMResponse, ToolCall

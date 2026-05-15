@@ -27,7 +27,7 @@ from collections.abc import AsyncGenerator
 
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from travel_agent.agents.optimizer import OptimizerAgent
 from travel_agent.agents.planner import PlannerAgent
@@ -52,8 +52,8 @@ def _resolve_profile(requested: str | None) -> str:
 
 
 class RefineRequest(BaseModel):
-    request_id: str
-    refinement: str
+    request_id: str = Field(min_length=1, max_length=200)
+    refinement: str = Field(min_length=3, max_length=1000)
 
 
 def _parse_change_type(text: str) -> str:

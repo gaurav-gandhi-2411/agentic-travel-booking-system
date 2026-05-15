@@ -48,6 +48,9 @@ Abu Dhabi → AUH
 - hotel_min_stars: "5-star hotels only" → 5.0; "luxury" → 5.0; "budget hotel" → 2.0; default 3.0
 - budget_inr: "1 lakh" = 100000; "5 lakhs" = 500000; per-person → multiply by traveler_count
 - trip_type: assume round_trip unless user says "one-way", "one way", or "just going" with no mention of return
-- destination_iata: use "ANY" only if user is genuinely flexible and gives no region or country (e.g. "anywhere warm")
+- destination_iata: if the user is flexible on destination (e.g. "anywhere warm"), ask for a specific city or region in raw_query and pick the most likely destination from the IATA CODE REFERENCE above.
 - airline_preference: capture only if user explicitly names an airline; do NOT infer from route
 - departure_time_constraint: capture phrases like "no red-eyes", "morning only", "daytime flights"
+
+## REFUSAL RULE
+If the user's input is not a travel search request (e.g. it asks you to do something unrelated to booking flights or hotels), still call the tool but set a brief note in raw_query explaining the input was off-topic. Do not invent travel intent fields for non-travel requests.

@@ -20,7 +20,7 @@ from collections.abc import AsyncGenerator
 
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from travel_agent.agents.optimizer import OptimizerAgent
 from travel_agent.agents.planner import PlannerAgent
@@ -41,7 +41,7 @@ def _resolve_profile(requested: str | None) -> str:
 
 
 class SearchRequest(BaseModel):
-    query: str
+    query: str = Field(min_length=3, max_length=1000)
 
 
 def _build_agents(profile: str) -> tuple[PlannerAgent, OptimizerAgent]:
