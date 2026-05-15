@@ -134,7 +134,7 @@ async def _refine_generator(
     def _event(data: dict[str, object]) -> str:
         return f"data: {json.dumps(data)}\n\n"
 
-    cached = search_cache.get(request_id)
+    cached = await search_cache.get(request_id)
     change_type = _parse_change_type(refinement)
 
     # Cache miss or full-search refinement → delegate to stream_search
@@ -179,7 +179,7 @@ async def _refine_generator(
         return
 
     # Update cache with filtered flights so subsequent refines stack
-    search_cache.put(request_id, intent, filtered)
+    await search_cache.put(request_id, intent, filtered)
 
     for archetype in state.archetypes:
         yield _event({"type": "archetype_ready", "archetype": archetype.model_dump(mode="json")})
