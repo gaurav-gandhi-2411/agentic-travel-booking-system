@@ -49,7 +49,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     profile = os.environ.get("LLM_ROUTING_PROFILE", "local")
     app_mode = os.environ.get("APP_MODE", "synthetic")
 
-    if profile in {"eval", "prod", "demo", "demo-haiku"} and not os.environ.get("ANTHROPIC_API_KEY"):
+    anthropic_profiles = {"eval", "prod", "demo", "demo-haiku"}
+    if profile in anthropic_profiles and not os.environ.get("ANTHROPIC_API_KEY"):
         msg = (
             f"LLM_ROUTING_PROFILE={profile} requires ANTHROPIC_API_KEY. "
             "Eval is for manual baseline runs only. "

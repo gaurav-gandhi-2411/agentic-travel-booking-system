@@ -269,7 +269,8 @@ GENERATE_ARCHETYPE_COMPARISONS = ToolDefinition(
     description=(
         "Given both flight archetypes (best-value and best-experience), generate a "
         "2-3 sentence comparison for EACH explaining why you'd choose it over the other. "
-        "Be specific: mention percentage price difference, stops saved/added, departure time impact. "
+        "Be specific: mention percentage price difference, stops saved/added, "
+        "departure time impact. "
         "Output must be 80-350 characters per comparison — plain text, no markdown."
     ),
     input_schema={
