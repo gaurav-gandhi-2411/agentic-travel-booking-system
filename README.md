@@ -4,7 +4,24 @@ A multi-agent system that takes a natural-language travel request and returns tw
 flight options (best-value, best-experience) with real Aviasales pricing and one-click
 affiliate booking links.  Stream the full agent pipeline over SSE with a single POST.
 
-## Quick demo
+## Live demo
+
+**https://agentic-travel-booking-system.vercel.app/demo**
+
+Type a natural-language query and watch two specialist agents stream their reasoning in
+real time, then surface two ranked flight options with one-click affiliate booking links.
+
+Queries verified against live Aviasales (May 2026):
+
+| Query | Route | Options | Trade-off |
+|---|---|---|---|
+| Delhi to Dubai in June | DEL→DXB | 16 | GF 1-stop red-eye INR 15,090 vs 6E non-stop morning INR 18,280 (21% price gap) |
+| Delhi to Singapore in June | DEL→SIN | 13 | 6E 1-stop evening INR 15,786 vs 6E 1-stop afternoon INR 17,378 (10% gap, 45 min faster) |
+| Mumbai to Bangkok for 5 days in June | BOM→BKK | 6 | Non-stop red-eye INR 12,361 vs non-stop afternoon INR 13,591 (10% gap, civilised hour) |
+
+See `docs/demo-queries.md` for full verification data and Travelpayouts API ceiling notes.
+
+## Quick start (local)
 
 ```bash
 # 1. Copy and fill env (needs ANTHROPIC_API_KEY + AVIASALES_API_KEY + AVIASALES_PARTNER_ID)
@@ -18,7 +35,7 @@ cd apps/api && uvicorn travel_agent.api.main:app --reload
 curl -N -X POST http://localhost:8000/search \
   -H "Content-Type: application/json" \
   -H "X-API-Key: $DEMO_API_KEY" \
-  -d '{"query": "Mumbai to Paris for 5 days next month"}'
+  -d '{"query": "Delhi to Dubai in June"}'
 ```
 
 You will see a sequence of SSE events:
@@ -101,6 +118,16 @@ Alongside the core system, this project fine-tunes compact open-source models
 - **20% of eval golden examples** released publicly (CC-BY-4.0)
 
 See ADRs 0008–0012 in `docs/architecture/adr/`.
+
+## What's next
+
+Phase roadmap and deferred items are tracked in `docs/followups.md` and `plan.md`.
+Key upcoming work:
+
+- **Hotel search** — Phase 2, gated on affiliate approvals (Booking.com, Agoda)
+- **Conversational refinement** — `BookingAgent` and `ConversationManagerAgent` stubs in `agents/`
+- **Open-source model track** — Qwen 2.5 7B/14B QLoRA fine-tuning per agent, eval harness in `evals/`
+- **Third archetype** — "best-balance" option surfaced from Pareto frontier
 
 ## License
 

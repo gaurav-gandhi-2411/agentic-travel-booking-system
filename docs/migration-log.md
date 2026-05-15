@@ -353,3 +353,71 @@ Fixed two demo-blocking bugs and completed demo hardening.
   - price diff: 21.1% | stops differ: True | distinct: True ✓
 
 **Deferred followups:** see docs/followups.md § Unit 5D
+
+---
+
+## 2026-05-15 | Unit 5C — Production Deploy
+
+**Summary**
+End-to-end production deployment: CORS, secrets wiring, Cloud Run staging + prod, v0.5.0
+tag, Vercel verification, keep-warm pinger, and updated README.
+
+**Steps completed**
+- CORS middleware added to FastAPI (`main.py`): `CORSMiddleware` allows `*` origins in
+  demo mode so the Vercel frontend can reach the Cloud Run API without preflight failures.
+- Demo secrets wired into both deploy workflows: `ANTHROPIC_API_KEY`, `AVIASALES_API_KEY`
+  (← `travelpayouts-api-token`), `AVIASALES_PARTNER_ID` (← `travelpayouts-aviasales-marker`),
+  `DEMO_API_KEY` (← `demo-api-key`) injected from GCP Secret Manager into Cloud Run at deploy time.
+- `demo-api-key` Secret Manager IAM: `roles/secretmanager.secretAccessor` granted to the
+  deployer SA — this was missing at Phase 0 and caused the first two staging deploy failures.
+- Config path bug fixed: `COORDINATOR_CONFIG_PATH` and `LLM_ROUTING_CONFIG_PATH` env vars
+  set in Dockerfile to `/app/config/` so the installed package finds YAML configs after
+  `pip install` moves source files out of `/app/src/`.
+- `v0.5.0` tag pushed → triggered `Deploy — Production` workflow (GH Actions run 25891843345):
+  5% canary → 100% promotion → health check passed.
+- Staging deploy (GH Actions run 25890296349): health check passed at
+  `https://agentic-travel-booking-api-staging-rqyyasfwaa-el.a.run.app/health`.
+- Vercel production verified: `/demo` page at
+  `https://agentic-travel-booking-system.vercel.app/demo` loads with search input and
+  3 verified demo chips (DEL→DXB, DEL→SIN, BOM→BKK). Marketing site at root loads.
+- `prod-keepwarm` Cloud Scheduler job created: `*/5 * * * 6,0,1` (Asia/Kolkata), GET
+  `https://agentic-travel-booking-api-prod-rqyyasfwaa-el.a.run.app/health`, 30s deadline.
+  Active Saturday–Monday IST. First fire: 2026-05-16 00:00 IST.
+- README updated: live demo URL, 3 verified queries with trade-off column, "What's next"
+  section, local quick-start updated to DEL→DXB example.
+
+**Key gotchas for the record**
+- Two staging deploy failures before the final success:
+  1. `demo-api-key` IAM missing → `Permission denied on secret` from Cloud Run revision.
+  2. `style(api): apply ruff format` commit failed staging deploy (CI timing overlap — not
+     a real failure; superseded by the next push).
+- The keep-warm schedule (`6,0,1` day-of-week) covers all of Saturday and Monday, not just
+  the exact 18:00 Sat – 12:00 Mon window. The extra ~24 h of /health pings are negligible
+  (Cloud Run min-instances=1 is already warm; Scheduler free tier comfortably fits 2 jobs).
+
+**Skipped (per cost rules)**
+- Staging smoke test (DEL→DXB POST /search): user verifying manually.
+- Cross-browser test: user will eyeball Sunday morning.
+
+**Owner actions outstanding**
+- Confirm `API_BASE_URL` is set to `https://agentic-travel-booking-api-prod-rqyyasfwaa-el.a.run.app`
+  in Vercel's Production environment (cannot verify without Vercel CLI).
+- Anthropic credit check: confirm sufficient credits for demo day.
+
+**Public production URLs**
+- API (prod):    `https://agentic-travel-booking-api-prod-rqyyasfwaa-el.a.run.app`
+- API (staging): `https://agentic-travel-booking-api-staging-rqyyasfwaa-el.a.run.app`
+- Web (Vercel):  `https://agentic-travel-booking-system.vercel.app`
+- Demo page:     `https://agentic-travel-booking-system.vercel.app/demo`
+
+**Files touched:** 5 (+ 1 Cloud Scheduler job created, not in repo)
+- `apps/api/src/travel_agent/api/main.py` (CORS middleware)
+- `apps/api/Dockerfile` (config path env vars)
+- `apps/api/src/travel_agent/coordinator/constants.py` (COORDINATOR_CONFIG_PATH override)
+- `.github/workflows/deploy-staging.yml` (demo secrets block)
+- `.github/workflows/deploy-prod.yml` (demo secrets block)
+- `README.md` (live demo section, What's next)
+- `docs/migration-log.md` (this entry)
+
+**Test delta:** 0 new tests (deploy verification only)
+**Final state:** 251 tests passing, 88.46% coverage, eval 100% (20/20 VCR replay)
