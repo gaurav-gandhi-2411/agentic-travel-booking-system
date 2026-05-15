@@ -9,6 +9,7 @@ Phase D will extend this to flight+hotel package scoring and full HITL booking.
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, date, datetime
 from pathlib import Path
 
@@ -69,8 +70,10 @@ class OptimizerAgent:
 
         system = _load_system_prompt(today)
 
-        value_explanation = await self._explain(best_value, ArchetypeLabel.BEST_VALUE, system)
-        exp_explanation = await self._explain(best_exp, ArchetypeLabel.BEST_EXPERIENCE, system)
+        value_explanation, exp_explanation = await asyncio.gather(
+            self._explain(best_value, ArchetypeLabel.BEST_VALUE, system),
+            self._explain(best_exp, ArchetypeLabel.BEST_EXPERIENCE, system),
+        )
 
         # Single LLM call for both comparison strings (different flights only)
         value_comparison, exp_comparison = await self._generate_comparisons(

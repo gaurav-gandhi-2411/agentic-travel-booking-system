@@ -212,6 +212,22 @@ async def test_score_breakdown_has_both_axes() -> None:
         assert "experience_score" in a.score_breakdown
 
 
+# ── parallel explain calls ────────────────────────────────────────────────────
+
+
+async def test_explain_called_twice_for_two_flights() -> None:
+    """Both archetype explains should be called (parallelised via asyncio.gather)."""
+    lcc = _flight(price_inr=47_500, layover_count=2, outbound_duration_minutes=1020)
+    premium = _flight(price_inr=91_500, layover_count=0, outbound_duration_minutes=540)
+    mock_client = _mock_client()
+    agent = OptimizerAgent(client=mock_client, partner_marker="12345")
+    state = _make_state([lcc, premium])
+    await agent.run(state, today=date(2026, 5, 14))
+    # _explain is called twice (once per archetype) + _generate_comparisons once
+    # Total chat calls: 2 explain + 1 comparisons = 3
+    assert mock_client.chat.call_count >= 2
+
+
 # ── bimodal synthetic data verification ──────────────────────────────────────
 
 
