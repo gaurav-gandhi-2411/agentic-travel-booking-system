@@ -14,6 +14,7 @@ from __future__ import annotations
 import os
 import time
 from collections import OrderedDict
+from typing import Protocol
 
 from travel_agent.coordinator.state import FlightOption, TravelIntent
 
@@ -21,6 +22,18 @@ _MAX_ENTRIES = 50
 _TTL_SECONDS = 1800
 
 _CacheEntry = tuple[float, TravelIntent, list[FlightOption]]
+
+
+class SearchCacheProtocol(Protocol):
+    """Structural type for both in-memory and Redis cache backends."""
+
+    async def put(
+        self, request_id: str, intent: TravelIntent, flights: list[FlightOption]
+    ) -> None: ...
+
+    async def get(self, request_id: str) -> tuple[TravelIntent, list[FlightOption]] | None: ...
+
+    async def ping(self) -> bool: ...
 
 
 class _SearchCache:
@@ -51,17 +64,20 @@ class _SearchCache:
         return True
 
 
-def _make_cache() -> _SearchCache:
+def _make_cache() -> SearchCacheProtocol:
     """Factory: return RedisSearchCache if UPSTASH_REDIS_URL is set, else in-memory."""
     url = os.environ.get("UPSTASH_REDIS_URL", "").strip()
     if url:
         import contextlib  # noqa: PLC0415
 
+        result: SearchCacheProtocol | None = None
         with contextlib.suppress(Exception):
             from travel_agent.cache.redis_cache import RedisSearchCache  # noqa: PLC0415
 
-            return RedisSearchCache(url)  # type: ignore[return-value]
+            result = RedisSearchCache(url)
+        if result is not None:
+            return result
     return _SearchCache()
 
 
-search_cache: _SearchCache = _make_cache()
+search_cache: SearchCacheProtocol = _make_cache()

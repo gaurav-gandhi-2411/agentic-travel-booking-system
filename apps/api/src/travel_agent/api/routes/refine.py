@@ -27,7 +27,7 @@ from collections.abc import AsyncGenerator
 
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from travel_agent.agents.optimizer import OptimizerAgent
 from travel_agent.agents.planner import PlannerAgent
@@ -35,13 +35,14 @@ from travel_agent.api.cache import search_cache
 from travel_agent.coordinator.state import FlightOption, RequestState
 from travel_agent.coordinator.streaming import stream_search
 from travel_agent.llm import get_llm_client_and_model
+from travel_agent.observability.langfuse_client import get_langfuse, set_request_trace
 
 router = APIRouter()
 
 _RED_EYE_CUTOFF_HOUR = 6
 
 
-_ALLOWED_PROFILES: frozenset[str] = frozenset({"demo-haiku", "demo-free"})
+_ALLOWED_PROFILES: frozenset[str] = frozenset({"demo-haiku", "demo-llama", "demo-qwen"})
 
 
 def _resolve_profile(requested: str | None) -> str:
@@ -52,8 +53,8 @@ def _resolve_profile(requested: str | None) -> str:
 
 
 class RefineRequest(BaseModel):
-    request_id: str
-    refinement: str
+    request_id: str = Field(min_length=1, max_length=200)
+    refinement: str = Field(min_length=3, max_length=1000)
 
 
 def _parse_change_type(text: str) -> str:
@@ -134,6 +135,21 @@ async def _refine_generator(
     def _event(data: dict[str, object]) -> str:
         return f"data: {json.dumps(data)}\n\n"
 
+    # Langfuse trace — optional, never breaks the pipeline
+    import contextlib  # noqa: PLC0415
+
+    lf = get_langfuse()
+    trace = None
+    with contextlib.suppress(Exception):
+        if lf is not None:
+            trace = lf.start_observation(
+                name="refine",
+                as_type="span",
+                input={"refinement": refinement, "profile": profile},
+                metadata={"request_id": request_id, "session_id": request_id},
+            )
+            set_request_trace(trace)
+
     cached = await search_cache.get(request_id)
     change_type = _parse_change_type(refinement)
 
@@ -185,6 +201,14 @@ async def _refine_generator(
         yield _event({"type": "archetype_ready", "archetype": archetype.model_dump(mode="json")})
 
     yield _event({"type": "done", "request_id": request_id})
+
+    # End Langfuse trace
+    import contextlib  # noqa: PLC0415
+
+    with contextlib.suppress(Exception):
+        if lf is not None and trace is not None:
+            trace.end()
+            lf.flush()
 
 
 @router.post("/refine")
