@@ -50,6 +50,11 @@ class PlannerAgent:
         system = _load_system_prompt(today)
         messages = [Message(role="user", content=state.raw_input)]
 
+        # cache_system_prompt=True enables prompt caching on AnthropicAdapter.
+        # Note: haiku-4-5 requires ≥1024 tokens to be cache-eligible; the planner
+        # system prompt is ~420 tokens so caching is a no-op for haiku profiles.
+        # Caching activates for sonnet-4-6 (eval profile) where system prompts grow.
+        # Non-Anthropic adapters accept **kwargs and safely ignore this kwarg.
         response = await self._client.chat(
             messages,
             model=self._model,
@@ -57,6 +62,7 @@ class PlannerAgent:
             temperature=0.0,
             system=system,
             tools=[EXTRACT_TRAVEL_INTENT],
+            cache_system_prompt=True,
         )
 
         if not response.tool_calls:

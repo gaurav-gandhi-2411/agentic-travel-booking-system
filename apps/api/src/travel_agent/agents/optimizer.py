@@ -113,6 +113,8 @@ class OptimizerAgent:
 
         summary = _flight_summary(flight, label)
         messages = [Message(role="user", content=summary)]
+        # cache_system_prompt: optimizer system ~200 tokens — below haiku threshold,
+        # no-op for haiku profiles. Activates for sonnet-4-6 eval profile.
         response = await self._client.chat(
             messages,
             model=self._model,
@@ -120,6 +122,7 @@ class OptimizerAgent:
             temperature=0.3,
             system=system,
             tools=[GENERATE_ARCHETYPE_EXPLANATION],
+            cache_system_prompt=True,
         )
         if response.tool_calls:
             raw = response.tool_calls[0].input
@@ -150,6 +153,7 @@ class OptimizerAgent:
             temperature=0.3,
             system=system,
             tools=[GENERATE_ARCHETYPE_COMPARISONS],
+            cache_system_prompt=True,
         )
         if response.tool_calls:
             raw = response.tool_calls[0].input
