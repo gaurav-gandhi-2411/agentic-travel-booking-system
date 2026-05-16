@@ -37,7 +37,7 @@ _logger = structlog.get_logger(__name__)
 
 
 def _make_flight_sets() -> list[dict]:
-    """Generate 20 diverse flight scenarios for Pareto evaluation."""
+    """Generate 24 diverse flight scenarios for Pareto evaluation."""
     import contextlib  # noqa: PLC0415
     from datetime import date, timedelta  # noqa: PLC0415
 
@@ -46,13 +46,14 @@ def _make_flight_sets() -> list[dict]:
     scenarios = []
     routes = [
         ("DEL", "DXB"),
-        ("BOM", "BKK"),
         ("DEL", "SIN"),
-        ("BOM", "CMB"),
+        ("BOM", "BKK"),
+        ("BOM", "DXB"),
         ("DEL", "KUL"),
+        ("DEL", "BKK"),
     ]
     for i, (origin, dest) in enumerate(routes):
-        for j in range(4):  # 4 windows per route = 20 total
+        for j in range(4):  # 4 windows per route = 24 total
             start = date(2026, 6, 1) + timedelta(days=j * 7)
             window = Window(start_date=start, end_date=start + timedelta(days=6))
             with contextlib.suppress(Exception):
@@ -83,7 +84,7 @@ async def run_profile(profile: str, scenarios: list[dict], dry_run: bool) -> lis
                 _logger.warning(
                     "eval_profile_skipped",
                     profile=profile,
-                    reason="profile not found in llm_routing.yaml (may be demoted or commented out)",
+                    reason="profile not found in llm_routing.yaml (demoted or commented out)",
                 )
                 return []
             client, model = get_llm_client_and_model("optimizer", profile)
