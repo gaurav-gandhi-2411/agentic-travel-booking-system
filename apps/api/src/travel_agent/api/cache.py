@@ -40,9 +40,7 @@ class _SearchCache:
         self._store: OrderedDict[str, _CacheEntry] = OrderedDict()
         self._lock: asyncio.Lock = asyncio.Lock()
 
-    async def put(
-        self, request_id: str, intent: TravelIntent, flights: list[FlightOption]
-    ) -> None:
+    async def put(self, request_id: str, intent: TravelIntent, flights: list[FlightOption]) -> None:
         async with self._lock:
             if request_id in self._store:
                 del self._store[request_id]

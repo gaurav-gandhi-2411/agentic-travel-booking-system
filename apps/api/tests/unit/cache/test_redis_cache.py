@@ -104,10 +104,12 @@ async def test_get_deserializes_correctly(
     """get() returns a correctly deserialised (intent, flights) tuple."""
     from travel_agent.cache.redis_cache import RedisSearchCache
 
-    payload = json.dumps({
-        "intent": sample_intent.model_dump(mode="json"),
-        "flights": [f.model_dump(mode="json") for f in sample_flights],
-    })
+    payload = json.dumps(
+        {
+            "intent": sample_intent.model_dump(mode="json"),
+            "flights": [f.model_dump(mode="json") for f in sample_flights],
+        }
+    )
     mock_redis.get.return_value = payload
 
     cache = RedisSearchCache("rediss://fake")

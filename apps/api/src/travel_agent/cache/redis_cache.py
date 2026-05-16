@@ -26,14 +26,14 @@ class RedisSearchCache:
     def __init__(self, url: str) -> None:
         self._redis: aioredis.Redis = aioredis.from_url(url, decode_responses=True)
 
-    async def put(
-        self, request_id: str, intent: TravelIntent, flights: list[FlightOption]
-    ) -> None:
+    async def put(self, request_id: str, intent: TravelIntent, flights: list[FlightOption]) -> None:
         key = f"{_KEY_PREFIX}{request_id}"
-        payload = json.dumps({
-            "intent": intent.model_dump(mode="json"),
-            "flights": [f.model_dump(mode="json") for f in flights],
-        })
+        payload = json.dumps(
+            {
+                "intent": intent.model_dump(mode="json"),
+                "flights": [f.model_dump(mode="json") for f in flights],
+            }
+        )
         await self._redis.set(key, payload, ex=_TTL_SECONDS)
 
     async def get(self, request_id: str) -> tuple[TravelIntent, list[FlightOption]] | None:

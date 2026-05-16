@@ -275,7 +275,13 @@ def test_search_no_data_emits_no_data_for_route(client: TestClient) -> None:
         input_tokens=30,
         output_tokens=80,
         latency_ms=0.0,
-        tool_calls=[ToolCall(name="extract_travel_intent", input=empty_intent_fields, id="tc-nd-001")],
+        tool_calls=[
+            ToolCall(
+                name="extract_travel_intent",
+                input=empty_intent_fields,
+                id="tc-nd-001",
+            )
+        ],
     )
 
     from unittest.mock import AsyncMock
