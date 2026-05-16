@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
-from unittest.mock import patch
-
-import pytest
-
 # Runner is not a package — insert src path before importing
 import sys
 from pathlib import Path
+from unittest.mock import patch
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "src"))
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "evals"))
@@ -19,9 +17,10 @@ from optimizer.runner import run_profile
 
 def _minimal_scenarios() -> list[dict]:
     """Two tiny scenarios for quick skip tests — no LLM calls needed."""
-    from travel_agent.coordinator.state import FlightOption, Window
-    from travel_agent.providers.synthetic import SyntheticProvider
     from datetime import date
+
+    from travel_agent.coordinator.state import Window
+    from travel_agent.providers.synthetic import SyntheticProvider
 
     provider = SyntheticProvider()
     w = Window(start_date=date(2026, 12, 1), end_date=date(2026, 12, 7))
