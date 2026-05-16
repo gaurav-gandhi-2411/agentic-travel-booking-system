@@ -43,6 +43,9 @@ curl -N -X POST http://localhost:8000/search \
   -d '{"query": "Delhi to Dubai in June"}'
 ```
 
+**Windows users:** the local server requires WSL2 — see
+[`docs/development.md`](docs/development.md). Unit tests work on native Windows.
+
 You will see a sequence of SSE events:
 ```
 data: {"type": "planner_started"}
