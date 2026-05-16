@@ -4,7 +4,7 @@ on:
   pull_request:
     types: [labeled]
   schedule:
-    - cron: '0 6 * * 1'  # weekly Monday 6am UTC
+    - cron: '0 3 * * *'  # nightly 03:00 UTC
 
 jobs:
   eval-optimizer:
@@ -17,7 +17,7 @@ jobs:
         working-directory: apps/api
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-python@v5
         with:
