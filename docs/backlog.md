@@ -6,6 +6,22 @@ Items deferred from current phase scope. Each entry notes the originating phase 
 
 ## Phase 2C follow-ups
 
+- **Add pre-commit hook for ruff check + ruff format** _(flagged 2026-05-17)_
+  Three consecutive PRs (#1, #2) have required cleanup commits for lint debt left by earlier
+  commits that bypassed CI. Add `.pre-commit-config.yaml` running `ruff check` and
+  `ruff format --check` as a local pre-commit hook. Stops the cycle at the source.
+  Setup: `pip install pre-commit && pre-commit install`. Config:
+  ```yaml
+  repos:
+    - repo: https://github.com/astral-sh/ruff-pre-commit
+      rev: v0.11.9  # pin to current project ruff version
+      hooks:
+        - id: ruff
+        - id: ruff-format
+  ```
+  Cost: ~5 minutes of setup, zero ongoing overhead.
+  File to create: `.pre-commit-config.yaml` at repo root.
+
 - **Redis cache failure should degrade gracefully, not crash /search** _(flagged 2026-05-16)_
   A Redis connection failure (wrong scheme, network blip, Upstash outage) currently raises
   through `search_cache.put()` in `coordinator/streaming.py` and aborts the entire SSE
