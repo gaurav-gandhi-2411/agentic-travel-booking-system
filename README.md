@@ -105,8 +105,12 @@ See `docs/architecture/` for ADRs and `plan.md` for the phased delivery roadmap.
 ## Development
 
 ```bash
-# Install dependencies and pre-commit hooks
+# Install dependencies
 cd apps/api && pip install -e ".[dev]"
+
+# Install pre-commit hooks (run once after cloning)
+pip install pre-commit && pre-commit install
+# Or via Make from repo root: make setup
 
 # Lint + typecheck + test
 python -m ruff check src/
@@ -116,6 +120,13 @@ python -m pytest tests/           # 249 tests, ~90% coverage
 # Eval harness (planner golden set, VCR replay)
 python evals/run.py               # 100% accuracy target
 ```
+
+The pre-commit config (`.pre-commit-config.yaml`) runs `ruff check --fix` and
+`ruff format` before every commit. This prevents the lint-debt cycle that
+blocked earlier PRs (E501, import-sort, format violations in committed files).
+
+**Windows users:** local server testing requires WSL2 — see
+`docs/development.md`.
 
 ## Open-Source Model Track
 
