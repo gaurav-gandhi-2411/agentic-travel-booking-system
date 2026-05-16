@@ -10,14 +10,20 @@ and expected request rate, the 50-entry LRU cap is not needed for Redis.
 
 from __future__ import annotations
 
+import asyncio
 import json
 
 import redis.asyncio as aioredis
+import redis.exceptions
+import structlog
 
 from travel_agent.coordinator.state import FlightOption, TravelIntent
 
 _TTL_SECONDS = 1800  # 30 min
 _KEY_PREFIX = "search_cache:"
+_logger = structlog.get_logger(__name__)
+
+_CACHE_ERRORS = (redis.exceptions.RedisError, asyncio.TimeoutError, ConnectionError)
 
 
 class RedisSearchCache:
@@ -34,11 +40,28 @@ class RedisSearchCache:
                 "flights": [f.model_dump(mode="json") for f in flights],
             }
         )
-        await self._redis.set(key, payload, ex=_TTL_SECONDS)
+        try:
+            await self._redis.set(key, payload, ex=_TTL_SECONDS)
+        except _CACHE_ERRORS as exc:
+            _logger.warning(
+                "search_cache_failure",
+                operation="put",
+                request_id=request_id,
+                error_class=exc.__class__.__name__,
+            )
 
     async def get(self, request_id: str) -> tuple[TravelIntent, list[FlightOption]] | None:
         key = f"{_KEY_PREFIX}{request_id}"
-        raw: str | None = await self._redis.get(key)
+        try:
+            raw: str | None = await self._redis.get(key)
+        except _CACHE_ERRORS as exc:
+            _logger.warning(
+                "search_cache_failure",
+                operation="get",
+                request_id=request_id,
+                error_class=exc.__class__.__name__,
+            )
+            return None
         if raw is None:
             return None
         data = json.loads(raw)
