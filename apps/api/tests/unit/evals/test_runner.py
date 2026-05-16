@@ -60,9 +60,7 @@ async def test_run_profile_dry_run_ignores_missing_config() -> None:
     # dry-run should NOT call load_routing_config at all
     with patch("optimizer.runner.OptimizerAgent") as mock_agent_cls:
         mock_agent = mock_agent_cls.return_value
-        mock_agent.run.return_value = type(
-            "State", (), {"archetypes": [], "flight_options": []}
-        )()
+        mock_agent.run.return_value = type("State", (), {"archetypes": [], "flight_options": []})()
 
         result = await run_profile("demo-qwen", scenarios, dry_run=True)
     # dry-run always tries to run; it may produce empty archetypes but should not raise
