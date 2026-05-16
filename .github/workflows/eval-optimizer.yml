@@ -4,7 +4,7 @@ on:
   pull_request:
     types: [labeled]
   schedule:
-    - cron: '0 6 * * 1'  # weekly Monday 6am UTC
+    - cron: '0 3 * * *'  # nightly 03:00 UTC
 
 jobs:
   eval-optimizer:
