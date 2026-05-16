@@ -4,6 +4,29 @@ Items deferred from current phase scope. Each entry notes the originating phase 
 
 ---
 
+## Phase 2C follow-ups
+
+- **Redis cache failure should degrade gracefully, not crash /search** _(flagged 2026-05-16)_
+  A Redis connection failure (wrong scheme, network blip, Upstash outage) currently raises
+  through `search_cache.put()` in `coordinator/streaming.py` and aborts the entire SSE
+  stream with a generic error event. The `/health` endpoint already returns `503` in prod
+  mode on unreachable Redis (correct); the runtime path should not abort. Wrap
+  `search_cache.put()` and `search_cache.get()` calls in `try/except` that log a structured
+  warning and continue. Incident reference: `redis://` → `rediss://` misconfiguration on
+  2026-05-16 caused full /search failure rather than graceful degradation.
+  File: `apps/api/src/travel_agent/coordinator/streaming.py:195`.
+
+- **Move optimizer eval from weekly to nightly cron** _(flagged 2026-05-16)_
+  Free-tier model deprecations (OpenRouter dropped `qwen-2.5-72b-instruct:free`, caught
+  2026-05-16) need detection within 24h, not a week. Change
+  `cron: '0 6 * * 1'` → `cron: '0 6 * * *'` in `.github/workflows/eval-optimizer.yml`.
+  Cost: Haiku calls cost ~$0.034/run × 30 days ≈ $1/month — within budget. Note: the
+  eval workflow currently uses `--dry-run`, so switching to nightly costs nothing until
+  live LLM keys are wired into CI (separate ticket). Start with: nightly dry-run to catch
+  config/schema breakage; add live-key nightly once CI budget is approved.
+
+---
+
 ## Phase 1 follow-ups
 
 - **Re-add `/health` smoke test to both deploy workflows**
