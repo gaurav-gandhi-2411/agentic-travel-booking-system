@@ -68,6 +68,11 @@ jobs:
             AVIASALES_API_KEY=travelpayouts-api-token:latest
             AVIASALES_PARTNER_ID=travelpayouts-aviasales-marker:latest
             DEMO_API_KEY=demo-api-key:latest
+            GROQ_API_KEY=groq-api-key:latest
+            OPENROUTER_API_KEY=openrouter-api-key:latest
+            UPSTASH_REDIS_URL=upstash-redis-url:latest
+            LANGFUSE_PUBLIC_KEY=langfuse-public-key:latest
+            LANGFUSE_SECRET_KEY=langfuse-secret-key:latest
           flags: |
             --min-instances=1
             --max-instances=20
