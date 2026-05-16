@@ -17,7 +17,8 @@ from travel_agent.llm.routing import (
     load_routing_config,
 )
 
-_EXPECTED_PROFILES = {"local", "free", "prod", "eval", "demo", "demo-haiku", "demo-llama", "demo-qwen"}
+# demo-qwen demoted 2026-05-16: OpenRouter removed qwen-2.5-72b-instruct:free.
+_EXPECTED_PROFILES = {"local", "free", "prod", "eval", "demo", "demo-haiku", "demo-llama"}
 
 
 @pytest.fixture(autouse=True)
@@ -120,11 +121,10 @@ def test_demo_llama_profile_uses_groq() -> None:
     assert "llama" in config["demo-llama"]["optimizer"]
 
 
-def test_demo_qwen_profile_uses_openrouter() -> None:
+def test_demo_qwen_profile_absent() -> None:
+    # demo-qwen demoted 2026-05-16: profile commented out in llm_routing.yaml.
     config = load_routing_config()
-    assert config["demo-qwen"]["provider"] == "openrouter"
-    assert "qwen" in config["demo-qwen"]["planner"].lower()
-    assert "qwen" in config["demo-qwen"]["optimizer"].lower()
+    assert "demo-qwen" not in config
 
 
 def test_get_profile_by_name() -> None:
@@ -145,7 +145,6 @@ def test_get_model_for_agent_in_profile() -> None:
 def test_get_provider_for_profile() -> None:
     assert get_provider_for_profile("demo-haiku") == "anthropic"
     assert get_provider_for_profile("demo-llama") == "groq"
-    assert get_provider_for_profile("demo-qwen") == "openrouter"
 
 
 def test_config_path_env_override(

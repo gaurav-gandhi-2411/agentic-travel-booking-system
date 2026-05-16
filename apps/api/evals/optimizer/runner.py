@@ -4,7 +4,7 @@ Usage:
     python -m evals.optimizer.runner                    # dry run (no LLM calls)
     python -m evals.optimizer.runner --profile demo-haiku
     python -m evals.optimizer.runner --profile demo-haiku --profile demo-llama
-    python -m evals.optimizer.runner --all-profiles     # all 3 profiles
+    python -m evals.optimizer.runner --all-profiles     # all active profiles
     python -m evals.optimizer.runner --dry-run          # deterministic only, no LLM
 
 Output: evals/optimizer/runs/<ISO-timestamp>_<profile>.jsonl
@@ -22,12 +22,18 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
+import structlog
+
 from travel_agent.agents.optimizer import OptimizerAgent
 from travel_agent.coordinator.state import FlightOption, RequestState, Window
 from travel_agent.providers.synthetic import SyntheticProvider
 
 _RUNS_DIR = Path(__file__).parent / "runs"
-_PROFILES = ["demo-haiku", "demo-llama", "demo-qwen"]
+# Profiles that are currently active in llm_routing.yaml.
+# demo-qwen demoted 2026-05-16: OpenRouter removed qwen-2.5-72b-instruct:free.
+_PROFILES = ["demo-haiku", "demo-llama"]
+
+_logger = structlog.get_logger(__name__)
 
 
 def _make_flight_sets() -> list[dict]:
@@ -71,10 +77,18 @@ async def run_profile(profile: str, scenarios: list[dict], dry_run: bool) -> lis
     else:
         try:
             from travel_agent.llm import get_llm_client_and_model  # noqa: PLC0415
+            from travel_agent.llm.routing import load_routing_config  # noqa: PLC0415
 
+            if profile not in load_routing_config():
+                _logger.warning(
+                    "eval_profile_skipped",
+                    profile=profile,
+                    reason="profile not found in llm_routing.yaml (may be demoted or commented out)",
+                )
+                return []
             client, model = get_llm_client_and_model("optimizer", profile)
         except Exception as exc:
-            print(f"[{profile}] Cannot load LLM client: {exc}", file=sys.stderr)
+            _logger.warning("eval_profile_skipped", profile=profile, reason=str(exc))
             return []
 
     optimizer = OptimizerAgent(client=client, model=model)

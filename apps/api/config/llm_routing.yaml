@@ -77,17 +77,19 @@ profiles:
     provider:       groq
 
   # ── demo-qwen ────────────────────────────────────────────────────────────────
-  # Free-tier demo profile. OpenRouter + Qwen 2.5 72B.
-  # Requires OPENROUTER_API_KEY (free at openrouter.ai).
-  # Activated per-request via X-LLM-Profile: demo-qwen header.
-  demo-qwen:
-    planner:        qwen/qwen-2.5-72b-instruct:free
-    flight_hunter:  qwen/qwen-2.5-72b-instruct:free
-    hotel_hunter:   qwen/qwen-2.5-72b-instruct:free
-    optimizer:      qwen/qwen-2.5-72b-instruct:free
-    booking:        qwen/qwen-2.5-72b-instruct:free
-    conversation:   qwen/qwen-2.5-72b-instruct:free
-    provider:       openrouter
+  # DEMOTED 2026-05-16: OpenRouter removed qwen/qwen-2.5-72b-instruct:free
+  # (HTTP 404 "No endpoints found"). Profile commented out until a replacement
+  # free-tier Qwen model is confirmed available. Do not delete — preserves the
+  # profile structure for when a replacement model is identified.
+  #
+  # demo-qwen:
+  #   planner:        qwen/qwen-2.5-72b-instruct:free
+  #   flight_hunter:  qwen/qwen-2.5-72b-instruct:free
+  #   hotel_hunter:   qwen/qwen-2.5-72b-instruct:free
+  #   optimizer:      qwen/qwen-2.5-72b-instruct:free
+  #   booking:        qwen/qwen-2.5-72b-instruct:free
+  #   conversation:   qwen/qwen-2.5-72b-instruct:free
+  #   provider:       openrouter
 
   # ── prod ──────────────────────────────────────────────────────────────────────
   # B2B production profile. Tenants supply their own ANTHROPIC_API_KEY; the SDK
