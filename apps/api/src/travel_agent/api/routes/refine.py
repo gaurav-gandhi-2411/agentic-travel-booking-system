@@ -35,6 +35,7 @@ from travel_agent.api.cache import search_cache
 from travel_agent.coordinator.state import FlightOption, RequestState
 from travel_agent.coordinator.streaming import stream_search
 from travel_agent.llm import get_llm_client_and_model
+from travel_agent.observability.langfuse_client import get_langfuse, set_request_trace
 
 router = APIRouter()
 
@@ -134,6 +135,21 @@ async def _refine_generator(
     def _event(data: dict[str, object]) -> str:
         return f"data: {json.dumps(data)}\n\n"
 
+    # Langfuse trace — optional, never breaks the pipeline
+    import contextlib  # noqa: PLC0415
+
+    lf = get_langfuse()
+    trace = None
+    with contextlib.suppress(Exception):
+        if lf is not None:
+            trace = lf.start_observation(
+                name="refine",
+                as_type="span",
+                input={"refinement": refinement, "profile": profile},
+                metadata={"request_id": request_id, "session_id": request_id},
+            )
+            set_request_trace(trace)
+
     cached = await search_cache.get(request_id)
     change_type = _parse_change_type(refinement)
 
@@ -185,6 +201,14 @@ async def _refine_generator(
         yield _event({"type": "archetype_ready", "archetype": archetype.model_dump(mode="json")})
 
     yield _event({"type": "done", "request_id": request_id})
+
+    # End Langfuse trace
+    import contextlib  # noqa: PLC0415
+
+    with contextlib.suppress(Exception):
+        if lf is not None and trace is not None:
+            trace.end()
+            lf.flush()
 
 
 @router.post("/refine")

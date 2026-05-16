@@ -40,6 +40,9 @@ class LLMResponse:
     output_tokens: int
     latency_ms: float
     tool_calls: list[ToolCall] = field(default_factory=list)
+    # Prompt-caching token counts (Anthropic only; 0 for other providers)
+    cache_read_input_tokens: int = 0
+    cache_creation_input_tokens: int = 0
 
 
 class LLMError(Exception):

@@ -8,9 +8,12 @@ Phase C: requires state.raw_input; sets state.intent on success.
 
 from __future__ import annotations
 
+import contextlib
 import json
 from datetime import UTC, date, datetime
 from pathlib import Path
+
+import structlog
 
 from travel_agent.agents.tools import EXTRACT_TRAVEL_INTENT
 from travel_agent.coordinator.state import (
@@ -21,6 +24,10 @@ from travel_agent.coordinator.state import (
     TripType,
 )
 from travel_agent.llm.base import LLMClient, Message
+from travel_agent.observability.langfuse_client import get_langfuse, get_request_trace
+from travel_agent.observability.pricing import compute_cost
+
+_logger = structlog.get_logger(__name__)
 
 _PROMPT_PATH = Path(__file__).parent / "prompts" / "planner_system.txt"
 
@@ -64,6 +71,51 @@ class PlannerAgent:
             tools=[EXTRACT_TRAVEL_INTENT],
             cache_system_prompt=True,
         )
+
+        # Cost telemetry + Langfuse generation — optional, never breaks the agent
+        cost = compute_cost(
+            response.model,
+            response.input_tokens,
+            response.output_tokens,
+            response.cache_read_input_tokens,
+            response.cache_creation_input_tokens,
+        )
+        _logger.info(
+            "llm_call",
+            model=response.model,
+            input_tokens=response.input_tokens,
+            output_tokens=response.output_tokens,
+            cache_read_tokens=response.cache_read_input_tokens,
+            cache_write_tokens=response.cache_creation_input_tokens,
+            latency_ms=round(response.latency_ms, 1),
+            cost_usd=cost,
+        )
+        with contextlib.suppress(Exception):
+            trace = get_request_trace()
+            if trace is not None:
+                lf = get_langfuse()
+                if lf is not None:
+                    output: object = (
+                        response.tool_calls[0].input if response.tool_calls else response.content
+                    )
+                    trace.start_observation(
+                        name="planner_chat",
+                        as_type="generation",
+                        model=response.model,
+                        input={"messages": [m.content for m in messages], "system": system[:200]},
+                        output=output,
+                        usage_details={
+                            "input": response.input_tokens,
+                            "output": response.output_tokens,
+                        },
+                        metadata={
+                            "latency_ms": round(response.latency_ms, 1),
+                            "adapter": type(self._client).__name__,
+                            "cost_usd": cost,
+                            "cache_read_tokens": response.cache_read_input_tokens,
+                            "cache_write_tokens": response.cache_creation_input_tokens,
+                        },
+                    ).end()
 
         if not response.tool_calls:
             state.phase = CoordinatorPhase.ERROR

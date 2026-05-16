@@ -10,8 +10,11 @@ Phase D will extend this to flight+hotel package scoring and full HITL booking.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from datetime import UTC, date, datetime
 from pathlib import Path
+
+import structlog
 
 from travel_agent.agents.tools import GENERATE_ARCHETYPE_COMPARISONS, GENERATE_ARCHETYPE_EXPLANATION
 from travel_agent.coordinator.state import (
@@ -21,12 +24,15 @@ from travel_agent.coordinator.state import (
     RequestState,
 )
 from travel_agent.llm.base import LLMClient, Message
+from travel_agent.observability.langfuse_client import get_langfuse, get_request_trace
+from travel_agent.observability.pricing import compute_cost
 from travel_agent.providers.aviasales.deeplink import build_deeplink
 from travel_agent.utility.experience import experience_score
 from travel_agent.utility.pareto import pareto_frontier
 from travel_agent.utility.value import value_score
 
 _PROMPT_PATH = Path(__file__).parent / "prompts" / "optimizer_system.txt"
+_logger = structlog.get_logger(__name__)
 
 
 def _load_system_prompt(today: date | None = None) -> str:
@@ -124,6 +130,50 @@ class OptimizerAgent:
             tools=[GENERATE_ARCHETYPE_EXPLANATION],
             cache_system_prompt=True,
         )
+
+        # Cost telemetry + Langfuse generation — optional, never breaks the agent
+        cost = compute_cost(
+            response.model,
+            response.input_tokens,
+            response.output_tokens,
+            response.cache_read_input_tokens,
+            response.cache_creation_input_tokens,
+        )
+        _logger.info(
+            "llm_call",
+            model=response.model,
+            input_tokens=response.input_tokens,
+            output_tokens=response.output_tokens,
+            latency_ms=round(response.latency_ms, 1),
+            cost_usd=cost,
+            agent="optimizer_explain",
+            label=str(label),
+        )
+        with contextlib.suppress(Exception):
+            trace = get_request_trace()
+            if trace is not None:
+                lf = get_langfuse()
+                if lf is not None:
+                    output: object = (
+                        response.tool_calls[0].input if response.tool_calls else response.content
+                    )
+                    trace.start_observation(
+                        name="optimizer_explain",
+                        as_type="generation",
+                        model=response.model,
+                        input={"messages": [m.content for m in messages]},
+                        output=output,
+                        usage_details={
+                            "input": response.input_tokens,
+                            "output": response.output_tokens,
+                        },
+                        metadata={
+                            "latency_ms": round(response.latency_ms, 1),
+                            "label": str(label),
+                            "cost_usd": cost,
+                        },
+                    ).end()
+
         if response.tool_calls:
             raw = response.tool_calls[0].input
             return str(raw.get("explanation", "")).strip() or _fallback_explanation(flight, label)
@@ -155,6 +205,48 @@ class OptimizerAgent:
             tools=[GENERATE_ARCHETYPE_COMPARISONS],
             cache_system_prompt=True,
         )
+
+        # Cost telemetry + Langfuse generation — optional, never breaks the agent
+        cmp_cost = compute_cost(
+            response.model,
+            response.input_tokens,
+            response.output_tokens,
+            response.cache_read_input_tokens,
+            response.cache_creation_input_tokens,
+        )
+        _logger.info(
+            "llm_call",
+            model=response.model,
+            input_tokens=response.input_tokens,
+            output_tokens=response.output_tokens,
+            latency_ms=round(response.latency_ms, 1),
+            cost_usd=cmp_cost,
+            agent="optimizer_compare",
+        )
+        with contextlib.suppress(Exception):
+            trace = get_request_trace()
+            if trace is not None:
+                lf = get_langfuse()
+                if lf is not None:
+                    out: object = (
+                        response.tool_calls[0].input if response.tool_calls else response.content
+                    )
+                    trace.start_observation(
+                        name="optimizer_compare",
+                        as_type="generation",
+                        model=response.model,
+                        input={"messages": [m.content for m in messages]},
+                        output=out,
+                        usage_details={
+                            "input": response.input_tokens,
+                            "output": response.output_tokens,
+                        },
+                        metadata={
+                            "latency_ms": round(response.latency_ms, 1),
+                            "cost_usd": cmp_cost,
+                        },
+                    ).end()
+
         if response.tool_calls:
             raw = response.tool_calls[0].input
             return (

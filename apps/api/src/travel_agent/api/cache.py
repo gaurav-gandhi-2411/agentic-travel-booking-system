@@ -1,19 +1,19 @@
-"""In-memory LRU cache for completed search state.
+"""Search cache — in-memory LRU (local) or Redis-backed (production).
 
-Keyed by request_id (str UUID). Stores (TravelIntent, list[FlightOption]) so
-the /refine endpoint can filter and re-optimize without re-running the search.
+When UPSTASH_REDIS_URL is set, a Redis-backed cache is used (via
+``travel_agent.cache.redis_cache.RedisSearchCache``).  Otherwise the
+in-memory LRU is used, guarded by asyncio.Lock for single-process safety.
 
-Capacity: 50 entries, TTL: 30 minutes. No external dependencies.
-asyncio.Lock guards all mutations for safe concurrent access across uvicorn workers
-sharing the same event loop (single-process) or independent processes (multi-worker:
-each worker has its own in-process cache; cross-worker cache misses trigger full searches).
+Capacity: 50 entries, TTL: 30 minutes.
 """
 
 from __future__ import annotations
 
 import asyncio
+import os
 import time
 from collections import OrderedDict
+from typing import Protocol
 
 from travel_agent.coordinator.state import FlightOption, TravelIntent
 
@@ -21,6 +21,18 @@ _MAX_ENTRIES = 50
 _TTL_SECONDS = 1800
 
 _CacheEntry = tuple[float, TravelIntent, list[FlightOption]]
+
+
+class SearchCacheProtocol(Protocol):
+    """Structural type shared by in-memory and Redis backends."""
+
+    async def put(
+        self, request_id: str, intent: TravelIntent, flights: list[FlightOption]
+    ) -> None: ...
+
+    async def get(self, request_id: str) -> tuple[TravelIntent, list[FlightOption]] | None: ...
+
+    async def ping(self) -> bool: ...
 
 
 class _SearchCache:
@@ -49,5 +61,24 @@ class _SearchCache:
             self._store.move_to_end(request_id)
             return intent, flights
 
+    async def ping(self) -> bool:
+        return True
 
-search_cache = _SearchCache()
+
+def _make_cache() -> SearchCacheProtocol:
+    """Factory: return RedisSearchCache if UPSTASH_REDIS_URL is set, else in-memory."""
+    url = os.environ.get("UPSTASH_REDIS_URL", "").strip()
+    if url:
+        import contextlib  # noqa: PLC0415
+
+        result: SearchCacheProtocol | None = None
+        with contextlib.suppress(Exception):
+            from travel_agent.cache.redis_cache import RedisSearchCache  # noqa: PLC0415
+
+            result = RedisSearchCache(url)
+        if result is not None:
+            return result
+    return _SearchCache()
+
+
+search_cache: SearchCacheProtocol = _make_cache()
