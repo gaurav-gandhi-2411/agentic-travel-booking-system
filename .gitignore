@@ -91,3 +91,12 @@ logs/
 *.whl
 
 .vercel
+
+# Local Claude Code state — never commit
+.claude/
+AUDIT_REPORT.md
+RECREATE_CHECKLIST.md
+docs/debug-search*.txt
+docs/groq-test.*
+docs/prod-test.*
+apps/web/Usersgaura*.json
