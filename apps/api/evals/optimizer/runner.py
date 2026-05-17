@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import sys
 import time
 from datetime import UTC, datetime
@@ -24,6 +25,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 import structlog
 
+from optimizer.throttle import TPM_LIMITS, ThrottledLLMClient, TokenTracker
 from travel_agent.agents.optimizer import OptimizerAgent
 from travel_agent.coordinator.state import FlightOption, RequestState, Window
 from travel_agent.providers.synthetic import SyntheticProvider
@@ -31,7 +33,8 @@ from travel_agent.providers.synthetic import SyntheticProvider
 _RUNS_DIR = Path(__file__).parent / "runs"
 # Profiles that are currently active in llm_routing.yaml.
 # demo-qwen demoted 2026-05-16: OpenRouter removed qwen-2.5-72b-instruct:free.
-_PROFILES = ["demo-haiku", "demo-llama"]
+# demo-deepseek-v4 added 2026-05-17: NIM fallback for Groq quota exhaustion.
+_PROFILES = ["demo-haiku", "demo-llama", "demo-deepseek-v4"]
 
 _logger = structlog.get_logger(__name__)
 
@@ -80,7 +83,7 @@ async def run_profile(profile: str, scenarios: list[dict], dry_run: bool) -> lis
     else:
         try:
             from travel_agent.llm import get_llm_client_and_model  # noqa: PLC0415
-            from travel_agent.llm.routing import load_routing_config  # noqa: PLC0415
+            from travel_agent.llm.routing import get_provider_for_profile, load_routing_config  # noqa: PLC0415
 
             if profile not in load_routing_config():
                 _logger.warning(
@@ -90,6 +93,28 @@ async def run_profile(profile: str, scenarios: list[dict], dry_run: bool) -> lis
                 )
                 return []
             client, model = get_llm_client_and_model("optimizer", profile)
+
+            # Wrap with token-rate throttle for providers that have TPM limits
+            provider = get_provider_for_profile(profile)
+            if provider in TPM_LIMITS:
+                tracker = TokenTracker(TPM_LIMITS[provider])
+                fallback_client = None
+                fallback_model = ""
+                if os.environ.get("NVIDIA_API_KEY"):
+                    try:
+                        fallback_client, fallback_model = get_llm_client_and_model(
+                            "optimizer", "demo-deepseek-v4"
+                        )
+                    except Exception as fb_exc:
+                        _logger.warning("nim_fallback_unavailable", reason=str(fb_exc))
+                elif profile != "demo-deepseek-v4":
+                    _logger.warning(
+                        "nim_fallback_disabled",
+                        reason="NVIDIA_API_KEY not set — 429s will not fall back to NIM",
+                    )
+                client = ThrottledLLMClient(
+                    client, tracker, fallback=fallback_client, fallback_model=fallback_model
+                )
         except Exception as exc:
             _logger.warning("eval_profile_skipped", profile=profile, reason=str(exc))
             return []
