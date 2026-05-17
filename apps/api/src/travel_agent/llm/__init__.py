@@ -22,6 +22,7 @@ from travel_agent.llm.base import (
     ToolDefinition,
 )
 from travel_agent.llm.groq import GroqAdapter
+from travel_agent.llm.nvidia import NIMAdapter
 from travel_agent.llm.ollama import OllamaAdapter
 from travel_agent.llm.openrouter import OpenRouterAdapter
 from travel_agent.llm.routing import (
@@ -43,12 +44,14 @@ def _build_client_for_provider(provider: str) -> LLMClient:
             return GroqAdapter()
         case "anthropic":
             return AnthropicAdapter()
+        case "nvidia":
+            return NIMAdapter()
         case "vllm":
             return VLLMAdapter()
         case _:
             msg = (
                 f"Unknown provider {provider!r} in routing config. "
-                "Valid providers: ollama, openrouter, groq, anthropic, vllm."
+                "Valid providers: ollama, openrouter, groq, anthropic, nvidia, vllm."
             )
             raise ValueError(msg)
 

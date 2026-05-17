@@ -19,7 +19,7 @@ from travel_agent.llm.routing import (
 
 # demo-qwen demoted 2026-05-16: OpenRouter removed qwen-2.5-72b-instruct:free.
 # Judge profiles (eval-judge-*) are flat model+provider configs, not agent-routed.
-_AGENT_PROFILES = {"local", "free", "prod", "eval", "demo", "demo-haiku", "demo-llama"}
+_AGENT_PROFILES = {"local", "free", "prod", "eval", "demo", "demo-haiku", "demo-llama", "demo-deepseek-v4"}
 _JUDGE_PROFILES = {"eval-judge-qwen3-32b", "eval-judge-sonnet"}
 _EXPECTED_PROFILES = _AGENT_PROFILES | _JUDGE_PROFILES
 
@@ -124,6 +124,12 @@ def test_demo_llama_profile_uses_groq() -> None:
     assert config["demo-llama"]["provider"] == "groq"
     assert "llama" in config["demo-llama"]["planner"]
     assert "llama" in config["demo-llama"]["optimizer"]
+
+
+def test_demo_deepseek_v4_profile_uses_nvidia() -> None:
+    config = load_routing_config()
+    assert config["demo-deepseek-v4"]["provider"] == "nvidia"
+    assert config["demo-deepseek-v4"]["optimizer"] == "deepseek-ai/deepseek-v4-pro"
 
 
 def test_demo_qwen_profile_absent() -> None:

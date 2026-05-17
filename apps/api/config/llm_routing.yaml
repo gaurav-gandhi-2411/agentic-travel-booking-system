@@ -76,6 +76,20 @@ profiles:
     conversation:   llama-3.3-70b-versatile
     provider:       groq
 
+  # ── demo-deepseek-v4 ─────────────────────────────────────────────────────────
+  # NVIDIA NIM profile — DeepSeek-V4-Pro served via integrate.api.nvidia.com.
+  # Model ID confirmed at build.nvidia.com/models (2026-05-17).
+  # Primary use: fallback when Groq hits TPM/TPD quota mid-batch (Issue #15).
+  # Requires NVIDIA_API_KEY (free dev tier at build.nvidia.com).
+  demo-deepseek-v4:
+    planner:        deepseek-ai/deepseek-v4-pro
+    flight_hunter:  deepseek-ai/deepseek-v4-pro
+    hotel_hunter:   deepseek-ai/deepseek-v4-pro
+    optimizer:      deepseek-ai/deepseek-v4-pro
+    booking:        deepseek-ai/deepseek-v4-pro
+    conversation:   deepseek-ai/deepseek-v4-pro
+    provider:       nvidia
+
   # ── demo-qwen ────────────────────────────────────────────────────────────────
   # DEMOTED 2026-05-16: OpenRouter removed qwen/qwen-2.5-72b-instruct:free
   # (HTTP 404 "No endpoints found"). Profile commented out until a replacement

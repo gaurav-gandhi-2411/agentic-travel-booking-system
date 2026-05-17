@@ -90,6 +90,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             "OPENROUTER_API_KEY not set — X-LLM-Profile: demo-qwen requests will fail at runtime."
         )
 
+    if app_mode == "demo" and not os.environ.get("NVIDIA_API_KEY"):
+        logger.warning(
+            "NVIDIA_API_KEY not set — X-LLM-Profile: demo-deepseek-v4 requests will fail at runtime."
+        )
+
     # Langfuse observability — optional; never raises on missing keys
     lf = get_langfuse()
     if lf is not None:
