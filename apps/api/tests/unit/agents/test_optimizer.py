@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock
 
-from travel_agent.agents.optimizer import OptimizerAgent
+import pytest
+import vcr
+
+from travel_agent.agents.optimizer import OptimizerAgent, _flight_summary
 from travel_agent.coordinator.state import (
     ArchetypeLabel,
     CabinClass,
@@ -17,8 +22,12 @@ from travel_agent.coordinator.state import (
     Window,
 )
 from travel_agent.llm.base import LLMClient, LLMResponse, ToolCall
+from travel_agent.llm.anthropic import AnthropicAdapter
 
 _WINDOW = Window(start_date=date(2026, 6, 1), end_date=date(2026, 6, 7))
+
+_CASSETTE_DIR = Path(__file__).parent.parent.parent / "fixtures" / "cassettes"
+_CLOCK_TIME_RE = re.compile(r"\d{1,2}:\d{2}\s*(?:[AP]M|am|pm)?|morning departure|evening departure")
 
 
 def _flight(
@@ -268,3 +277,83 @@ async def test_bimodal_synthetic_correct_archetype_assignment() -> None:
     assert value_arch.flight.price_inr < 65_000
     # Premium (direct, fast) should be best-experience
     assert exp_arch.flight.layover_count == 0
+
+
+# ── Issue #14: departure-time hallucination fix ───────────────────────────────
+
+
+def test_system_prompt_no_departure_time_guidance() -> None:
+    """Optimizer system prompt must prohibit citing departure/arrival times, not encourage it.
+
+    Regression guard for Issue #14: Haiku was hallucinating departure times ('10:30 AM',
+    '9:30 AM') by following the old 'mention arrival time' guidance in the system prompt.
+    The fix removes encouraging language and adds an explicit prohibition.
+    """
+    prompt_path = (
+        Path(__file__).parent.parent.parent.parent
+        / "src" / "travel_agent" / "agents" / "prompts" / "optimizer_system.txt"
+    )
+    text = prompt_path.read_text()
+    text_lower = text.lower()
+    # Old encouraging phrases must be gone (the old prompt said "mention ... arrival time")
+    assert "or arrival time" not in text_lower, (
+        "Old 'mention ... or arrival time' instruction must be removed"
+    )
+    assert "daytime arrival" not in text_lower, "Old best-experience 'daytime arrival' guidance must be removed"
+    # Prohibition must be present
+    assert "do not" in text_lower and "departure times" in text_lower, (
+        "Explicit 'Do NOT ... departure times' prohibition must be present"
+    )
+
+
+def test_flight_summary_excludes_departure_at() -> None:
+    """_flight_summary must not include the departure datetime in its output.
+
+    When outbound_departure_at is present in the FlightOption, the old implementation
+    passed it verbatim ('Departs: 2026-06-01T09:00:00+05:30'), giving Haiku the
+    raw time to cite in explanations. The fix removes this field from the summary.
+    """
+    flight = _flight(
+        price_inr=91_500,
+        layover_count=0,
+        outbound_duration_minutes=540,
+        outbound_departure_at="2026-06-01T09:30:00+05:30",
+    )
+    summary = _flight_summary(flight, ArchetypeLabel.BEST_EXPERIENCE)
+    assert "09:30" not in summary, "Departure time must not appear in flight summary"
+    assert "9:30" not in summary, "Departure time must not appear in flight summary"
+    assert "Departs" not in summary, "'Departs:' field must be removed from summary"
+
+
+async def test_explain_output_no_clock_time_vcr(monkeypatch: pytest.MonkeyPatch) -> None:
+    """LLM explanation must not contain clock-time strings (VCR cassette, deterministic).
+
+    Replays a recorded Anthropic response where the model correctly omits departure/arrival
+    times from the explanation. Verifies that the cassette response clears the clock-time
+    regex — if someone re-records the cassette with a time-citing response, this test fails.
+    """
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-key")
+    _vcr = vcr.VCR(
+        cassette_library_dir=str(_CASSETTE_DIR / "optimizer"),
+        record_mode="none",
+        filter_headers=["authorization", "x-api-key"],
+        decode_compressed_response=True,
+        match_on=["method", "scheme", "host", "port", "path"],
+    )
+    with _vcr.use_cassette("explain_no_clock_time.yaml"):
+        client = AnthropicAdapter()
+        flight = _flight(
+            price_inr=91_500,
+            layover_count=0,
+            outbound_duration_minutes=540,
+            outbound_departure_at="2026-06-01T09:30:00+05:30",
+        )
+        agent = OptimizerAgent(client=client, model="claude-haiku-4-5-20251001")
+        state = _make_state([flight])
+        result = await agent.run(state, today=date(2026, 5, 17))
+
+    assert result.archetypes, "Agent must produce archetypes"
+    for arch in result.archetypes:
+        assert not _CLOCK_TIME_RE.search(arch.explanation), (
+            f"Explanation contains a clock time: {arch.explanation!r}"
+        )

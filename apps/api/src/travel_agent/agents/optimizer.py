@@ -278,7 +278,7 @@ def _flight_summary(flight: FlightOption, label: ArchetypeLabel) -> str:
         f"Airline: {flight.airline_code}  Flight: {flight.flight_number}\n"
         f"Price: INR {flight.price_inr:,}\n"
         f"Duration: {hrs}h {mins}m  |  {stops}\n"
-        f"Departs: {flight.outbound_departure_at}\n"
+        f"Refundable: {flight.is_refundable}\n"
         f"Cabin: {flight.cabin_class}"
     )
 
