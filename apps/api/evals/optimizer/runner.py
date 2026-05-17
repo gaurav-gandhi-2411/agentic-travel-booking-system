@@ -59,13 +59,15 @@ def _make_flight_sets() -> list[dict]:
             with contextlib.suppress(Exception):
                 flights = provider.get_flights(origin, dest, window)
                 if flights:
-                    scenarios.append({
-                        "id": f"opt-{i * 4 + j + 1:03d}",
-                        "route": f"{origin}-{dest}",
-                        "window_start": str(start),
-                        "flights": [f.model_dump(mode="json") for f in flights],
-                        "n_flights": len(flights),
-                    })
+                    scenarios.append(
+                        {
+                            "id": f"opt-{i * 4 + j + 1:03d}",
+                            "route": f"{origin}-{dest}",
+                            "window_start": str(start),
+                            "flights": [f.model_dump(mode="json") for f in flights],
+                            "n_flights": len(flights),
+                        }
+                    )
 
     return scenarios
 
@@ -107,13 +109,15 @@ async def run_profile(profile: str, scenarios: list[dict], dry_run: bool) -> lis
             continue
 
         archetypes = [a.model_dump(mode="json") for a in state.archetypes]
-        results.append({
-            **scenario,
-            "profile": profile,
-            "model": model,
-            "archetypes": archetypes,
-            "latency_ms": round(latency_ms, 1),
-        })
+        results.append(
+            {
+                **scenario,
+                "profile": profile,
+                "model": model,
+                "archetypes": archetypes,
+                "latency_ms": round(latency_ms, 1),
+            }
+        )
 
     return results
 

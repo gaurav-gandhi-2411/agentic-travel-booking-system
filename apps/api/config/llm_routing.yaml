@@ -115,3 +115,28 @@ profiles:
     booking:        claude-haiku-4-5-20251001
     conversation:   claude-sonnet-4-6
     provider:       anthropic
+
+  # ── eval-judge-qwen3-32b ─────────────────────────────────────────────────────
+  # Judge profile for optimizer eval coherence scoring.
+  # Substituted from deepseek-r1-distill-llama-70b after Groq
+  # decommissioned that model on 2026-05-17.
+  # See docs/architecture/adr/0016-llm-judge-design.md.
+  #
+  # Reasoning-tuned (emits <think>...</think> blocks stripped before parsing).
+  # Free on Groq free tier. Cross-family from evaluated profiles (Haiku/Llama)
+  # to reduce within-family bias. max_tokens 2048 because Qwen3 think blocks
+  # average ~500 tokens.
+  eval-judge-qwen3-32b:
+    model:          qwen/qwen3-32b
+    provider:       groq
+    temperature:    0.0
+    max_tokens:     2048
+
+  # ── eval-judge-sonnet ─────────────────────────────────────────────────────────
+  # External-defensible judge for on-demand manual runs. NOT used in CI.
+  # Swap via --judge-profile eval-judge-sonnet on the scorer CLI.
+  eval-judge-sonnet:
+    model:          claude-sonnet-4-6
+    provider:       anthropic
+    temperature:    0.0
+    max_tokens:     512

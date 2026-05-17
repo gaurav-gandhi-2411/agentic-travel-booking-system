@@ -11,6 +11,7 @@ Exit codes:
     1 — accuracy below threshold
     2 — configuration / setup error
 """
+
 from __future__ import annotations
 
 import argparse
@@ -32,21 +33,23 @@ from travel_agent.coordinator.state import RequestState
 from travel_agent.llm.anthropic import AnthropicAdapter
 
 _DATASETS_DIR = Path(__file__).parent / "datasets"
-_CASSETTES_DIR = (
-    Path(__file__).parent.parent
-    / "tests"
-    / "fixtures"
-    / "cassettes"
-    / "eval"
-)
+_CASSETTES_DIR = Path(__file__).parent.parent / "tests" / "fixtures" / "cassettes" / "eval"
 
 _EVAL_DATE = date(2026, 5, 14)
 _FLOAT_TOLERANCE = 0.01
 
 _VCR = vcrpy.VCR(
     record_mode="none",
-    filter_headers=["authorization", "x-api-key", "x-api-key", "cookie", "set-cookie",
-                    "anthropic-version", "anthropic-beta", "user-agent"],
+    filter_headers=[
+        "authorization",
+        "x-api-key",
+        "x-api-key",
+        "cookie",
+        "set-cookie",
+        "anthropic-version",
+        "anthropic-beta",
+        "user-agent",
+    ],
     decode_compressed_response=True,
     match_on=["method", "scheme", "host", "port", "path"],
 )
@@ -186,8 +189,10 @@ async def _main(args: argparse.Namespace) -> int:
     adapter = AnthropicAdapter()
     agent = PlannerAgent(adapter, "claude-haiku-4-5-20251001")
 
-    print(f"eval-quick: {args.dataset} | {len(examples)} examples | "
-          f"mode={'live' if args.live else 'vcr-replay'}")
+    print(
+        f"eval-quick: {args.dataset} | {len(examples)} examples | "
+        f"mode={'live' if args.live else 'vcr-replay'}"
+    )
 
     results = []
     for ex in examples:
@@ -202,8 +207,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="eval-quick runner")
     parser.add_argument("--dataset", default="planner")
     parser.add_argument("--threshold", type=float, default=0.95)
-    parser.add_argument("--live", action="store_true",
-                        help="Use real API instead of VCR cassettes")
+    parser.add_argument("--live", action="store_true", help="Use real API instead of VCR cassettes")
     args = parser.parse_args()
     sys.exit(asyncio.run(_main(args)))
 

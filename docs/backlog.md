@@ -6,6 +6,52 @@ Items deferred from current phase scope. Each entry notes the originating phase 
 
 ## Phase 2C follow-ups
 
+- **Use `find_dotenv()` for all .env loading in eval and dev scripts** _(flagged 2026-05-17, Phase 2C.1 sanity run)_
+  Several scripts use relative paths like `../.env` that break silently depending on CWD.
+  `find_dotenv()` walks up the tree and is robust. Audit: `judge.py`, `runner.py`, `scorer.py`,
+  `evals/run.py`, any ad-hoc dev scripts calling `load_dotenv()` with a hardcoded path.
+  Small standalone cleanup PR, no functional change.
+
+- **Add `all_samples: list[dict]` to JudgeScore for variance root-cause analysis** _(flagged 2026-05-17, Phase 2C.1 diagnosis)_
+  `all_scores: list[int]` is already exposed and sufficient for flagging high-variance scenarios.
+  For deeper debugging (why did sample 1 score differently?), add `all_samples: list[dict]`
+  storing each sample's raw text, parsed score, and parsed reason. Not a blocker for baseline;
+  only useful when investigating `high_variance=True` scenarios post-baseline.
+
+- **Narrow exception handling in `CoherenceJudge.score()`** _(flagged 2026-05-17, Phase 2C.1 code review)_
+  `except (json.JSONDecodeError, Exception)` — the broad `Exception` swallows everything.
+  Replace with explicit types: `json.JSONDecodeError`, `KeyError`, `ValueError`,
+  `httpx.HTTPError`, `asyncio.TimeoutError`. Same discipline as PR #4 Redis graceful degradation.
+
+- **Add tiebreak comment in `CoherenceJudge.score()` best-sample selection** _(flagged 2026-05-17)_
+  `min(parsed_samples, key=lambda p: abs(...))` picks the first sample in iteration order when
+  multiple samples tie on distance to median. Add one-line comment `# tiebreak: first sample wins`
+  so future readers don't second-guess it.
+
+- **Haiku hallucinates departure times not in FlightOption schema** _(flagged 2026-05-17, baseline opt-003 + opt-019; tag: phase-2c-followup, prompt-tuning)_
+  Two baseline high-variance archetypes revealed Haiku citing departure times (e.g., "10:30 AM",
+  "9:30 AM") that do not exist in the `FlightOption` schema. When the LLM judge detects the
+  unverifiable time claim it scores structural_valid=False (score 2); when it focuses on the
+  verifiable attributes (stops, duration) it scores 5. This is the root cause of both HV cases.
+  Possible fixes (Phase 2C.2 to decide):
+  (a) Add `departure_at` to `FlightOption` and pass it to the optimizer prompt.
+  (b) Constrain optimizer system prompt: "Only mention attributes explicitly present in the
+      flight data. Do not infer or invent timing claims."
+  (c) Post-process explanation output to strip ungrounded timing phrases (regex, conservative).
+  Reference: baseline reports opt-003 and opt-019, all_scores=[5,4,2] and [5,2,5].
+
+- **Optimizer eval runner hits Groq token quota on Llama before completing 24 scenarios** _(flagged 2026-05-17, baseline opt-007/023/024; tag: phase-2c-followup, runner-resilience)_
+  Baseline 2026-05-17: the Llama 24-scenario run triggered TPM (opt-007) then TPD (opt-023,
+  opt-024) 429 errors, leaving 3 scenarios without archetypes. No pacing or quota-aware logic
+  exists in `runner.py`. Possible fixes:
+  (a) Add inter-scenario sleep to stay within TPM (currently fires all scenarios sequentially
+      but without back-off).
+  (b) Multi-provider fallback: on Groq 429, re-route the affected scenario through OpenRouter
+      or another free tier.
+  (c) NVIDIA NIM as a fallback target (Phase 2C.2 option from external engineer).
+  (d) Pre-flight quota check: estimate total tokens before starting; refuse if insufficient.
+  Reference: 20260516T232614_demo-llama run; opt-007 (TPM), opt-023/024 (TPD).
+
 - **Add pre-commit hook for ruff check + ruff format** _(flagged 2026-05-17)_
   Three consecutive PRs (#1, #2) have required cleanup commits for lint debt left by earlier
   commits that bypassed CI. Add `.pre-commit-config.yaml` running `ruff check` and
