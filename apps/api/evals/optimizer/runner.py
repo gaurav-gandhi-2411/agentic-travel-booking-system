@@ -1,7 +1,7 @@
 """Optimizer eval runner.
 
 Usage:
-    python -m evals.optimizer.runner                    # dry run (no LLM calls)
+    python -m evals.optimizer.runner                    # default profiles (llama + deepseek-v4)
     python -m evals.optimizer.runner --profile demo-llama
     python -m evals.optimizer.runner --profile demo-llama --profile demo-deepseek-v4
     python -m evals.optimizer.runner --all-profiles     # all active profiles
@@ -210,7 +210,7 @@ async def main() -> int:
     parser.add_argument("--dry-run", action="store_true", default=False)
     args = parser.parse_args()
 
-    profiles = _PROFILES if args.all_profiles else (args.profiles or ["demo-haiku"])
+    profiles = _PROFILES if args.all_profiles else (args.profiles or _PROFILES)
     scenarios = _make_flight_sets()
     print(f"Generated {len(scenarios)} flight scenarios")
 
