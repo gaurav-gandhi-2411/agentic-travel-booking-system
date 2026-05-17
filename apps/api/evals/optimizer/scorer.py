@@ -4,15 +4,20 @@ Usage:
     python -m evals.optimizer.scorer --run runs/20260516T120000_demo-haiku.jsonl
     python -m evals.optimizer.scorer --all          # score all runs in runs/
     python -m evals.optimizer.scorer                # same as --all
+    python -m evals.optimizer.scorer --all --judge-profile eval-judge-deepseek
 
 Scoring:
-    label_correct: bool   — archetype labels match expected Pareto result
-    coherence: None       — deferred to Phase 2c (LLM-as-judge)
+    label_correct: bool       — archetype labels match deterministic Pareto result
+    coherence_avg: float      — mean coherence score (1-5) across all archetypes
+    coherence_p50: float      — median coherence score
+    coherence_variance: float — variance of scores (higher = less stable)
+    high_variance_count: int  — archetypes where judge disagreed > 2 pts across 3 samples
 """
 
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import statistics
 import sys
@@ -40,7 +45,7 @@ def _expected_labels(flights_raw: list[dict]) -> tuple[str, str]:
 
 
 def score_record(record: dict) -> dict:
-    """Score a single run record."""
+    """Score a single run record for label correctness."""
     if "error" in record:
         return {**record, "label_correct": False, "coherence": None}
 
@@ -52,7 +57,6 @@ def score_record(record: dict) -> dict:
 
     expected_val_id, expected_exp_id = _expected_labels(flights_raw)
 
-    # Find what the optimizer actually picked
     got_val_id = next(
         (a["flight"]["id"] for a in archetypes if a["label"] == "best-value"), None
     )
@@ -61,7 +65,6 @@ def score_record(record: dict) -> dict:
     )
 
     label_correct = got_val_id == expected_val_id and got_exp_id == expected_exp_id
-
     return {**record, "label_correct": label_correct, "coherence": None}
 
 
@@ -69,6 +72,33 @@ def score_run_file(path: Path) -> list[dict]:
     """Load and score all records in a JSONL run file."""
     records = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
     return [score_record(r) for r in records]
+
+
+def _coherence_summary(scored: list[dict]) -> dict:
+    """Aggregate coherence metrics across all scored records."""
+    all_coh: list[int] = []
+    hv_count = 0
+    for rec in scored:
+        for js in rec.get("judge_scores", []):
+            s = js.get("coherence_score")
+            if s is not None:
+                all_coh.append(int(s))
+            if js.get("high_variance"):
+                hv_count += 1
+
+    if not all_coh:
+        return {
+            "coherence_avg": None,
+            "coherence_p50": None,
+            "coherence_variance": None,
+            "high_variance_count": 0,
+        }
+    return {
+        "coherence_avg": round(statistics.mean(all_coh), 3),
+        "coherence_p50": round(statistics.median(all_coh), 1),
+        "coherence_variance": round(statistics.variance(all_coh) if len(all_coh) > 1 else 0.0, 3),
+        "high_variance_count": hv_count,
+    }
 
 
 def print_summary(scored: list[dict], profile: str) -> dict:
@@ -81,9 +111,19 @@ def print_summary(scored: list[dict], profile: str) -> dict:
     p95 = round(sorted(latencies)[p95_idx], 0) if latencies else 0
 
     pct = 100 * correct // total if total else 0
+    coh = _coherence_summary(scored)
+
     print(f"\n### {profile}")
     print(f"  Label correct: {correct}/{total} ({pct}%)")
     print(f"  Latency p50: {p50}ms  p95: {p95}ms")
+    if coh["coherence_avg"] is not None:
+        print(
+            f"  Coherence avg: {coh['coherence_avg']}  "
+            f"p50: {coh['coherence_p50']}  "
+            f"variance: {coh['coherence_variance']}  "
+            f"high-variance archetypes: {coh['high_variance_count']}"
+        )
+
     return {
         "profile": profile,
         "total": total,
@@ -91,6 +131,7 @@ def print_summary(scored: list[dict], profile: str) -> dict:
         "label_correct_pct": pct,
         "latency_p50": p50,
         "latency_p95": p95,
+        **coh,
     }
 
 
@@ -98,30 +139,66 @@ def write_report(summaries: list[dict], out_path: Path) -> None:
     """Write a markdown report to out_path."""
     _REPORTS_DIR.mkdir(exist_ok=True)
     ts = datetime.now(tz=UTC).isoformat()
+    has_coherence = any(s.get("coherence_avg") is not None for s in summaries)
+
+    if has_coherence:
+        header = (
+            "| Profile | Label Correct | Label % "
+            "| Coh avg | Coh p50 | Coh var | HV count "
+            "| Lat p50 | Lat p95 |"
+        )
+        sep = "|---|---|---|---|---|---|---|---|---|"
+    else:
+        header = "| Profile | Label Correct | Label Correct % | Latency p50 | Latency p95 |"
+        sep = "|---|---|---|---|---|"
+
     lines = [
         "# Optimizer Eval Report\n",
         f"Generated: {ts}\n",
-        "| Profile | Label Correct | Label Correct % | Latency p50 | Latency p95 |",
-        "|---|---|---|---|---|",
+        header,
+        sep,
     ]
     for s in summaries:
-        lines.append(
-            f"| {s['profile']} | {s['label_correct']}/{s['total']} "
-            f"| {s['label_correct_pct']}% "
-            f"| {s['latency_p50']}ms | {s['latency_p95']}ms |"
-        )
+        if has_coherence:
+            coh_avg = s.get("coherence_avg", "—")
+            coh_p50 = s.get("coherence_p50", "—")
+            coh_var = s.get("coherence_variance", "—")
+            hv = s.get("high_variance_count", 0)
+            lines.append(
+                f"| {s['profile']} | {s['label_correct']}/{s['total']} "
+                f"| {s['label_correct_pct']}% "
+                f"| {coh_avg} | {coh_p50} | {coh_var} | {hv} "
+                f"| {s['latency_p50']}ms | {s['latency_p95']}ms |"
+            )
+        else:
+            lines.append(
+                f"| {s['profile']} | {s['label_correct']}/{s['total']} "
+                f"| {s['label_correct_pct']}% "
+                f"| {s['latency_p50']}ms | {s['latency_p95']}ms |"
+            )
     out_path.write_text("\n".join(lines) + "\n")
     print(f"\nReport written -> {out_path}")
+
+
+async def _run_coherence(scored: list[dict], judge_profile: str) -> list[dict]:
+    from evals.optimizer.judge import CoherenceJudge, score_all_archetypes  # noqa: PLC0415
+
+    judge = CoherenceJudge(judge_profile=judge_profile)
+    return await score_all_archetypes(scored, judge)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Optimizer eval scorer")
     parser.add_argument("--run", help="Path to a single run JSONL file")
     parser.add_argument("--all", action="store_true", help="Score all run files")
+    parser.add_argument(
+        "--judge-profile",
+        default=None,
+        help="Judge profile name (e.g. eval-judge-deepseek). Omit to skip coherence.",
+    )
     args = parser.parse_args()
 
     ts = datetime.now(tz=UTC).strftime("%Y%m%dT%H%M%S")
-
     paths = [Path(args.run)] if args.run else sorted(_RUNS_DIR.glob("*.jsonl"))
 
     if not paths:
@@ -130,10 +207,13 @@ def main() -> int:
 
     summaries = []
     for path in paths:
-        # Extract profile from filename: <timestamp>_<profile>.jsonl
         stem = path.stem
         profile = stem.split("_", 1)[-1] if "_" in stem else stem
         scored = score_run_file(path)
+
+        if args.judge_profile:
+            scored = asyncio.run(_run_coherence(scored, args.judge_profile))
+
         summaries.append(print_summary(scored, profile))
 
     report_path = _REPORTS_DIR / f"{ts}_report.md"
