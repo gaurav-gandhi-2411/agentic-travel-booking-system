@@ -18,7 +18,10 @@ from travel_agent.llm.routing import (
 )
 
 # demo-qwen demoted 2026-05-16: OpenRouter removed qwen-2.5-72b-instruct:free.
-_EXPECTED_PROFILES = {"local", "free", "prod", "eval", "demo", "demo-haiku", "demo-llama"}
+# Judge profiles (eval-judge-*) are flat model+provider configs, not agent-routed.
+_AGENT_PROFILES = {"local", "free", "prod", "eval", "demo", "demo-haiku", "demo-llama"}
+_JUDGE_PROFILES = {"eval-judge-deepseek", "eval-judge-sonnet"}
+_EXPECTED_PROFILES = _AGENT_PROFILES | _JUDGE_PROFILES
 
 
 @pytest.fixture(autouse=True)
@@ -35,6 +38,8 @@ def test_all_profiles_present() -> None:
 def test_all_agents_in_all_profiles() -> None:
     config = load_routing_config()
     for profile_name, profile in config.items():
+        if profile_name in _JUDGE_PROFILES:
+            continue  # judge profiles are flat model+provider — no agent keys
         missing = AGENT_KEYS - set(profile.keys())
         assert not missing, f"Profile {profile_name!r} missing agents: {missing}"
 
