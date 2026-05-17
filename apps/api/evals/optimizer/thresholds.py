@@ -8,10 +8,13 @@ from __future__ import annotations
 
 from typing import Final
 
-# Fraction of scenarios that must produce archetypes (no runner error).
+# Completion rate — fraction of scenarios that produced archetypes.
 # Baseline: haiku 24/24=100%, llama 21/24=87.5%.
-# Floor set below llama baseline to absorb transient quota failures
-# without false-flagging; 0.83 allows up to 4/24 runner failures.
+# Floor set at 0.83 = baseline llama minus 0.045. This is TIGHT
+# ON PURPOSE: a single additional runner-phase failure flips llama
+# to FAIL, which is diagnostic, not noise. See Issue #15 for the
+# runner-quota root cause we're choosing to surface via the gate
+# rather than hide via a loose threshold.
 THRESHOLD_COMPLETION_MIN: Final[float] = 0.83
 
 # Label correctness on COMPLETED scenarios only (denominator excludes
