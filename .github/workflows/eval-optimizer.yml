@@ -30,6 +30,8 @@ jobs:
         run: python -m evals.optimizer.runner --dry-run --all-profiles
 
       - name: Score and report
+        # TODO(Phase 2C.1 S3 / Issue #8): add --judge-profile eval-judge-qwen3-32b
+        # and explicit --run targets so coherence is actually evaluated in CI.
         run: python -m evals.optimizer.scorer --all
 
       - name: Upload report

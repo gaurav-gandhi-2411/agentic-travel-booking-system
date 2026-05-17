@@ -20,7 +20,7 @@ from travel_agent.llm.routing import (
 # demo-qwen demoted 2026-05-16: OpenRouter removed qwen-2.5-72b-instruct:free.
 # Judge profiles (eval-judge-*) are flat model+provider configs, not agent-routed.
 _AGENT_PROFILES = {"local", "free", "prod", "eval", "demo", "demo-haiku", "demo-llama"}
-_JUDGE_PROFILES = {"eval-judge-deepseek", "eval-judge-sonnet"}
+_JUDGE_PROFILES = {"eval-judge-qwen3-32b", "eval-judge-sonnet"}
 _EXPECTED_PROFILES = _AGENT_PROFILES | _JUDGE_PROFILES
 
 

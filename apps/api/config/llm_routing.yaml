@@ -116,16 +116,17 @@ profiles:
     conversation:   claude-sonnet-4-6
     provider:       anthropic
 
-  # ── eval-judge-deepseek ───────────────────────────────────────────────────────
-  # Default coherence judge for CI evals. Reasoning-tuned model (emits
-  # <think>...</think> blocks stripped before parsing). Free on Groq free tier.
-  # Cross-family from evaluated profiles (Haiku/Llama) to reduce within-family bias.
-  # Originally deepseek-r1-distill-llama-70b; substituted 2026-05-17 because
-  # Groq decommissioned that model. qwen/qwen3-32b (Alibaba) preserves all
-  # key properties: cross-family, reasoning-tuned, free, <think> emitting.
-  # max_tokens raised to 2048 because Qwen3 think blocks are ~500 tokens.
-  # See ADR-0016.
-  eval-judge-deepseek:
+  # ── eval-judge-qwen3-32b ─────────────────────────────────────────────────────
+  # Judge profile for optimizer eval coherence scoring.
+  # Substituted from deepseek-r1-distill-llama-70b after Groq
+  # decommissioned that model on 2026-05-17.
+  # See docs/architecture/adr/0016-llm-judge-design.md.
+  #
+  # Reasoning-tuned (emits <think>...</think> blocks stripped before parsing).
+  # Free on Groq free tier. Cross-family from evaluated profiles (Haiku/Llama)
+  # to reduce within-family bias. max_tokens 2048 because Qwen3 think blocks
+  # average ~500 tokens.
+  eval-judge-qwen3-32b:
     model:          qwen/qwen3-32b
     provider:       groq
     temperature:    0.0

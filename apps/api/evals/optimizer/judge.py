@@ -64,10 +64,10 @@ class JudgeScore(BaseModel):
 
 
 def _strip_thinking(raw: str) -> str:
-    """Strip <think>...</think> block emitted by DeepSeek R1 family."""
+    """Strip <think>...</think> blocks from reasoning model output (DeepSeek R1, Qwen3, etc.)."""
     match = re.search(r"</think>", raw, re.DOTALL)
     if match:
-        return raw[match.end():].strip()
+        return raw[match.end() :].strip()
     if "<think>" in raw:
         _logger.warning("judge_unclosed_think_tag: returning empty string")
         return ""
@@ -122,7 +122,7 @@ def _build_user_prompt(scenario: dict, archetype: dict) -> str:
 class CoherenceJudge:
     """Scores archetype explanation quality via an LLM judge (median-of-3)."""
 
-    def __init__(self, judge_profile: str = "eval-judge-deepseek") -> None:
+    def __init__(self, judge_profile: str = "eval-judge-qwen3-32b") -> None:
         from travel_agent.llm.routing import load_routing_config  # noqa: PLC0415
 
         profiles = load_routing_config()

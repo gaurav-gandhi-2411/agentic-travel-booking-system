@@ -4,7 +4,7 @@ Usage:
     python -m evals.optimizer.scorer --run runs/20260516T120000_demo-haiku.jsonl
     python -m evals.optimizer.scorer --all          # score all runs in runs/
     python -m evals.optimizer.scorer                # same as --all
-    python -m evals.optimizer.scorer --all --judge-profile eval-judge-deepseek
+    python -m evals.optimizer.scorer --all --judge-profile eval-judge-qwen3-32b
 
 Scoring:
     label_correct: bool       — archetype labels match deterministic Pareto result
@@ -57,9 +57,7 @@ def score_record(record: dict) -> dict:
 
     expected_val_id, expected_exp_id = _expected_labels(flights_raw)
 
-    got_val_id = next(
-        (a["flight"]["id"] for a in archetypes if a["label"] == "best-value"), None
-    )
+    got_val_id = next((a["flight"]["id"] for a in archetypes if a["label"] == "best-value"), None)
     got_exp_id = next(
         (a["flight"]["id"] for a in archetypes if a["label"] == "best-experience"), None
     )
@@ -194,7 +192,7 @@ def main() -> int:
     parser.add_argument(
         "--judge-profile",
         default=None,
-        help="Judge profile name (e.g. eval-judge-deepseek). Omit to skip coherence.",
+        help="Judge profile name (e.g. eval-judge-qwen3-32b). Omit to skip coherence.",
     )
     args = parser.parse_args()
 

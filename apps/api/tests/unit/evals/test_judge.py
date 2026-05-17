@@ -49,11 +49,13 @@ _ARCHETYPE = {
     ),
 }
 
-_GOOD_JUDGE_RESPONSE = json.dumps({
-    "score": 4,
-    "reason": "Explanation mentions the specific price and stop count correctly.",
-    "structural_valid": True,
-})
+_GOOD_JUDGE_RESPONSE = json.dumps(
+    {
+        "score": 4,
+        "reason": "Explanation mentions the specific price and stop count correctly.",
+        "structural_valid": True,
+    }
+)
 
 
 # ── _strip_thinking ──────────────────────────────────────────────────────────
@@ -86,7 +88,7 @@ def test_strip_thinking_preserves_content_after_close() -> None:
 
 
 def test_extract_json_strips_markdown_fences() -> None:
-    raw = "```json\n{\"score\": 4}\n```"
+    raw = '```json\n{"score": 4}\n```'
     assert _extract_json(raw) == '{"score": 4}'
 
 
