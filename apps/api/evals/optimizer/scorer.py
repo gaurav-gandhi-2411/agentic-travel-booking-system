@@ -45,15 +45,17 @@ def _expected_labels(flights_raw: list[dict]) -> tuple[str, str]:
 
 
 def score_record(record: dict) -> dict:
-    """Score a single run record for label correctness."""
-    if "error" in record:
-        return {**record, "label_correct": False, "coherence": None}
+    """Score a single run record for completion and label correctness."""
+    completed = "error" not in record and bool(record.get("archetypes"))
+
+    if not completed:
+        return {**record, "completed": False, "label_correct": None, "coherence": None}
 
     archetypes = record.get("archetypes", [])
     flights_raw = record.get("flights", [])
 
-    if not archetypes or not flights_raw:
-        return {**record, "label_correct": False, "coherence": None}
+    if not flights_raw:
+        return {**record, "completed": False, "label_correct": None, "coherence": None}
 
     expected_val_id, expected_exp_id = _expected_labels(flights_raw)
 
@@ -63,7 +65,7 @@ def score_record(record: dict) -> dict:
     )
 
     label_correct = got_val_id == expected_val_id and got_exp_id == expected_exp_id
-    return {**record, "label_correct": label_correct, "coherence": None}
+    return {**record, "completed": True, "label_correct": label_correct, "coherence": None}
 
 
 def score_run_file(path: Path) -> list[dict]:
@@ -102,17 +104,25 @@ def _coherence_summary(scored: list[dict]) -> dict:
 def print_summary(scored: list[dict], profile: str) -> dict:
     """Print per-profile summary and return summary dict."""
     total = len(scored)
-    correct = sum(1 for r in scored if r.get("label_correct"))
-    latencies = [r["latency_ms"] for r in scored if "latency_ms" in r]
+    completed = sum(1 for r in scored if r.get("completed"))
+    # label_correct is None for incomplete records; only count completed ones
+    label_correct_on_completed = sum(
+        1 for r in scored if r.get("completed") and r.get("label_correct")
+    )
+    latencies = [r["latency_ms"] for r in scored if "latency_ms" in r and r.get("completed")]
     p50 = round(statistics.median(latencies), 0) if latencies else 0
     p95_idx = max(0, int(len(latencies) * 0.95) - 1)
     p95 = round(sorted(latencies)[p95_idx], 0) if latencies else 0
 
-    pct = 100 * correct // total if total else 0
+    completion_pct = round(100 * completed / total, 1) if total else 0.0
+    label_pct = 100 * label_correct_on_completed // completed if completed else 0
     coh = _coherence_summary(scored)
 
     print(f"\n### {profile}")
-    print(f"  Label correct: {correct}/{total} ({pct}%)")
+    print(
+        f"  Completion: {completed}/{total} ({completion_pct}%)  "
+        f"Label-correct (completed): {label_correct_on_completed}/{completed} ({label_pct}%)"
+    )
     print(f"  Latency p50: {p50}ms  p95: {p95}ms")
     if coh["coherence_avg"] is not None:
         print(
@@ -125,15 +135,21 @@ def print_summary(scored: list[dict], profile: str) -> dict:
     return {
         "profile": profile,
         "total": total,
-        "label_correct": correct,
-        "label_correct_pct": pct,
+        "completed": completed,
+        "completion_pct": completion_pct,
+        "label_correct_on_completed": label_correct_on_completed,
+        "label_correct_pct": label_pct,
         "latency_p50": p50,
         "latency_p95": p95,
         **coh,
     }
 
 
-def write_report(summaries: list[dict], out_path: Path) -> None:
+def write_report(
+    summaries: list[dict],
+    out_path: Path,
+    scored_by_profile: dict[str, list[dict]] | None = None,
+) -> None:
     """Write a markdown report to out_path."""
     _REPORTS_DIR.mkdir(exist_ok=True)
     ts = datetime.now(tz=UTC).isoformat()
@@ -141,13 +157,16 @@ def write_report(summaries: list[dict], out_path: Path) -> None:
 
     if has_coherence:
         header = (
-            "| Profile | Label Correct | Label % "
-            "| Coh avg | Coh p50 | Coh var | HV count "
-            "| Lat p50 | Lat p95 |"
+            "| Profile | Completion | Label % (completed)"
+            " | Coh avg | Coh p50 | Coh var | HV count"
+            " | Lat p50 | Lat p95 |"
         )
         sep = "|---|---|---|---|---|---|---|---|---|"
     else:
-        header = "| Profile | Label Correct | Label Correct % | Latency p50 | Latency p95 |"
+        header = (
+            "| Profile | Completion | Label % (completed)"
+            " | Latency p50 | Latency p95 |"
+        )
         sep = "|---|---|---|---|---|"
 
     lines = [
@@ -157,24 +176,88 @@ def write_report(summaries: list[dict], out_path: Path) -> None:
         sep,
     ]
     for s in summaries:
+        comp = f"{s['completed']}/{s['total']} ({s['completion_pct']}%)"
+        lbl = f"{s['label_correct_on_completed']}/{s['completed']} ({s['label_correct_pct']}%)"
         if has_coherence:
             coh_avg = s.get("coherence_avg", "—")
             coh_p50 = s.get("coherence_p50", "—")
             coh_var = s.get("coherence_variance", "—")
             hv = s.get("high_variance_count", 0)
             lines.append(
-                f"| {s['profile']} | {s['label_correct']}/{s['total']} "
-                f"| {s['label_correct_pct']}% "
-                f"| {coh_avg} | {coh_p50} | {coh_var} | {hv} "
-                f"| {s['latency_p50']}ms | {s['latency_p95']}ms |"
+                f"| {s['profile']} | {comp} | {lbl}"
+                f" | {coh_avg} | {coh_p50} | {coh_var} | {hv}"
+                f" | {s['latency_p50']}ms | {s['latency_p95']}ms |"
             )
         else:
             lines.append(
-                f"| {s['profile']} | {s['label_correct']}/{s['total']} "
-                f"| {s['label_correct_pct']}% "
-                f"| {s['latency_p50']}ms | {s['latency_p95']}ms |"
+                f"| {s['profile']} | {comp} | {lbl}"
+                f" | {s['latency_p50']}ms | {s['latency_p95']}ms |"
             )
-    out_path.write_text("\n".join(lines) + "\n")
+
+    # Per-profile detail sections
+    if scored_by_profile:
+        for profile, scored in scored_by_profile.items():
+            lines.append(f"\n## {profile}\n")
+
+            # Runner failures
+            failures = [r for r in scored if not r.get("completed")]
+            lines.append("### Runner failures (no archetypes produced)")
+            if failures:
+                lines.append("| Scenario | Route | Error |")
+                lines.append("|---|---|---|")
+                for r in failures:
+                    flights = r.get("flights", [])
+                    route = (
+                        f"{flights[0].get('origin_iata','?')}→{flights[0].get('destination_iata','?')}"
+                        if flights
+                        else "?"
+                    )
+                    err = str(r.get("error", "unknown"))
+                    # Summarise to fit a table cell
+                    if "tokens per minute" in err:
+                        err_short = "429 TPM"
+                    elif "tokens per day" in err:
+                        err_short = "429 TPD"
+                    elif "tokens per second" in err:
+                        err_short = "429 TPS"
+                    else:
+                        err_short = err[:60]
+                    lines.append(f"| {r.get('id','?')} | {route} | {err_short} |")
+            else:
+                lines.append("*(none)*")
+
+            # Label mismatches
+            mismatches = [
+                r for r in scored if r.get("completed") and r.get("label_correct") is False
+            ]
+            lines.append("\n### Label mismatches (archetypes produced, wrong label selected)")
+            if mismatches:
+                lines.append("| Scenario | Expected value-id | Got value-id | Expected exp-id | Got exp-id |")
+                lines.append("|---|---|---|---|---|")
+                for r in mismatches:
+                    lines.append(f"| {r.get('id','?')} | (see JSONL) | (see JSONL) | (see JSONL) | (see JSONL) |")
+            else:
+                lines.append("*(none)*")
+
+            # High-variance archetypes
+            hv_rows = []
+            archetypes = []
+            for r in scored:
+                for i, js in enumerate(r.get("judge_scores", [])):
+                    if js.get("high_variance"):
+                        arch_list = r.get("archetypes") or []
+                        arch = arch_list[i] if i < len(arch_list) else {}
+                        hv_rows.append((r.get("id", "?"), arch.get("label", "?"), js["all_scores"]))
+            lines.append("\n### High-variance archetypes (score range > 2 across 3 judge samples)")
+            if hv_rows:
+                lines.append("| Scenario | Label | Scores |")
+                lines.append("|---|---|---|")
+                for sid, lbl_name, scores in hv_rows:
+                    lines.append(f"| {sid} | {lbl_name} | {scores} |")
+            else:
+                lines.append("*(none)*")
+
+    out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(f"\nReport written -> {out_path}")
 
 
@@ -204,6 +287,7 @@ def main() -> int:
         return 1
 
     summaries = []
+    scored_by_profile: dict[str, list[dict]] = {}
     for path in paths:
         stem = path.stem
         profile = stem.split("_", 1)[-1] if "_" in stem else stem
@@ -213,9 +297,10 @@ def main() -> int:
             scored = asyncio.run(_run_coherence(scored, args.judge_profile))
 
         summaries.append(print_summary(scored, profile))
+        scored_by_profile[profile] = scored
 
     report_path = _REPORTS_DIR / f"{ts}_report.md"
-    write_report(summaries, report_path)
+    write_report(summaries, report_path, scored_by_profile=scored_by_profile)
     return 0
 
 

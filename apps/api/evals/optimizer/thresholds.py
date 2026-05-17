@@ -1,17 +1,34 @@
 """Quality gate thresholds for optimizer eval.
 
-Values are populated from the live baseline run. Until then,
-THRESHOLD_COHERENCE_MIN is None and any code that tries to use it
-for gating must check `if THRESHOLD_COHERENCE_MIN is None: skip
-gate`.
-
-See ADR-0016 for the rationale on threshold selection.
+Values set from the 24-scenario baseline run on 2026-05-17.
+See ADR-0016 for threshold rationale.
 """
 
 from __future__ import annotations
 
 from typing import Final
 
-THRESHOLD_LABEL_CORRECT: Final[float] = 1.0  # deterministic, always 100%
-THRESHOLD_COHERENCE_MIN: Final[float | None] = None  # set after baseline
-THRESHOLD_HIGH_VARIANCE_MAX_PCT: Final[float] = 0.20  # 20% of scenarios
+# Fraction of scenarios that must produce archetypes (no runner error).
+# Baseline: haiku 24/24=100%, llama 21/24=87.5%.
+# Floor set below llama baseline to absorb transient quota failures
+# without false-flagging; 0.83 allows up to 4/24 runner failures.
+THRESHOLD_COMPLETION_MIN: Final[float] = 0.83
+
+# Label correctness on COMPLETED scenarios only (denominator excludes
+# runner failures). Pareto math is deterministic — once archetypes are
+# produced the label must be correct. 100% is the strict target.
+THRESHOLD_LABEL_CORRECT_COMPLETED: Final[float] = 1.0
+
+# Coherence average on scored archetypes. Baseline lower bound was
+# llama at 4.571. Threshold = baseline - 0.5 (one-sigma equivalent
+# given variance < 0.5 on both profiles).
+THRESHOLD_COHERENCE_MIN: Final[float] = 4.0
+
+# High-variance fraction (archetypes where max-min score > 2 across
+# 3 judge samples). Baseline: haiku 2/24=8%, llama 0/24=0%.
+# 20% gives headroom while flagging rubric-ambiguity creep.
+THRESHOLD_HIGH_VARIANCE_MAX_PCT: Final[float] = 0.20
+
+# Reference: baseline run committed in PR #13
+# Reports: evals/optimizer/reports/20260517T130642_report.md (haiku)
+#          evals/optimizer/reports/20260517T132554_report.md (llama)
