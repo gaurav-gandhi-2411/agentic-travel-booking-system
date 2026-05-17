@@ -74,6 +74,51 @@ def score_run_file(path: Path) -> list[dict]:
     return [score_record(r) for r in records]
 
 
+def _provider_from_model(model: str) -> str:
+    """Map a model name to its billing provider."""
+    if model.startswith("claude-"):
+        return "anthropic"
+    if model.startswith(("llama", "qwen")):
+        return "groq"
+    if model.startswith(("deepseek-ai/", "nvidia/")):
+        return "nvidia"
+    return "unknown"
+
+
+def _cost_summary(scored: list[dict]) -> dict:
+    """Aggregate per-provider spend and call counts across all completed records."""
+    spend: dict[str, float] = {"anthropic": 0.0, "groq": 0.0, "nvidia": 0.0}
+    calls: dict[str, int] = {"anthropic": 0, "groq": 0, "nvidia": 0}
+    calls_per_scenario = 3  # 2 explain + 1 compare
+
+    for rec in scored:
+        if not rec.get("completed"):
+            continue
+        model = rec.get("model", "")
+        provider = _provider_from_model(model)
+        if provider in calls:
+            calls[provider] += calls_per_scenario
+            spend[provider] += rec.get("cost_usd_estimate", 0.0)
+
+    return {"spend": spend, "calls": calls}
+
+
+def _print_cost_summary(scored: list[dict]) -> None:
+    cs = _cost_summary(scored)
+    anthropic_usd = cs["spend"]["anthropic"]
+    n_anthropic = cs["calls"]["anthropic"]
+    if anthropic_usd > 0:
+        print(f"  !! Anthropic spend this run: ${anthropic_usd:.5f} ({n_anthropic} calls)")
+    else:
+        print(f"  Anthropic spend this run: $0 ({n_anthropic} calls)")
+    groq_calls = cs["calls"]["groq"]
+    if groq_calls:
+        print(f"  Groq spend this run: $0 ({groq_calls} calls, free tier)")
+    nvidia_calls = cs["calls"]["nvidia"]
+    if nvidia_calls:
+        print(f"  NVIDIA NIM spend this run: $0 ({nvidia_calls} calls, free tier)")
+
+
 def _coherence_summary(scored: list[dict]) -> dict:
     """Aggregate coherence metrics across all scored records."""
     all_coh: list[int] = []
@@ -124,6 +169,7 @@ def print_summary(scored: list[dict], profile: str) -> dict:
         f"Label-correct (completed): {label_correct_on_completed}/{completed} ({label_pct}%)"
     )
     print(f"  Latency p50: {p50}ms  p95: {p95}ms")
+    _print_cost_summary(scored)
     if coh["coherence_avg"] is not None:
         print(
             f"  Coherence avg: {coh['coherence_avg']}  "
@@ -145,7 +191,7 @@ def print_summary(scored: list[dict], profile: str) -> dict:
     }
 
 
-def write_report(
+def write_report(  # noqa: PLR0912, PLR0915
     summaries: list[dict],
     out_path: Path,
     scored_by_profile: dict[str, list[dict]] | None = None,
@@ -163,10 +209,7 @@ def write_report(
         )
         sep = "|---|---|---|---|---|---|---|---|---|"
     else:
-        header = (
-            "| Profile | Completion | Label % (completed)"
-            " | Latency p50 | Latency p95 |"
-        )
+        header = "| Profile | Completion | Label % (completed) | Latency p50 | Latency p95 |"
         sep = "|---|---|---|---|---|"
 
     lines = [
@@ -190,8 +233,7 @@ def write_report(
             )
         else:
             lines.append(
-                f"| {s['profile']} | {comp} | {lbl}"
-                f" | {s['latency_p50']}ms | {s['latency_p95']}ms |"
+                f"| {s['profile']} | {comp} | {lbl} | {s['latency_p50']}ms | {s['latency_p95']}ms |"
             )
 
     # Per-profile detail sections
@@ -208,7 +250,7 @@ def write_report(
                 for r in failures:
                     flights = r.get("flights", [])
                     route = (
-                        f"{flights[0].get('origin_iata','?')}→{flights[0].get('destination_iata','?')}"
+                        f"{flights[0].get('origin_iata', '?')}→{flights[0].get('destination_iata', '?')}"
                         if flights
                         else "?"
                     )
@@ -222,7 +264,7 @@ def write_report(
                         err_short = "429 TPS"
                     else:
                         err_short = err[:60]
-                    lines.append(f"| {r.get('id','?')} | {route} | {err_short} |")
+                    lines.append(f"| {r.get('id', '?')} | {route} | {err_short} |")
             else:
                 lines.append("*(none)*")
 
@@ -232,16 +274,20 @@ def write_report(
             ]
             lines.append("\n### Label mismatches (archetypes produced, wrong label selected)")
             if mismatches:
-                lines.append("| Scenario | Expected value-id | Got value-id | Expected exp-id | Got exp-id |")
+                lines.append(
+                    "| Scenario | Expected value-id | Got value-id | Expected exp-id | Got exp-id |"
+                )  # noqa: E501
                 lines.append("|---|---|---|---|---|")
                 for r in mismatches:
-                    lines.append(f"| {r.get('id','?')} | (see JSONL) | (see JSONL) | (see JSONL) | (see JSONL) |")
+                    lines.append(
+                        f"| {r.get('id', '?')} | (see JSONL) | (see JSONL) | (see JSONL) | (see JSONL) |"
+                    )  # noqa: E501
             else:
                 lines.append("*(none)*")
 
             # High-variance archetypes
             hv_rows = []
-            archetypes = []
+            archetypes = []  # noqa: F841
             for r in scored:
                 for i, js in enumerate(r.get("judge_scores", [])):
                     if js.get("high_variance"):

@@ -2,10 +2,15 @@
 
 Usage:
     python -m evals.optimizer.runner                    # dry run (no LLM calls)
-    python -m evals.optimizer.runner --profile demo-haiku
-    python -m evals.optimizer.runner --profile demo-haiku --profile demo-llama
+    python -m evals.optimizer.runner --profile demo-llama
+    python -m evals.optimizer.runner --profile demo-llama --profile demo-deepseek-v4
     python -m evals.optimizer.runner --all-profiles     # all active profiles
     python -m evals.optimizer.runner --dry-run          # deterministic only, no LLM
+
+Default profiles: demo-llama, demo-deepseek-v4 (both free tier).
+Haiku is excluded from defaults — Phase 2C.1 baseline proved Llama matches Haiku on
+label correctness and coherence within margin. Use --profile demo-haiku explicitly
+when comparing against the paid Anthropic baseline.
 
 Output: evals/optimizer/runs/<ISO-timestamp>_<profile>.jsonl
 """
@@ -28,13 +33,23 @@ from optimizer.throttle import TPM_LIMITS, ThrottledLLMClient, TokenTracker
 
 from travel_agent.agents.optimizer import OptimizerAgent
 from travel_agent.coordinator.state import FlightOption, RequestState, Window
+from travel_agent.observability.pricing import compute_cost
 from travel_agent.providers.synthetic import SyntheticProvider
 
 _RUNS_DIR = Path(__file__).parent / "runs"
-# Profiles that are currently active in llm_routing.yaml.
+
+# Token estimates for cost calculation — derived from Phase 2C.2 baseline runs.
+# 2 explain calls + 1 compare call per scenario; token counts are typical medians.
+_EST_EXPLAIN_IN = 1141
+_EST_EXPLAIN_OUT = 88
+_EST_COMPARE_IN = 1364
+_EST_COMPARE_OUT = 190
+# Active profiles for routine eval (free-tier only).
+# demo-haiku excluded 2026-05-18: Phase 2C.1 baseline proved Llama matches Haiku on
+# label correctness and coherence — Haiku is opt-in via --profile demo-haiku.
 # demo-qwen demoted 2026-05-16: OpenRouter removed qwen-2.5-72b-instruct:free.
 # demo-deepseek-v4 added 2026-05-17: NIM fallback for Groq quota exhaustion.
-_PROFILES = ["demo-haiku", "demo-llama", "demo-deepseek-v4"]
+_PROFILES = ["demo-llama", "demo-deepseek-v4"]
 
 _logger = structlog.get_logger(__name__)
 
@@ -157,6 +172,12 @@ async def run_profile(profile: str, scenarios: list[dict], dry_run: bool) -> lis
             continue
 
         archetypes = [a.model_dump(mode="json") for a in state.archetypes]
+        n_arch = len(archetypes)
+        cost_est = compute_cost(
+            model,
+            _EST_EXPLAIN_IN * n_arch + _EST_COMPARE_IN,
+            _EST_EXPLAIN_OUT * n_arch + _EST_COMPARE_OUT,
+        )
         results.append(
             {
                 **scenario,
@@ -164,6 +185,7 @@ async def run_profile(profile: str, scenarios: list[dict], dry_run: bool) -> lis
                 "model": model,
                 "archetypes": archetypes,
                 "latency_ms": round(latency_ms, 1),
+                "cost_usd_estimate": cost_est,
             }
         )
 
