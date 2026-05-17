@@ -24,8 +24,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 import structlog
-
 from optimizer.throttle import TPM_LIMITS, ThrottledLLMClient, TokenTracker
+
 from travel_agent.agents.optimizer import OptimizerAgent
 from travel_agent.coordinator.state import FlightOption, RequestState, Window
 from travel_agent.providers.synthetic import SyntheticProvider
@@ -37,6 +37,32 @@ _RUNS_DIR = Path(__file__).parent / "runs"
 _PROFILES = ["demo-haiku", "demo-llama", "demo-deepseek-v4"]
 
 _logger = structlog.get_logger(__name__)
+
+
+def _resolve_client_and_model(profile: str, routing: dict, profile_cfg: dict) -> tuple[object, str]:
+    """Return (client, model) for flat or agent-routed profiles."""
+    from travel_agent.llm import (  # noqa: PLC0415
+        get_llm_client_and_model,
+        get_llm_client_for_provider,
+    )
+
+    provider = profile_cfg.get("provider", "")
+    if "model" in profile_cfg:
+        return get_llm_client_for_provider(provider), profile_cfg["model"]
+    return get_llm_client_and_model("optimizer", profile)
+
+
+def _build_nim_fallback(routing: dict) -> tuple[object | None, str]:
+    """Return (fallback_client, fallback_model) if NVIDIA_API_KEY is set, else (None, '')."""
+    from travel_agent.llm import get_llm_client_for_provider  # noqa: PLC0415
+
+    if not os.environ.get("NVIDIA_API_KEY"):
+        return None, ""
+    nim_cfg = routing.get("demo-deepseek-v4", {})
+    if nim_cfg and "model" in nim_cfg:
+        client = get_llm_client_for_provider(nim_cfg["provider"])
+        return client, nim_cfg["model"]
+    return None, ""
 
 
 def _make_flight_sets() -> list[dict]:
@@ -82,32 +108,29 @@ async def run_profile(profile: str, scenarios: list[dict], dry_run: bool) -> lis
         model = "dry-run"
     else:
         try:
-            from travel_agent.llm import get_llm_client_and_model  # noqa: PLC0415
-            from travel_agent.llm.routing import get_provider_for_profile, load_routing_config  # noqa: PLC0415
+            from travel_agent.llm.routing import load_routing_config  # noqa: PLC0415
 
-            if profile not in load_routing_config():
+            routing = load_routing_config()
+            if profile not in routing:
                 _logger.warning(
                     "eval_profile_skipped",
                     profile=profile,
                     reason="profile not found in llm_routing.yaml (demoted or commented out)",
                 )
                 return []
-            client, model = get_llm_client_and_model("optimizer", profile)
 
-            # Wrap with token-rate throttle for providers that have TPM limits
-            provider = get_provider_for_profile(profile)
+            profile_cfg = routing[profile]
+            provider = profile_cfg.get("provider", "")
+            client, model = _resolve_client_and_model(profile, routing, profile_cfg)
+
             if provider in TPM_LIMITS:
                 tracker = TokenTracker(TPM_LIMITS[provider])
-                fallback_client = None
-                fallback_model = ""
-                if os.environ.get("NVIDIA_API_KEY"):
-                    try:
-                        fallback_client, fallback_model = get_llm_client_and_model(
-                            "optimizer", "demo-deepseek-v4"
-                        )
-                    except Exception as fb_exc:
-                        _logger.warning("nim_fallback_unavailable", reason=str(fb_exc))
-                elif profile != "demo-deepseek-v4":
+                try:
+                    fallback_client, fallback_model = _build_nim_fallback(routing)
+                except Exception as fb_exc:
+                    _logger.warning("nim_fallback_unavailable", reason=str(fb_exc))
+                    fallback_client, fallback_model = None, ""
+                if fallback_client is None and profile != "demo-deepseek-v4":
                     _logger.warning(
                         "nim_fallback_disabled",
                         reason="NVIDIA_API_KEY not set — 429s will not fall back to NIM",

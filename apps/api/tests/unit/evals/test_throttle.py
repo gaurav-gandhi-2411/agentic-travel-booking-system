@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 import time
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -13,7 +13,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "src"))
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "evals"))
 
 from optimizer.throttle import ThrottledLLMClient, TokenTracker
-from travel_agent.llm.base import LLMError, LLMResponse, Message, ToolCall
+
+from travel_agent.llm.base import LLMError, LLMResponse, Message
 
 
 def _response(input_tokens: int = 300, output_tokens: int = 50) -> LLMResponse:
@@ -108,9 +109,11 @@ async def test_throttled_client_sleeps_when_near_limit(monkeypatch: pytest.Monke
     inner = AsyncMock()
     inner.chat = AsyncMock(return_value=_response(10, 10))
 
-    # Pre-fill tracker so next call would exceed limit
-    tracker = TokenTracker(tpm_limit=500)
-    tracker.record(450)  # 450 + 600 estimate > 500 → should sleep
+    # Pre-fill tracker so next call would exceed limit.
+    # tpm_limit must exceed _CALL_TOKEN_ESTIMATE (600) so that the freeable events
+    # cover needed_to_free — otherwise wait_seconds hits the fallthrough path (returns 0.0).
+    tracker = TokenTracker(tpm_limit=5_000)
+    tracker.record(4_900)  # 4900 + 600 estimate = 5500 > 5000 → needed_to_free=500
 
     sleep_calls: list[float] = []
 
@@ -153,7 +156,7 @@ async def test_throttled_client_falls_back_on_429() -> None:
 
     tracker = TokenTracker(tpm_limit=5_000)
     client = ThrottledLLMClient(
-        inner, tracker, fallback=fallback, fallback_model="deepseek-ai/deepseek-v4-pro"
+        inner, tracker, fallback=fallback, fallback_model="deepseek-ai/deepseek-v4-flash"
     )
     resp = await client.chat(_msg(), model="llama-3.3-70b-versatile", max_tokens=256)
 
@@ -161,7 +164,7 @@ async def test_throttled_client_falls_back_on_429() -> None:
     fallback.chat.assert_called_once()
     # fallback is called with fallback_model, not original model
     call_kwargs = fallback.chat.call_args
-    assert call_kwargs.kwargs["model"] == "deepseek-ai/deepseek-v4-pro"
+    assert call_kwargs.kwargs["model"] == "deepseek-ai/deepseek-v4-flash"
 
 
 async def test_throttled_client_reraises_non_429_errors() -> None:
@@ -172,6 +175,21 @@ async def test_throttled_client_reraises_non_429_errors() -> None:
 
     with pytest.raises(LLMError, match="503"):
         await client.chat(_msg(), model="test", max_tokens=256)
+
+
+def test_tracker_wait_returns_zero_when_estimate_exceeds_limit() -> None:
+    """When estimate alone exceeds the limit, wait_seconds returns 0 (not infinite sleep).
+
+    Regression guard for the fallthrough path in wait_seconds(). Previously returned
+    self._window (60s), which would cause a repeated sleep loop because the window
+    never frees enough capacity when estimated_next > tpm_limit.
+    """
+    tracker = TokenTracker(tpm_limit=500)
+    tracker.record(100)
+    # estimated_next=600 > limit=500 → needed_to_free=200, but freed loop can only
+    # free 100 (the one event) → fallthrough path
+    wait = tracker.wait_seconds(estimated_next=600)
+    assert wait == 0.0, "oversized estimate must not trigger infinite sleep"
 
 
 async def test_throttled_client_reraises_429_when_no_fallback() -> None:
@@ -193,7 +211,7 @@ async def test_throttled_client_fallback_records_tokens() -> None:
 
     tracker = TokenTracker(tpm_limit=5_000)
     client = ThrottledLLMClient(
-        inner, tracker, fallback=fallback, fallback_model="deepseek-ai/deepseek-v4-pro"
+        inner, tracker, fallback=fallback, fallback_model="deepseek-ai/deepseek-v4-flash"
     )
     await client.chat(_msg(), model="test", max_tokens=256)
 

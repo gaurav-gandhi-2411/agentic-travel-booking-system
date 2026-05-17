@@ -18,10 +18,12 @@ from travel_agent.llm.routing import (
 )
 
 # demo-qwen demoted 2026-05-16: OpenRouter removed qwen-2.5-72b-instruct:free.
-# Judge profiles (eval-judge-*) are flat model+provider configs, not agent-routed.
-_AGENT_PROFILES = {"local", "free", "prod", "eval", "demo", "demo-haiku", "demo-llama", "demo-deepseek-v4"}
+# Agent profiles: full per-agent model keys. Flat profiles: single model + provider.
+_AGENT_PROFILES = {"local", "free", "prod", "eval", "demo", "demo-haiku", "demo-llama"}
+# Flat profiles: model+provider only (no per-agent keys). Same skip logic as judge profiles.
+_FLAT_PROVIDER_PROFILES = {"demo-deepseek-v4"}
 _JUDGE_PROFILES = {"eval-judge-qwen3-32b", "eval-judge-sonnet"}
-_EXPECTED_PROFILES = _AGENT_PROFILES | _JUDGE_PROFILES
+_EXPECTED_PROFILES = _AGENT_PROFILES | _FLAT_PROVIDER_PROFILES | _JUDGE_PROFILES
 
 
 @pytest.fixture(autouse=True)
@@ -38,8 +40,8 @@ def test_all_profiles_present() -> None:
 def test_all_agents_in_all_profiles() -> None:
     config = load_routing_config()
     for profile_name, profile in config.items():
-        if profile_name in _JUDGE_PROFILES:
-            continue  # judge profiles are flat model+provider — no agent keys
+        if profile_name in _JUDGE_PROFILES | _FLAT_PROVIDER_PROFILES:
+            continue  # flat profiles have no per-agent keys
         missing = AGENT_KEYS - set(profile.keys())
         assert not missing, f"Profile {profile_name!r} missing agents: {missing}"
 
@@ -126,10 +128,17 @@ def test_demo_llama_profile_uses_groq() -> None:
     assert "llama" in config["demo-llama"]["optimizer"]
 
 
-def test_demo_deepseek_v4_profile_uses_nvidia() -> None:
+def test_demo_deepseek_v4_profile_uses_nvidia_flash() -> None:
     config = load_routing_config()
-    assert config["demo-deepseek-v4"]["provider"] == "nvidia"
-    assert config["demo-deepseek-v4"]["optimizer"] == "deepseek-ai/deepseek-v4-pro"
+    profile = config["demo-deepseek-v4"]
+    assert profile["provider"] == "nvidia"
+    assert profile["model"] == "deepseek-ai/deepseek-v4-flash"
+    # Flat profile: no per-agent keys
+    from travel_agent.llm.routing import AGENT_KEYS
+
+    assert not AGENT_KEYS.intersection(profile.keys()), (
+        "demo-deepseek-v4 must be flat (model+provider only), not agent-routed"
+    )
 
 
 def test_demo_qwen_profile_absent() -> None:

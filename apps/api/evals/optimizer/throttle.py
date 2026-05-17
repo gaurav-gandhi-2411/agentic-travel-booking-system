@@ -69,7 +69,15 @@ class TokenTracker:
             if freed >= needed_to_free:
                 wait = (ts + self._window) - time.monotonic() + 0.5
                 return max(0.0, wait)
-        return self._window  # fallback: wait full window
+        # Reached only when estimated_next alone exceeds the limit — no amount of waiting
+        # would satisfy the check. Proceed and let the 429 fallback handle it.
+        _logger.warning(
+            "throttle_estimate_exceeds_limit",
+            estimated=estimated_next,
+            limit=self._limit,
+            current=current,
+        )
+        return 0.0
 
 
 class ThrottledLLMClient:
@@ -93,7 +101,7 @@ class ThrottledLLMClient:
         self._fallback = fallback
         self._fallback_model = fallback_model
 
-    async def chat(
+    async def chat(  # noqa: PLR0913
         self,
         messages: list[Message],
         *,

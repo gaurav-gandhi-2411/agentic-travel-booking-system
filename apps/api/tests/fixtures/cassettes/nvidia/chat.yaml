@@ -1,6 +1,6 @@
 interactions:
 - request:
-    body: '{"model":"deepseek-ai/deepseek-v4-pro","messages":[{"role":"user","content":"Say hi in one word"}],"max_tokens":2048,"temperature":0.0}'
+    body: '{"model":"deepseek-ai/deepseek-v4-flash","messages":[{"role":"user","content":"Say hi in one word"}],"max_tokens":2048,"temperature":0.0}'
     headers:
       Accept:
       - application/json
@@ -10,7 +10,7 @@ interactions:
     uri: https://integrate.api.nvidia.com/v1/chat/completions
   response:
     body:
-      string: '{"id":"chatcmpl-nim-001","object":"chat.completion","created":1715000000,"model":"deepseek-ai/deepseek-v4-pro","choices":[{"index":0,"message":{"role":"assistant","content":"Hello from NIM!","tool_calls":null},"logprobs":null,"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":4,"total_tokens":14}}'
+      string: '{"id":"chatcmpl-nim-001","object":"chat.completion","created":1715000000,"model":"deepseek-ai/deepseek-v4-flash","choices":[{"index":0,"message":{"role":"assistant","content":"Hello from NIM!","tool_calls":null},"logprobs":null,"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":4,"total_tokens":14}}'
     headers:
       Content-Type:
       - application/json

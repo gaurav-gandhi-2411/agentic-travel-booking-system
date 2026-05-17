@@ -118,9 +118,9 @@ async def test_nvidia_nim_chat_replays_cassette(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setenv("NVIDIA_API_KEY", "nvapi-test-key")
     with _VCR.use_cassette("nvidia/chat.yaml"):
         adapter = NIMAdapter()
-        response = await adapter.chat(_MSG, model="deepseek-ai/deepseek-v4-pro")
+        response = await adapter.chat(_MSG, model="deepseek-ai/deepseek-v4-flash")
     assert response.content == "Hello from NIM!"
-    assert response.model == "deepseek-ai/deepseek-v4-pro"
+    assert response.model == "deepseek-ai/deepseek-v4-flash"
     assert response.input_tokens == 10
     assert response.output_tokens == 4
     assert response.tool_calls == []
@@ -131,7 +131,7 @@ async def test_nvidia_nim_tool_call_via_cassette(monkeypatch: pytest.MonkeyPatch
     with _VCR.use_cassette("nvidia/chat_tool_call.yaml"):
         adapter = NIMAdapter()
         response = await adapter.chat(
-            _TOOL_MSG, model="deepseek-ai/deepseek-v4-pro", tools=[_FLIGHT_TOOL]
+            _TOOL_MSG, model="deepseek-ai/deepseek-v4-flash", tools=[_FLIGHT_TOOL]
         )
     assert len(response.tool_calls) == 1
     assert response.tool_calls[0].name == "search_flights"

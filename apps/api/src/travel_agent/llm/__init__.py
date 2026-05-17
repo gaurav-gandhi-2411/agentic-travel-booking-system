@@ -56,6 +56,15 @@ def _build_client_for_provider(provider: str) -> LLMClient:
             raise ValueError(msg)
 
 
+def get_llm_client_for_provider(provider: str) -> LLMClient:
+    """Instantiate a client for a named provider without an agent or profile lookup.
+
+    Used for flat profiles (NIM-style) where the model key is stored directly
+    on the profile rather than under per-agent keys.
+    """
+    return _build_client_for_provider(provider)
+
+
 def get_llm_client_and_model(agent: str, profile_name: str) -> tuple[LLMClient, str]:
     """Return (client, model_id) for *agent* under an explicit named profile.
 
@@ -89,4 +98,5 @@ __all__ = [
     "ToolDefinition",
     "get_llm_client",
     "get_llm_client_and_model",
+    "get_llm_client_for_provider",
 ]
