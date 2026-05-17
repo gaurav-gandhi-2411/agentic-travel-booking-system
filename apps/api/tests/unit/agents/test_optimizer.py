@@ -21,8 +21,8 @@ from travel_agent.coordinator.state import (
     TripType,
     Window,
 )
-from travel_agent.llm.base import LLMClient, LLMResponse, ToolCall
 from travel_agent.llm.anthropic import AnthropicAdapter
+from travel_agent.llm.base import LLMClient, LLMResponse, ToolCall
 
 _WINDOW = Window(start_date=date(2026, 6, 1), end_date=date(2026, 6, 7))
 
@@ -291,7 +291,11 @@ def test_system_prompt_no_departure_time_guidance() -> None:
     """
     prompt_path = (
         Path(__file__).parent.parent.parent.parent
-        / "src" / "travel_agent" / "agents" / "prompts" / "optimizer_system.txt"
+        / "src"
+        / "travel_agent"
+        / "agents"
+        / "prompts"
+        / "optimizer_system.txt"
     )
     text = prompt_path.read_text()
     text_lower = text.lower()
@@ -299,11 +303,14 @@ def test_system_prompt_no_departure_time_guidance() -> None:
     assert "or arrival time" not in text_lower, (
         "Old 'mention ... or arrival time' instruction must be removed"
     )
-    assert "daytime arrival" not in text_lower, "Old best-experience 'daytime arrival' guidance must be removed"
+    assert "daytime arrival" not in text_lower, (
+        "Old best-experience 'daytime arrival' guidance must be removed"
+    )
     # Prohibition must be present
-    assert "do not" in text_lower and "departure times" in text_lower, (
+    assert "do not" in text_lower, (
         "Explicit 'Do NOT ... departure times' prohibition must be present"
     )
+    assert "departure times" in text_lower, "Prohibition text must reference departure times"
 
 
 def test_flight_summary_excludes_departure_at() -> None:
