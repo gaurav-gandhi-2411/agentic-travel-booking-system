@@ -74,6 +74,75 @@ def score_run_file(path: Path) -> list[dict]:
     return [score_record(r) for r in records]
 
 
+def _provider_from_model(model: str) -> str:
+    """Map a model name to its billing provider."""
+    if model.startswith("claude-"):
+        return "anthropic"
+    if model.startswith(("llama", "qwen")):
+        return "groq"
+    if model.startswith(("deepseek-ai/", "nvidia/")):
+        return "nvidia"
+    return "unknown"
+
+
+def _cost_summary(scored: list[dict]) -> dict:
+    """Aggregate per-provider spend and call counts across all completed records."""
+    spend: dict[str, float] = {"anthropic": 0.0, "groq": 0.0, "nvidia": 0.0}
+    calls: dict[str, int] = {"anthropic": 0, "groq": 0, "nvidia": 0}
+    calls_per_scenario = 3  # 2 explain + 1 compare
+
+    for rec in scored:
+        if not rec.get("completed"):
+            continue
+        model = rec.get("model", "")
+        provider = _provider_from_model(model)
+        if provider in calls:
+            calls[provider] += calls_per_scenario
+            spend[provider] += rec.get("cost_usd_estimate", 0.0)
+
+    return {"spend": spend, "calls": calls}
+
+
+def _format_provider_spend(label: str, usd: float, n_calls: int, *, free_tier: bool) -> str:
+    """Return the spend line for one provider."""
+    if n_calls == 0:
+        return f"  {label}: $0 (no calls)"
+    if free_tier:
+        return f"  {label}: $0 ({n_calls} calls, free tier)"
+    # Paid provider: distinguish tracked spend from missing cost_usd_estimate field
+    if usd > 0:
+        return f"  !! {label}: ${usd:.5f} ({n_calls} calls)"
+    return f"  {label}: not tracked in this run ({n_calls} calls)"
+
+
+def _print_cost_summary(scored: list[dict]) -> None:
+    cs = _cost_summary(scored)
+    print(
+        _format_provider_spend(
+            "Anthropic spend this run",
+            cs["spend"]["anthropic"],
+            cs["calls"]["anthropic"],
+            free_tier=False,
+        )
+    )
+    print(
+        _format_provider_spend(
+            "Groq spend this run",
+            cs["spend"]["groq"],
+            cs["calls"]["groq"],
+            free_tier=True,
+        )
+    )
+    print(
+        _format_provider_spend(
+            "NVIDIA NIM spend this run",
+            cs["spend"]["nvidia"],
+            cs["calls"]["nvidia"],
+            free_tier=True,
+        )
+    )
+
+
 def _coherence_summary(scored: list[dict]) -> dict:
     """Aggregate coherence metrics across all scored records."""
     all_coh: list[int] = []
@@ -124,6 +193,7 @@ def print_summary(scored: list[dict], profile: str) -> dict:
         f"Label-correct (completed): {label_correct_on_completed}/{completed} ({label_pct}%)"
     )
     print(f"  Latency p50: {p50}ms  p95: {p95}ms")
+    _print_cost_summary(scored)
     if coh["coherence_avg"] is not None:
         print(
             f"  Coherence avg: {coh['coherence_avg']}  "
@@ -145,7 +215,7 @@ def print_summary(scored: list[dict], profile: str) -> dict:
     }
 
 
-def write_report(
+def write_report(  # noqa: PLR0912, PLR0915
     summaries: list[dict],
     out_path: Path,
     scored_by_profile: dict[str, list[dict]] | None = None,
@@ -163,10 +233,7 @@ def write_report(
         )
         sep = "|---|---|---|---|---|---|---|---|---|"
     else:
-        header = (
-            "| Profile | Completion | Label % (completed)"
-            " | Latency p50 | Latency p95 |"
-        )
+        header = "| Profile | Completion | Label % (completed) | Latency p50 | Latency p95 |"
         sep = "|---|---|---|---|---|"
 
     lines = [
@@ -190,8 +257,7 @@ def write_report(
             )
         else:
             lines.append(
-                f"| {s['profile']} | {comp} | {lbl}"
-                f" | {s['latency_p50']}ms | {s['latency_p95']}ms |"
+                f"| {s['profile']} | {comp} | {lbl} | {s['latency_p50']}ms | {s['latency_p95']}ms |"
             )
 
     # Per-profile detail sections
@@ -207,11 +273,12 @@ def write_report(
                 lines.append("|---|---|---|")
                 for r in failures:
                     flights = r.get("flights", [])
-                    route = (
-                        f"{flights[0].get('origin_iata','?')}→{flights[0].get('destination_iata','?')}"
-                        if flights
-                        else "?"
-                    )
+                    if flights:
+                        orig = flights[0].get("origin_iata", "?")
+                        dest = flights[0].get("destination_iata", "?")
+                        route = f"{orig}→{dest}"
+                    else:
+                        route = "?"
                     err = str(r.get("error", "unknown"))
                     # Summarise to fit a table cell
                     if "tokens per minute" in err:
@@ -222,7 +289,7 @@ def write_report(
                         err_short = "429 TPS"
                     else:
                         err_short = err[:60]
-                    lines.append(f"| {r.get('id','?')} | {route} | {err_short} |")
+                    lines.append(f"| {r.get('id', '?')} | {route} | {err_short} |")
             else:
                 lines.append("*(none)*")
 
@@ -232,16 +299,21 @@ def write_report(
             ]
             lines.append("\n### Label mismatches (archetypes produced, wrong label selected)")
             if mismatches:
-                lines.append("| Scenario | Expected value-id | Got value-id | Expected exp-id | Got exp-id |")
+                lines.append(
+                    "| Scenario | Expected value-id | Got value-id | Expected exp-id | Got exp-id |"
+                )
                 lines.append("|---|---|---|---|---|")
                 for r in mismatches:
-                    lines.append(f"| {r.get('id','?')} | (see JSONL) | (see JSONL) | (see JSONL) | (see JSONL) |")
+                    lines.append(
+                        f"| {r.get('id', '?')} | (see JSONL) | (see JSONL)"
+                        " | (see JSONL) | (see JSONL) |"
+                    )
             else:
                 lines.append("*(none)*")
 
             # High-variance archetypes
             hv_rows = []
-            archetypes = []
+            archetypes = []  # noqa: F841
             for r in scored:
                 for i, js in enumerate(r.get("judge_scores", [])):
                     if js.get("high_variance"):
@@ -266,6 +338,47 @@ async def _run_coherence(scored: list[dict], judge_profile: str) -> list[dict]:
 
     judge = CoherenceJudge(judge_profile=judge_profile)
     return await score_all_archetypes(scored, judge)
+
+
+def _check_gates(summaries: list[dict]) -> bool:
+    """Return True if every profile clears all quality thresholds; print violations."""
+    from evals.optimizer.thresholds import (  # noqa: PLC0415
+        THRESHOLD_COHERENCE_MIN,
+        THRESHOLD_COMPLETION_MIN,
+        THRESHOLD_HIGH_VARIANCE_MAX_PCT,
+        THRESHOLD_LABEL_CORRECT_COMPLETED,
+    )
+
+    violations: list[str] = []
+    for s in summaries:
+        p = s["profile"]
+        total = s["total"] or 1
+        completion = s["completed"] / total
+        if completion < THRESHOLD_COMPLETION_MIN:
+            violations.append(f"{p}: completion {completion:.3f} < {THRESHOLD_COMPLETION_MIN}")
+        if s["completed"]:
+            label_rate = s["label_correct_on_completed"] / s["completed"]
+            if label_rate < THRESHOLD_LABEL_CORRECT_COMPLETED:
+                violations.append(
+                    f"{p}: label_correct {label_rate:.3f} < {THRESHOLD_LABEL_CORRECT_COMPLETED}"
+                )
+        if s.get("coherence_avg") is not None and s["coherence_avg"] < THRESHOLD_COHERENCE_MIN:
+            violations.append(
+                f"{p}: coherence_avg {s['coherence_avg']} < {THRESHOLD_COHERENCE_MIN}"
+            )
+        if s.get("high_variance_count") is not None and s["completed"]:
+            hv_pct = s["high_variance_count"] / (s["completed"] * 2)
+            if hv_pct > THRESHOLD_HIGH_VARIANCE_MAX_PCT:
+                violations.append(
+                    f"{p}: high_variance_pct {hv_pct:.3f} > {THRESHOLD_HIGH_VARIANCE_MAX_PCT}"
+                )
+
+    if violations:
+        print("\n!! GATE VIOLATIONS — eval did not pass thresholds:")
+        for v in violations:
+            print(f"  {v}")
+        return False
+    return True
 
 
 def main() -> int:
@@ -301,7 +414,7 @@ def main() -> int:
 
     report_path = _REPORTS_DIR / f"{ts}_report.md"
     write_report(summaries, report_path, scored_by_profile=scored_by_profile)
-    return 0
+    return 0 if _check_gates(summaries) else 1
 
 
 if __name__ == "__main__":

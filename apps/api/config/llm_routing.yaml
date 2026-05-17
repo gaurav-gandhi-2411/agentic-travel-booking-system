@@ -76,6 +76,22 @@ profiles:
     conversation:   llama-3.3-70b-versatile
     provider:       groq
 
+  # ── demo-deepseek-v4 ─────────────────────────────────────────────────────────
+  # NVIDIA NIM profile — DeepSeek-V4-Flash via integrate.api.nvidia.com.
+  # Flat model+provider config (no per-agent keys); used by the eval runner
+  # both as a standalone profile and as the fallback when Groq hits TPM/TPD
+  # quota mid-batch (Issue #15).
+  # Free tier: 40 RPM (request-rate limited, not TPM-based).
+  # Requires NVIDIA_API_KEY (free dev tier at build.nvidia.com).
+  #
+  # Model suffix: -flash for free-tier latency. Do not change to -pro without
+  # rebenchmarking eval latency budgets (-pro is 1.6T params vs 284B for -flash).
+  demo-deepseek-v4:
+    provider:    nvidia
+    model:       deepseek-ai/deepseek-v4-flash
+    temperature: 0.0
+    max_tokens:  1024
+
   # ── demo-qwen ────────────────────────────────────────────────────────────────
   # DEMOTED 2026-05-16: OpenRouter removed qwen/qwen-2.5-72b-instruct:free
   # (HTTP 404 "No endpoints found"). Profile commented out until a replacement

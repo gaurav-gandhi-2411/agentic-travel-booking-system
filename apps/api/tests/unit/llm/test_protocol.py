@@ -19,6 +19,7 @@ from travel_agent.llm.base import (
     ToolDefinition,
 )
 from travel_agent.llm.groq import GroqAdapter
+from travel_agent.llm.nvidia import NIMAdapter
 from travel_agent.llm.ollama import OllamaAdapter
 from travel_agent.llm.openrouter import OpenRouterAdapter
 from travel_agent.llm.vllm import VLLMAdapter
@@ -54,6 +55,17 @@ def test_groq_raises_without_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("GROQ_API_KEY", raising=False)
     with pytest.raises(RuntimeError, match="GROQ_API_KEY"):
         GroqAdapter()
+
+
+def test_nvidia_nim_implements_protocol(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("NVIDIA_API_KEY", "nvapi-test-key")
+    assert isinstance(NIMAdapter(), LLMClient)
+
+
+def test_nvidia_nim_raises_without_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("NVIDIA_API_KEY", raising=False)
+    with pytest.raises(RuntimeError, match="NVIDIA_API_KEY"):
+        NIMAdapter()
 
 
 def test_anthropic_raises_without_api_key(monkeypatch: pytest.MonkeyPatch) -> None:

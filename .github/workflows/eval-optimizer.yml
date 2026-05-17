@@ -6,11 +6,16 @@ on:
   schedule:
     - cron: '0 3 * * *'  # nightly 03:00 UTC
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  eval-optimizer:
+  # PR smoke test — dry-run, no LLM keys required.
+  eval-smoke:
     if: >
-      github.event_name == 'schedule' ||
-      (github.event_name == 'pull_request' && github.event.label.name == 'run-optimizer-eval')
+      github.event_name == 'pull_request' &&
+      github.event.label.name == 'run-optimizer-eval'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -27,15 +32,73 @@ jobs:
         run: pip install -e ".[dev]"
 
       - name: Run optimizer eval (dry-run — no LLM keys required)
+        # Default profiles are demo-llama and demo-deepseek-v4 (both free tier).
+        # Haiku excluded from defaults — opt-in via --profile demo-haiku when comparing
+        # against the paid Anthropic baseline (Phase 2C.1 baseline already proves parity).
         run: python -m evals.optimizer.runner --dry-run --all-profiles
 
       - name: Score and report
-        # TODO(Phase 2C.1 S3 / Issue #8): add --judge-profile eval-judge-qwen3-32b
-        # and explicit --run targets so coherence is actually evaluated in CI.
         run: python -m evals.optimizer.scorer --all
 
       - name: Upload report
         uses: actions/upload-artifact@v4
         with:
-          name: optimizer-eval-report
+          name: optimizer-eval-report-smoke
           path: apps/api/evals/optimizer/reports/
+
+  # Nightly eval — real LLM calls, coherence judge, threshold gates.
+  eval-nightly:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Run optimizer eval
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+        run: python -m evals.optimizer.runner --all-profiles
+
+      - name: Score and check gates
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: >
+          python -m evals.optimizer.scorer
+          --all
+          --judge-profile eval-judge-qwen3-32b
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: optimizer-eval-report-nightly
+          path: apps/api/evals/optimizer/reports/
+
+      - name: Open failure issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          REPORT_FILE=$(ls -t evals/optimizer/reports/*.md 2>/dev/null | head -1)
+          REPORT_BODY=""
+          if [ -n "$REPORT_FILE" ]; then
+            REPORT_BODY=$(cat "$REPORT_FILE")
+          fi
+          gh issue create \
+            --title "Nightly eval failure $(date -u '+%Y-%m-%d')" \
+            --label "nightly-eval-failure" \
+            --body "$(printf 'Nightly optimizer eval failed on %s UTC.\n\nWorkflow run: %s\n\n<details><summary>Report</summary>\n\n```\n%s\n```\n</details>' \
+              "$(date -u)" \
+              "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+              "$REPORT_BODY")"

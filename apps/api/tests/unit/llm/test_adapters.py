@@ -20,6 +20,7 @@ import vcr
 from travel_agent.llm.anthropic import AnthropicAdapter
 from travel_agent.llm.base import Message, ToolDefinition
 from travel_agent.llm.groq import GroqAdapter
+from travel_agent.llm.nvidia import NIMAdapter
 from travel_agent.llm.ollama import OllamaAdapter
 from travel_agent.llm.openrouter import OpenRouterAdapter
 from travel_agent.llm.vllm import VLLMAdapter
@@ -108,6 +109,40 @@ async def test_groq_chat_replays_cassette(monkeypatch: pytest.MonkeyPatch) -> No
     assert response.input_tokens == 11
     assert response.output_tokens == 4
     assert response.tool_calls == []
+
+
+# ── NVIDIA NIM ────────────────────────────────────────────────────────────────
+
+
+async def test_nvidia_nim_chat_replays_cassette(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("NVIDIA_API_KEY", "nvapi-test-key")
+    with _VCR.use_cassette("nvidia/chat.yaml"):
+        adapter = NIMAdapter()
+        response = await adapter.chat(_MSG, model="deepseek-ai/deepseek-v4-flash")
+    assert response.content == "Hello from NIM!"
+    assert response.model == "deepseek-ai/deepseek-v4-flash"
+    assert response.input_tokens == 10
+    assert response.output_tokens == 4
+    assert response.tool_calls == []
+
+
+async def test_nvidia_nim_tool_call_via_cassette(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("NVIDIA_API_KEY", "nvapi-test-key")
+    with _VCR.use_cassette("nvidia/chat_tool_call.yaml"):
+        adapter = NIMAdapter()
+        response = await adapter.chat(
+            _TOOL_MSG, model="deepseek-ai/deepseek-v4-flash", tools=[_FLIGHT_TOOL]
+        )
+    assert len(response.tool_calls) == 1
+    assert response.tool_calls[0].name == "search_flights"
+    assert response.tool_calls[0].input == {"origin": "BOM", "destination": "CDG"}
+    assert response.content == ""
+
+
+async def test_nvidia_nim_raises_without_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("NVIDIA_API_KEY", raising=False)
+    with pytest.raises(RuntimeError, match="NVIDIA_API_KEY"):
+        NIMAdapter()
 
 
 # ── vLLM ──────────────────────────────────────────────────────────────────────

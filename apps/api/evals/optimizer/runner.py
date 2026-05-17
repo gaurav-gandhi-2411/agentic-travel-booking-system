@@ -1,11 +1,16 @@
 """Optimizer eval runner.
 
 Usage:
-    python -m evals.optimizer.runner                    # dry run (no LLM calls)
-    python -m evals.optimizer.runner --profile demo-haiku
-    python -m evals.optimizer.runner --profile demo-haiku --profile demo-llama
+    python -m evals.optimizer.runner                    # default profiles (llama + deepseek-v4)
+    python -m evals.optimizer.runner --profile demo-llama
+    python -m evals.optimizer.runner --profile demo-llama --profile demo-deepseek-v4
     python -m evals.optimizer.runner --all-profiles     # all active profiles
     python -m evals.optimizer.runner --dry-run          # deterministic only, no LLM
+
+Default profiles: demo-llama, demo-deepseek-v4 (both free tier).
+Haiku is excluded from defaults — Phase 2C.1 baseline proved Llama matches Haiku on
+label correctness and coherence within margin. Use --profile demo-haiku explicitly
+when comparing against the paid Anthropic baseline.
 
 Output: evals/optimizer/runs/<ISO-timestamp>_<profile>.jsonl
 """
@@ -15,6 +20,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import sys
 import time
 from datetime import UTC, datetime
@@ -23,17 +29,55 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 import structlog
+from optimizer.throttle import TPM_LIMITS, ThrottledLLMClient, TokenTracker
 
 from travel_agent.agents.optimizer import OptimizerAgent
 from travel_agent.coordinator.state import FlightOption, RequestState, Window
+from travel_agent.observability.pricing import compute_cost
 from travel_agent.providers.synthetic import SyntheticProvider
 
 _RUNS_DIR = Path(__file__).parent / "runs"
-# Profiles that are currently active in llm_routing.yaml.
+
+# Token estimates for cost calculation — derived from Phase 2C.2 baseline runs.
+# 2 explain calls + 1 compare call per scenario; token counts are typical medians.
+_EST_EXPLAIN_IN = 1141
+_EST_EXPLAIN_OUT = 88
+_EST_COMPARE_IN = 1364
+_EST_COMPARE_OUT = 190
+# Active profiles for routine eval (free-tier only).
+# demo-haiku excluded 2026-05-18: Phase 2C.1 baseline proved Llama matches Haiku on
+# label correctness and coherence — Haiku is opt-in via --profile demo-haiku.
 # demo-qwen demoted 2026-05-16: OpenRouter removed qwen-2.5-72b-instruct:free.
-_PROFILES = ["demo-haiku", "demo-llama"]
+# demo-deepseek-v4 added 2026-05-17: NIM fallback for Groq quota exhaustion.
+_PROFILES = ["demo-llama", "demo-deepseek-v4"]
 
 _logger = structlog.get_logger(__name__)
+
+
+def _resolve_client_and_model(profile: str, routing: dict, profile_cfg: dict) -> tuple[object, str]:
+    """Return (client, model) for flat or agent-routed profiles."""
+    from travel_agent.llm import (  # noqa: PLC0415
+        get_llm_client_and_model,
+        get_llm_client_for_provider,
+    )
+
+    provider = profile_cfg.get("provider", "")
+    if "model" in profile_cfg:
+        return get_llm_client_for_provider(provider), profile_cfg["model"]
+    return get_llm_client_and_model("optimizer", profile)
+
+
+def _build_nim_fallback(routing: dict) -> tuple[object | None, str]:
+    """Return (fallback_client, fallback_model) if NVIDIA_API_KEY is set, else (None, '')."""
+    from travel_agent.llm import get_llm_client_for_provider  # noqa: PLC0415
+
+    if not os.environ.get("NVIDIA_API_KEY"):
+        return None, ""
+    nim_cfg = routing.get("demo-deepseek-v4", {})
+    if nim_cfg and "model" in nim_cfg:
+        client = get_llm_client_for_provider(nim_cfg["provider"])
+        return client, nim_cfg["model"]
+    return None, ""
 
 
 def _make_flight_sets() -> list[dict]:
@@ -79,17 +123,36 @@ async def run_profile(profile: str, scenarios: list[dict], dry_run: bool) -> lis
         model = "dry-run"
     else:
         try:
-            from travel_agent.llm import get_llm_client_and_model  # noqa: PLC0415
             from travel_agent.llm.routing import load_routing_config  # noqa: PLC0415
 
-            if profile not in load_routing_config():
+            routing = load_routing_config()
+            if profile not in routing:
                 _logger.warning(
                     "eval_profile_skipped",
                     profile=profile,
                     reason="profile not found in llm_routing.yaml (demoted or commented out)",
                 )
                 return []
-            client, model = get_llm_client_and_model("optimizer", profile)
+
+            profile_cfg = routing[profile]
+            provider = profile_cfg.get("provider", "")
+            client, model = _resolve_client_and_model(profile, routing, profile_cfg)
+
+            if provider in TPM_LIMITS:
+                tracker = TokenTracker(TPM_LIMITS[provider])
+                try:
+                    fallback_client, fallback_model = _build_nim_fallback(routing)
+                except Exception as fb_exc:
+                    _logger.warning("nim_fallback_unavailable", reason=str(fb_exc))
+                    fallback_client, fallback_model = None, ""
+                if fallback_client is None and profile != "demo-deepseek-v4":
+                    _logger.warning(
+                        "nim_fallback_disabled",
+                        reason="NVIDIA_API_KEY not set — 429s will not fall back to NIM",
+                    )
+                client = ThrottledLLMClient(
+                    client, tracker, fallback=fallback_client, fallback_model=fallback_model
+                )
         except Exception as exc:
             _logger.warning("eval_profile_skipped", profile=profile, reason=str(exc))
             return []
@@ -109,6 +172,12 @@ async def run_profile(profile: str, scenarios: list[dict], dry_run: bool) -> lis
             continue
 
         archetypes = [a.model_dump(mode="json") for a in state.archetypes]
+        n_arch = len(archetypes)
+        cost_est = compute_cost(
+            model,
+            _EST_EXPLAIN_IN * n_arch + _EST_COMPARE_IN,
+            _EST_EXPLAIN_OUT * n_arch + _EST_COMPARE_OUT,
+        )
         results.append(
             {
                 **scenario,
@@ -116,6 +185,7 @@ async def run_profile(profile: str, scenarios: list[dict], dry_run: bool) -> lis
                 "model": model,
                 "archetypes": archetypes,
                 "latency_ms": round(latency_ms, 1),
+                "cost_usd_estimate": cost_est,
             }
         )
 
@@ -140,7 +210,7 @@ async def main() -> int:
     parser.add_argument("--dry-run", action="store_true", default=False)
     args = parser.parse_args()
 
-    profiles = _PROFILES if args.all_profiles else (args.profiles or ["demo-haiku"])
+    profiles = _PROFILES if args.all_profiles else (args.profiles or _PROFILES)
     scenarios = _make_flight_sets()
     print(f"Generated {len(scenarios)} flight scenarios")
 

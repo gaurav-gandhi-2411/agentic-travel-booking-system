@@ -22,6 +22,7 @@ from travel_agent.llm.base import (
     ToolDefinition,
 )
 from travel_agent.llm.groq import GroqAdapter
+from travel_agent.llm.nvidia import NIMAdapter
 from travel_agent.llm.ollama import OllamaAdapter
 from travel_agent.llm.openrouter import OpenRouterAdapter
 from travel_agent.llm.routing import (
@@ -43,14 +44,25 @@ def _build_client_for_provider(provider: str) -> LLMClient:
             return GroqAdapter()
         case "anthropic":
             return AnthropicAdapter()
+        case "nvidia":
+            return NIMAdapter()
         case "vllm":
             return VLLMAdapter()
         case _:
             msg = (
                 f"Unknown provider {provider!r} in routing config. "
-                "Valid providers: ollama, openrouter, groq, anthropic, vllm."
+                "Valid providers: ollama, openrouter, groq, anthropic, nvidia, vllm."
             )
             raise ValueError(msg)
+
+
+def get_llm_client_for_provider(provider: str) -> LLMClient:
+    """Instantiate a client for a named provider without an agent or profile lookup.
+
+    Used for flat profiles (NIM-style) where the model key is stored directly
+    on the profile rather than under per-agent keys.
+    """
+    return _build_client_for_provider(provider)
 
 
 def get_llm_client_and_model(agent: str, profile_name: str) -> tuple[LLMClient, str]:
@@ -86,4 +98,5 @@ __all__ = [
     "ToolDefinition",
     "get_llm_client",
     "get_llm_client_and_model",
+    "get_llm_client_for_provider",
 ]

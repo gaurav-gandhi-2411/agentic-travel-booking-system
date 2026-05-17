@@ -30,9 +30,15 @@ _RATES: dict[str, TokenRates] = {
     # Groq (https://console.groq.com/docs/pricing, 2026-05-16)
     # llama-3.3-70b free tier — $0 for now; paid tier exists
     "llama-3.3-70b-versatile": TokenRates(0.0, 0.0),  # free tier
+    # qwen3-32b on Groq free tier (judge profile eval-judge-qwen3-32b)
+    "qwen/qwen3-32b": TokenRates(0.0, 0.0),  # free tier
+    "qwen3-32b": TokenRates(0.0, 0.0),  # alias
     # OpenRouter Qwen free (https://openrouter.ai/qwen/qwen-2.5-72b-instruct:free, 2026-05-16)
     "qwen/qwen-2.5-72b-instruct:free": TokenRates(0.0, 0.0),  # free tier
     "qwen-2.5-72b-instruct": TokenRates(0.0, 0.0),  # alias
+    # NVIDIA NIM free tier (https://build.nvidia.com/deepseek-ai/deepseek-v4-flash, 2026-05-16)
+    "deepseek-ai/deepseek-v4-flash": TokenRates(0.0, 0.0),  # free tier (40 RPM)
+    "deepseek-ai/deepseek-v4-pro": TokenRates(0.0, 0.0),  # free tier
 }
 
 
