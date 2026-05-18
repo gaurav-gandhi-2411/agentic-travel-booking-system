@@ -71,7 +71,7 @@ function ArchetypeSkeleton() {
 export default function DemoClient() {
   const { start, refine, events, archetypes, status, error, noData, reset, lastQuery, requestId } = useSearchStream();
   const [profile, setProfile] = useProfilePreference();
-  const [activeProfile, setActiveProfile] = useState<LLMProfile>('demo-haiku');
+  const [activeProfile, setActiveProfile] = useState<LLMProfile>('demo-gpt-oss-120b');
   const [refineInput, setRefineInput] = useState('');
 
   // Cmd+K / Ctrl+K focuses the search textarea
