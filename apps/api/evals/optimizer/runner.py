@@ -127,6 +127,7 @@ def _make_flight_sets() -> list[dict]:
 
 async def run_profile(profile: str, scenarios: list[dict], dry_run: bool) -> list[dict]:
     """Run all scenarios under one profile. Returns list of result records."""
+    extra_params: dict | None = None
     if dry_run:
         client = None
         model = "dry-run"
@@ -146,6 +147,7 @@ async def run_profile(profile: str, scenarios: list[dict], dry_run: bool) -> lis
             profile_cfg = routing[profile]
             provider = profile_cfg.get("provider", "")
             client, model = _resolve_client_and_model(profile, routing, profile_cfg)
+            extra_params: dict | None = profile_cfg.get("extra_params") or None
 
             if provider in TPM_LIMITS or provider in RPM_LIMITS:
                 tpm_tracker = TokenTracker(TPM_LIMITS[provider]) if provider in TPM_LIMITS else None
@@ -175,7 +177,7 @@ async def run_profile(profile: str, scenarios: list[dict], dry_run: bool) -> lis
             _logger.warning("eval_profile_skipped", profile=profile, reason=str(exc))
             return []
 
-    optimizer = OptimizerAgent(client=client, model=model)
+    optimizer = OptimizerAgent(client=client, model=model, extra_params=extra_params)
     results = []
 
     for scenario in scenarios:

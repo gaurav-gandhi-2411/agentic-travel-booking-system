@@ -148,6 +148,7 @@ def test_demo_gpt_oss_120b_profile_uses_groq_openai() -> None:
     assert profile["model"] == "openai/gpt-oss-120b"
     assert profile["temperature"] == 0.0
     assert profile["max_tokens"] == 1024
+    assert profile["extra_params"]["reasoning_effort"] == "low"
     # Flat profile: no per-agent keys
     assert not AGENT_KEYS.intersection(profile.keys()), (
         "demo-gpt-oss-120b must be flat (model+provider only), not agent-routed"

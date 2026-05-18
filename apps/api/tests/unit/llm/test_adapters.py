@@ -3,16 +3,19 @@
 Each test enters the cassette context before creating the adapter so that
 vcrpy can patch the httpx transport prior to client initialisation.
 Cassettes are stored at tests/fixtures/cassettes/{adapter}/chat.yaml.
-No real network calls are made — record_mode="none" enforces this.
+No real network calls are made -- record_mode="none" enforces this.
 
 To re-record a cassette: delete the .yaml file and run the test with
 LLM_ROUTING_PROFILE set and the appropriate API key in the environment.
 vcrpy will record the interaction on first run and replay on subsequent runs.
+
+Also contains unit tests for extra_params threading (mock-based, no cassette).
 """
 
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import vcr
@@ -210,3 +213,32 @@ async def test_vllm_tool_call_via_cassette() -> None:
     assert len(response.tool_calls) == 1
     assert response.tool_calls[0].name == "search_flights"
     assert response.content == ""
+
+
+# ── extra_params threading (no cassette — mock-based) ────────────────────────
+
+
+async def test_groq_extra_params_reach_api_call(monkeypatch: pytest.MonkeyPatch) -> None:
+    """extra_params dict is merged into the create() kwargs sent to the Groq API."""
+    monkeypatch.setenv("GROQ_API_KEY", "gsk_test-key")
+    adapter = GroqAdapter()
+
+    fake_choice = MagicMock()
+    fake_choice.message.content = "ok"
+    fake_choice.message.tool_calls = None
+    fake_resp = MagicMock()
+    fake_resp.choices = [fake_choice]
+    fake_resp.model = "openai/gpt-oss-120b"
+    fake_resp.usage.prompt_tokens = 10
+    fake_resp.usage.completion_tokens = 5
+
+    mock_create = AsyncMock(return_value=fake_resp)
+    with patch.object(adapter._client.chat.completions, "create", mock_create):
+        await adapter.chat(
+            _MSG,
+            model="openai/gpt-oss-120b",
+            extra_params={"reasoning_effort": "low"},
+        )
+
+    call_kwargs = mock_create.call_args.kwargs
+    assert call_kwargs.get("reasoning_effort") == "low"

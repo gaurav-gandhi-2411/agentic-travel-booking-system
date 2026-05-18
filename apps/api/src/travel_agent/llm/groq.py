@@ -51,4 +51,5 @@ class GroqAdapter:
             temperature=temperature,
             system=system,
             tools=tools,
+            extra_params=kwargs.get("extra_params"),
         )

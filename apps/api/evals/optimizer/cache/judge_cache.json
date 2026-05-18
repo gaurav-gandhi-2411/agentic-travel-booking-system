@@ -3018,5 +3018,649 @@
       4,
       4
     ]
+  },
+  "ae67af459cca5fc70dc07286893e555d": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly identifies the flight's lowest price (\u20b918,500) and 2 stops, aligning with the 'best-value' label by prioritizing budget over directness or duration. The framing is coherent and specific to this flight's tradeoffs.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation correctly identifies the flight's lowest price (\u20b918,500) and 2 stops, aligning with the 'best-value' label by prioritizing budget over directness or duration. The framing is coherent and specific to this flight's tradeoffs.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      4,
+      5
+    ]
+  },
+  "b069d53c81cbb644e5cf13ebfd76dd8c": {
+    "coherence_score": 2,
+    "coherence_reason": "The explanation incorrectly states the flight duration as '3h total' when the actual duration is 225 minutes (3h45m). This factual mismatch with the flight's actual attributes invalidates the explanation.",
+    "structural_valid": false,
+    "raw_judge_output": "{\"score\": 3, \"reason\": \"The explanation mentions a 3h duration, but the actual flight duration is 225 minutes (3h45m). While it correctly notes the non-stop aspect and ties it to comfort/convenience, the duration mismatch weakens factual accuracy. The 'best-experience' framing is plausible but generic and doesn't address the high price point.\", \"structural_valid\": false}",
+    "high_variance": false,
+    "all_scores": [
+      3,
+      2,
+      2
+    ]
+  },
+  "88090379ab68306dd2ef54726bf277d0": {
+    "coherence_score": 2,
+    "coherence_reason": "The explanation incorrectly states the duration as '5h total' when the actual flight duration is 330 minutes (5h30m). This factual mismatch with the flight's attributes reduces coherence. The non-stop aspect is correctly referenced, but the duration error is significant.",
+    "structural_valid": false,
+    "raw_judge_output": "{\"score\": 2, \"reason\": \"The explanation incorrectly states the duration as '5h total' when the actual flight duration is 330 minutes (5h30m). This factual mismatch with the flight's attributes reduces coherence. The non-stop aspect is correctly referenced, but the duration error is significant.\", \"structural_valid\": false}",
+    "high_variance": false,
+    "all_scores": [
+      2,
+      2,
+      4
+    ]
+  },
+  "5865d109ad0033c88bdcd25ed0638a09": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation is logically coherent, directly references the flight's exact price (\u20b922,800) and stop count (1), and frames the 'ideal traveler' as budget-focused, which aligns with the 'best-value' label. No contradictions or generic phrasing.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation is logically coherent, directly references the flight's exact price (\u20b922,800) and stop count (1), and frames the 'ideal traveler' as budget-focused, which aligns with the 'best-value' label. No contradictions or generic phrasing.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "0e83d7ed665209c0e087d0182b4e6333": {
+    "coherence_score": 4,
+    "coherence_reason": "The explanation correctly identifies the non-stop nature and positions it as the fastest option, aligning with the 'best-experience' label. However, the duration is inaccurately stated as '5h total' when the actual duration is 5h40m (340 minutes), creating a minor factual mismatch. The price and refundable status are omitted, but the focus on comfort/convenience fits the archetype.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 4, \"reason\": \"The explanation correctly identifies the non-stop nature and positions it as the fastest option, aligning with the 'best-experience' label. However, the duration is inaccurately stated as '5h total' when the actual duration is 5h40m (340 minutes), creating a minor factual mismatch. The price and refundable status are omitted, but the focus on comfort/convenience fits the archetype.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      4,
+      3,
+      4
+    ]
+  },
+  "b8a47df085cd479a74b4a96a31d50e03": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation accurately references the flight's price (\u20b916,400) and 1 stop, framing it as 'best-value' for budget-focused travelers. The tradeoff of a connecting flight for lower cost aligns logically with the 'ideal traveler' prioritizing price over directness.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation accurately references the flight's price (\u20b916,400) and 1 stop, framing it as 'best-value' for budget-focused travelers. The tradeoff of a connecting flight for lower cost aligns logically with the 'ideal traveler' prioritizing price over directness.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "09e781e566f01da94123c740b93ff497": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the flight's price (\u20b918,500), duration (8h 0m), and 2 stops, aligning with the 'best-value' label. It logically frames the flight as ideal for budget travelers prioritizing cost over speed, which matches the tradeoffs implied by the attributes.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the flight's price (\u20b918,500), duration (8h 0m), and 2 stops, aligning with the 'best-value' label. It logically frames the flight as ideal for budget travelers prioritizing cost over speed, which matches the tradeoffs implied by the attributes.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "504e6e0c8c8393b8d318fd902729dc62": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly identifies the non-stop nature, duration (3h45m), price (\u20b943,500), and refundable status of EK-511. The 'best-experience' framing aligns with the tradeoff of paying a premium for direct service and minimal travel time.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation correctly identifies the non-stop nature, duration (3h45m), price (\u20b943,500), and refundable status of EK-511. The 'best-experience' framing aligns with the tradeoff of paying a premium for direct service and minimal travel time.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "74a6308ee467d0428ae478077adf6917": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation is logically coherent, correctly references the flight's price (\u20b918,500), duration (8h 0m), and stops (2), and the 'lowest-cost option' framing aligns with the 'best-value' archetype label.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation is logically coherent, correctly references the flight's price (\u20b918,500), duration (8h 0m), and stops (2), and the 'lowest-cost option' framing aligns with the 'best-value' archetype label.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5
+    ]
+  },
+  "b62638627a97782254174f147178dbc8": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation accurately references the flight's price (\u20b918,500), duration (8h 0m), and 2 stops, framing it as the 'lowest-price option' for budget travelers. The 'best-value' label aligns with the tradeoff of cost vs. convenience.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation accurately references the flight's price (\u20b918,500), duration (8h 0m), and 2 stops, framing it as the 'lowest-price option' for budget travelers. The 'best-value' label aligns with the tradeoff of cost vs. convenience.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5
+    ]
+  },
+  "e7756689ff13484d17ea9b6947614d9d": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the flight number (EK-511), route (DEL\u2192DXB), duration (3h 45m = 225 min), price (INR 43,500), non-stop nature, and frames the best-experience archetype around shortest travel time and comfort \u2014 all logically consistent with the flight's actual attributes.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the flight number (EK-511), route (DEL\u2192DXB), duration (3h 45m = 225 min), price (INR 43,500), non-stop nature, and frames the best-experience archetype around shortest travel time and comfort \u2014 all logically consistent with the flight's actual attributes.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "33edd2f20b9b5454dc87a9104372e30a": {
+    "coherence_score": 4,
+    "coherence_reason": "The explanation correctly references the actual price (\u20b918,500), stop count (2), and duration (8h 0m / 480 min). The 'best-value' framing for budget travelers is reasonable. Minor weakness: a 2-stop, 8-hour flight at \u20b918,500 isn't obviously the best value without comparison context, and 'lowest-cost option' is an unsupported claim, but the flight attributes are accurately cited.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 4, \"reason\": \"The explanation correctly references the actual price (\u20b918,500), stop count (2), and duration (8h 0m / 480 min). The 'best-value' framing for budget travelers is reasonable. Minor weakness: a 2-stop, 8-hour flight at \u20b918,500 isn't obviously the best value without comparison context, and 'lowest-cost option' is an unsupported claim, but the flight attributes are accurately cited.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      4,
+      4,
+      4
+    ]
+  },
+  "211138fade4ad0e51152b849788de03e": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the flight number (EK-511), route (DEL\u2192DXB), duration (3h 45m = 225 min), price (INR 43,500), non-stop status, and refundable nature. The 'best-experience' archetype framing is well-justified by the combination of non-stop convenience, refundability, and premium pricing.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the flight number (EK-511), route (DEL\u2192DXB), duration (3h 45m = 225 min), price (INR 43,500), non-stop status, and refundable nature. The 'best-experience' archetype framing is well-justified by the combination of non-stop convenience, refundability, and premium pricing.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "c31616413b6c0ee93f2f775dbe373465": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the flight number (EK-511), route (DEL\u2192DXB), duration (3h 45m = 225 min), price (INR 43,500), and non-stop nature. The 'best-experience' archetype framing is logical given the premium price point and direct routing with shortest travel time.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the flight number (EK-511), route (DEL\u2192DXB), duration (3h 45m = 225 min), price (INR 43,500), and non-stop nature. The 'best-experience' archetype framing is logical given the premium price point and direct routing with shortest travel time.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "0dfb14046258a7ed48775eb4c3f14371": {
+    "coherence_score": 4,
+    "coherence_reason": "The explanation correctly references the actual price (\u20b924,600), stop count (2), and duration (540 min = 9h 0m). The 'best-value' framing for budget travelers is coherent given the low price, though calling it 'the cheapest option' is an assumption not verifiable from the data provided. Minor framing weakness but overall solid.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 4, \"reason\": \"The explanation correctly references the actual price (\u20b924,600), stop count (2), and duration (540 min = 9h 0m). The 'best-value' framing for budget travelers is coherent given the low price, though calling it 'the cheapest option' is an assumption not verifiable from the data provided. Minor framing weakness but overall solid.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      4,
+      4,
+      4
+    ]
+  },
+  "745890de3277d83d9900ffbeb1601e36": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly references the non-stop nature, accurately converts 330 minutes to 5h 30m, mentions the actual price of INR 56,200, and the 'best-experience' framing aligns well with the shortest travel time and premium positioning.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation correctly references the non-stop nature, accurately converts 330 minutes to 5h 30m, mentions the actual price of INR 56,200, and the 'best-experience' framing aligns well with the shortest travel time and premium positioning.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "033635f551b813601dfb073131ae3536": {
+    "coherence_score": 4,
+    "coherence_reason": "The explanation correctly references the actual price (\u20b924,600), stop count (2), and duration (540 min = 9h 0m), and the 'best-value' framing is coherent for a lowest-cost option. Minor weakness: calling it 'the lowest-cost option on the board' is an assertion without comparative context, but the flight's attributes are accurately cited and the framing is logical.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 4, \"reason\": \"The explanation correctly references the actual price (\u20b924,600), stop count (2), and duration (540 min = 9h 0m), and the 'best-value' framing is coherent for a lowest-cost option. Minor weakness: calling it 'the lowest-cost option on the board' is an assertion without comparative context, but the flight's attributes are accurately cited and the framing is logical.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      4,
+      4,
+      4
+    ]
+  },
+  "354a58209f0c8386d2167fbfcf42040d": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the non-stop nature, correct duration of 5h 30m (330 min), and the price of INR 56,200. The 'best-experience' framing aligns well with the shortest travel time and convenience tradeoffs for this flight.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the non-stop nature, correct duration of 5h 30m (330 min), and the price of INR 56,200. The 'best-experience' framing aligns well with the shortest travel time and convenience tradeoffs for this flight.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "0f9cfded9dd751ba15a01f655d6d4519": {
+    "coherence_score": 4,
+    "coherence_reason": "The explanation correctly references the actual price (\u20b924,600), number of stops (2), and duration (540 min = 9h 0m), and the best-value framing is coherent for a lower-cost 2-stop option. Minor weakness: claiming it is 'the lowest-cost option' is an assertion without comparative context, but the framing is otherwise logical and specific to this flight.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 4, \"reason\": \"The explanation correctly references the actual price (\u20b924,600), number of stops (2), and duration (540 min = 9h 0m), and the best-value framing is coherent for a lower-cost 2-stop option. Minor weakness: claiming it is 'the lowest-cost option' is an assertion without comparative context, but the framing is otherwise logical and specific to this flight.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      4,
+      4,
+      4
+    ]
+  },
+  "177032c0b6eb4c198ae150f1feff0b98": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the flight's actual price (\u20b956,200), duration (330 min = 5h 30m), non-stop routing, and refundable status. The 'best-experience' archetype framing aligns well with the combination of non-stop convenience, refundability, and premium pricing.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the flight's actual price (\u20b956,200), duration (330 min = 5h 30m), non-stop routing, and refundable status. The 'best-experience' archetype framing aligns well with the combination of non-stop convenience, refundability, and premium pricing.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "2efebc0c9af406574ef878df4a46530d": {
+    "coherence_score": 4,
+    "coherence_reason": "The explanation correctly references the actual price (\u20b924,600), duration (9h 0m = 540 min), and stop count (2). The 'best-value' framing for budget travelers is coherent given the low price, though it doesn't explicitly acknowledge the tradeoff of 2 stops making it less convenient, which would strengthen the archetype framing.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 4, \"reason\": \"The explanation correctly references the actual price (\u20b924,600), duration (9h 0m = 540 min), and stop count (2). The 'best-value' framing for budget travelers is coherent given the low price, though it doesn't explicitly acknowledge the tradeoff of 2 stops making it less convenient, which would strengthen the archetype framing.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      4,
+      4,
+      4
+    ]
+  },
+  "5f8b2acea1256a9af4a6d98e45bdb663": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the non-stop nature, correct duration of 5h 30m (330 min), and the price of INR 56,200. The 'best-experience' framing aligns well with the shortest travel time and convenience tradeoffs for this flight.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the non-stop nature, correct duration of 5h 30m (330 min), and the price of INR 56,200. The 'best-experience' framing aligns well with the shortest travel time and convenience tradeoffs for this flight.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "c26a26354889e7afce7e20a120c396f2": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the flight's actual price (\u20b915,800), correct duration (420 min = 7h 0m), and stop count (1). The 'best-value' framing is coherent given it's positioned as the lowest-cost option, and all attributes match the flight's specifics.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the flight's actual price (\u20b915,800), correct duration (420 min = 7h 0m), and stop count (1). The 'best-value' framing is coherent given it's positioned as the lowest-cost option, and all attributes match the flight's specifics.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "e4f585a641a9842437cafcb5e53a63b2": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly references the non-stop nature, accurately converts 255 minutes to 4h 15m, mentions the exact price of INR 27,900, and the 'best-experience' framing logically aligns with the shortest travel time and direct routing tradeoffs.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation correctly references the non-stop nature, accurately converts 255 minutes to 4h 15m, mentions the exact price of INR 27,900, and the 'best-experience' framing logically aligns with the shortest travel time and direct routing tradeoffs.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "41ce2cb24ae8dd825794a55ac346ee5f": {
+    "coherence_score": 4,
+    "coherence_reason": "The explanation correctly references the actual price (\u20b915,800), stop count (1), and duration (420 min = 7h 0m), and the 'best-value' framing is coherent for a low-cost 1-stop option. Minor weakness: it claims this is 'the lowest-cost option on the board' without comparative data to support that assertion, but the core attributes are accurately cited.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 4, \"reason\": \"The explanation correctly references the actual price (\u20b915,800), stop count (1), and duration (420 min = 7h 0m), and the 'best-value' framing is coherent for a low-cost 1-stop option. Minor weakness: it claims this is 'the lowest-cost option on the board' without comparative data to support that assertion, but the core attributes are accurately cited.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      4,
+      4,
+      4
+    ]
+  },
+  "02c9a3c152fd6a54dd8c1de4cc2fdb88": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the non-stop nature, correct duration of 4h 15m (255 min), and the actual price of INR 27,900. The 'best-experience' framing is logically justified by the shortest travel time and no stops, making it coherent and specific to this flight.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the non-stop nature, correct duration of 4h 15m (255 min), and the actual price of INR 27,900. The 'best-experience' framing is logically justified by the shortest travel time and no stops, making it coherent and specific to this flight.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "03f56a8d3621037a6ff721b5d1c5950c": {
+    "coherence_score": 4,
+    "coherence_reason": "The explanation correctly references the actual price (\u20b915,800), stop count (1), and duration (420 min = 7h 0m), and the 'best-value' framing as lowest-cost is coherent. Minor weakness: it asserts it's the lowest-cost option on the board without comparative context, but the core logic and specifics match well.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 4, \"reason\": \"The explanation correctly references the actual price (\u20b915,800), stop count (1), and duration (420 min = 7h 0m), and the 'best-value' framing as lowest-cost is coherent. Minor weakness: it asserts it's the lowest-cost option on the board without comparative context, but the core logic and specifics match well.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      4,
+      4,
+      4
+    ]
+  },
+  "35fd5b9dccbb4fb4de9a6d6b85afecd0": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly references the non-stop nature, accurately converts 255 minutes to 4h 15m, mentions the exact price of INR 27,900, and the 'best-experience' framing logically aligns with the shortest travel time and direct routing tradeoffs.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation correctly references the non-stop nature, accurately converts 255 minutes to 4h 15m, mentions the exact price of INR 27,900, and the 'best-experience' framing logically aligns with the shortest travel time and direct routing tradeoffs.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "fe1b50d1c5c28a01ca1567d25c976a6b": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the flight's actual price (\u20b915,800), correct duration (420 min = 7h 0m), and stop count (1). The 'best-value' framing as lowest-cost option is coherent with these specifics.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the flight's actual price (\u20b915,800), correct duration (420 min = 7h 0m), and stop count (1). The 'best-value' framing as lowest-cost option is coherent with these specifics.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "87c616b5db0dc33b976a498cced92f9c": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the non-stop nature, correctly converts 255 minutes to 4h 15m, and mentions the actual price of INR 27,900. The 'best-experience' framing is well-justified by the shortest travel time and no stops, making the ideal traveler framing coherent.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the non-stop nature, correctly converts 255 minutes to 4h 15m, and mentions the actual price of INR 27,900. The 'best-experience' framing is well-justified by the shortest travel time and no stops, making the ideal traveler framing coherent.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "367d5b66740955d6026ea456edb445be": {
+    "coherence_score": 4,
+    "coherence_reason": "The explanation correctly references the actual price (\u20b918,200), stop count (1), and duration (330 min = 5h 30m), and the 'best-value' framing is coherent. Minor weakness: claiming it's the 'lowest-cost option on the board' is an assertion about other flights not shown, which can't be verified, but the core logic and specifics match well.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 4, \"reason\": \"The explanation correctly references the actual price (\u20b918,200), stop count (1), and duration (330 min = 5h 30m), and the 'best-value' framing is coherent. Minor weakness: claiming it's the 'lowest-cost option on the board' is an assertion about other flights not shown, which can't be verified, but the core logic and specifics match well.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      4,
+      4,
+      4
+    ]
+  },
+  "08e201a45a0eccaa86cb07ceeee86b12": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the non-stop nature, correct duration (3h 5m = 185 min), and the actual price (INR 35,400). The 'best-experience' framing is logically tied to the shortest travel time and non-stop convenience, making the ideal traveler framing coherent.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the non-stop nature, correct duration (3h 5m = 185 min), and the actual price (INR 35,400). The 'best-experience' framing is logically tied to the shortest travel time and non-stop convenience, making the ideal traveler framing coherent.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "71a7ea7d2a582ddccd809027049bdfb2": {
+    "coherence_score": 4,
+    "coherence_reason": "The explanation correctly references the actual price (\u20b918,200), stop count (1), and duration (330 min = 5h 30m), and the 'best-value' framing is coherent. Minor weakness: claiming it's 'the lowest-cost option on the board' is an assertion about other flights not shown, which can't be verified, but the flight-specific attributes are accurately cited.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 4, \"reason\": \"The explanation correctly references the actual price (\u20b918,200), stop count (1), and duration (330 min = 5h 30m), and the 'best-value' framing is coherent. Minor weakness: claiming it's 'the lowest-cost option on the board' is an assertion about other flights not shown, which can't be verified, but the flight-specific attributes are accurately cited.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      4,
+      4,
+      4
+    ]
+  },
+  "676d7ad38ae86e1b03e76f415b9da5d9": {
+    "coherence_score": 4,
+    "coherence_reason": "The explanation correctly references the non-stop nature, accurate duration (3h 5m = 185 min), and the price of INR 35,400. It logically frames the flight as offering the quickest travel time, which aligns with the best-experience archetype. Minor weakness: it doesn't elaborate on why this represents the 'best experience' beyond just speed \u2014 no mention of Emirates service quality or comfort tradeoffs that would strengthen the archetype framing.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 4, \"reason\": \"The explanation correctly references the non-stop nature, accurate duration (3h 5m = 185 min), and the price of INR 35,400. It logically frames the flight as offering the quickest travel time, which aligns with the best-experience archetype. Minor weakness: it doesn't elaborate on why this represents the 'best experience' beyond just speed \u2014 no mention of Emirates service quality or comfort tradeoffs that would strengthen the archetype framing.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      4,
+      4,
+      4
+    ]
+  },
+  "342204b1be02b1b20cdcefd535464ab6": {
+    "coherence_score": 4,
+    "coherence_reason": "The explanation correctly references the actual price (\u20b918,200), stop count (1), and duration (330 min = 5h 30m), and the 'best-value' framing is coherent. Minor weakness: claiming it's the 'lowest-cost option on the board' is an assertion that can't be verified from the single flight data provided, making it a slight framing overreach.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 4, \"reason\": \"The explanation correctly references the actual price (\u20b918,200), stop count (1), and duration (330 min = 5h 30m), and the 'best-value' framing is coherent. Minor weakness: claiming it's the 'lowest-cost option on the board' is an assertion that can't be verified from the single flight data provided, making it a slight framing overreach.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      4,
+      4,
+      4
+    ]
+  },
+  "a8bc6cbf7d5b3996221c01c5e7a916b4": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the non-stop nature, correct duration (3h 5m = 185 min), and correct price (INR 35,400). The 'best-experience' framing is logically justified by the combination of no stops and minimal travel time, making it coherent and specific to this flight.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the non-stop nature, correct duration (3h 5m = 185 min), and correct price (INR 35,400). The 'best-experience' framing is logically justified by the combination of no stops and minimal travel time, making it coherent and specific to this flight.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "3d519fd36885e0b3bd7139dbb5fa8ece": {
+    "coherence_score": 4,
+    "coherence_reason": "The explanation correctly references the actual price (\u20b918,200), stop count (1), and duration (330 min = 5h 30m), and the 'best-value' framing is coherent for a lowest-cost positioning. Minor weakness: it asserts this is the 'lowest-cost option' without comparative context, but the core attributes match and the logic holds.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 4, \"reason\": \"The explanation correctly references the actual price (\u20b918,200), stop count (1), and duration (330 min = 5h 30m), and the 'best-value' framing is coherent for a lowest-cost positioning. Minor weakness: it asserts this is the 'lowest-cost option' without comparative context, but the core attributes match and the logic holds.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      4,
+      4,
+      4
+    ]
+  },
+  "1c07ac65e285280a9e33883b7c796609": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the non-stop flight, correct duration (185 min = 3h 5m), correct price (INR 35,400), and the 'best-experience' archetype framing aligns well with Emirates' premium positioning on a direct route.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the non-stop flight, correct duration (185 min = 3h 5m), correct price (INR 35,400), and the 'best-experience' archetype framing aligns well with Emirates' premium positioning on a direct route.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "433747742c5a5570d098eb00aace987f": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the flight's actual price (\u20b922,800), stop count (1), and duration (480 min = 8h 0m), and the best-value framing is coherent for a lowest-cost option with these tradeoffs.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the flight's actual price (\u20b922,800), stop count (1), and duration (480 min = 8h 0m), and the best-value framing is coherent for a lowest-cost option with these tradeoffs.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "291e49b03436c58ab706db3cc70916ee": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the flight's actual attributes: non-stop (0 stops), 340 minutes converted correctly to 5h 40m, and the price of INR 38,900. The 'best-experience' archetype framing aligns well with the non-stop, shortest-duration tradeoff for comfort.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the flight's actual attributes: non-stop (0 stops), 340 minutes converted correctly to 5h 40m, and the price of INR 38,900. The 'best-experience' archetype framing aligns well with the non-stop, shortest-duration tradeoff for comfort.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "c57c7358e66edcc8dfe8b9dc8ed4be58": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the flight's actual price (\u20b922,800), correct duration (480 min = 8h 0m), and 1 stop. The 'best-value' framing is coherent given it's described as the lowest cost option with reasonable layovers, which aligns well with the flight's attributes.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the flight's actual price (\u20b922,800), correct duration (480 min = 8h 0m), and 1 stop. The 'best-value' framing is coherent given it's described as the lowest cost option with reasonable layovers, which aligns well with the flight's attributes.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "bc0c3168c75ee8e6f4d0a39007edd1d9": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly references the non-stop nature, accurately converts 340 minutes to 5h 40m, mentions the actual price of INR 38,900, and the 'best-experience' framing logically aligns with a direct flight offering the quickest travel time.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation correctly references the non-stop nature, accurately converts 340 minutes to 5h 40m, mentions the actual price of INR 38,900, and the 'best-experience' framing logically aligns with a direct flight offering the quickest travel time.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "871132e5bea049dfdd76a904c7075fdc": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the flight's actual price (\u20b922,800), stop count (1), and duration (480 min = 8h 0m), and the 'best-value' framing is coherent given these attributes \u2014 positioning it as the cheapest viable option for the route.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the flight's actual price (\u20b922,800), stop count (1), and duration (480 min = 8h 0m), and the 'best-value' framing is coherent given these attributes \u2014 positioning it as the cheapest viable option for the route.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "fa27d46569c1459372efb5e8889ce686": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the non-stop nature, correctly converts 340 minutes to 5h 40m, and cites the exact price of INR 38,900. The 'best-experience' framing is logically justified by the direct flight minimizing travel time.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the non-stop nature, correctly converts 340 minutes to 5h 40m, and cites the exact price of INR 38,900. The 'best-experience' framing is logically justified by the direct flight minimizing travel time.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "0d753d2a599da4139805b06a7314b28e": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the flight's actual price (\u20b922,800), stop count (1), and duration (480 min = 8h 0m), and the 'best-value' framing is coherent given these specifics.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the flight's actual price (\u20b922,800), stop count (1), and duration (480 min = 8h 0m), and the 'best-value' framing is coherent given these specifics.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "4f23cd9769c70c8c1769a21d84e1f62c": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the non-stop nature, correct duration (5h 40m = 340 min), and the price (INR 38,900). The 'best-experience' framing is logically justified by the combination of no layovers and shortest travel time, making the ideal traveler framing coherent and specific to this flight's attributes.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the non-stop nature, correct duration (5h 40m = 340 min), and the price (INR 38,900). The 'best-experience' framing is logically justified by the combination of no layovers and shortest travel time, making the ideal traveler framing coherent and specific to this flight's attributes.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "11b1c30cfeae33f97170a207eec455ad": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the flight's actual price (\u20b916,400), correct duration (420 min = 7h 0m), and stop count (1). The 'best-value' framing is logically supported by positioning it as the lowest-cost option, which is coherent with the attributes provided.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the flight's actual price (\u20b916,400), correct duration (420 min = 7h 0m), and stop count (1). The 'best-value' framing is logically supported by positioning it as the lowest-cost option, which is coherent with the attributes provided.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "4d719bd6ae6c67e3ecc5ab7791957c40": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly references the non-stop nature, accurately converts 250 minutes to 4h 10m, mentions the actual price of INR 30,200, and the 'best-experience' framing logically ties to shortest travel time with no stops.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation correctly references the non-stop nature, accurately converts 250 minutes to 4h 10m, mentions the actual price of INR 30,200, and the 'best-experience' framing logically ties to shortest travel time with no stops.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "81d1ec46404f04dbafbdd0c799fedd74": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the flight's actual price (\u20b916,400), correct duration (420 min = 7h 0m), and stop count (1). The 'best-value' framing is coherent given it's described as the lowest-cost option, and all attributes match the flight's specifics.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the flight's actual price (\u20b916,400), correct duration (420 min = 7h 0m), and stop count (1). The 'best-value' framing is coherent given it's described as the lowest-cost option, and all attributes match the flight's specifics.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "6acd8ee0b13507db8ab1e6c74b8c8637": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly references the non-stop nature, accurately converts 250 minutes to 4h 10m, mentions the actual price of INR 30,200, and the 'best-experience' framing logically connects shortest travel time with comfort \u2014 all attributes match the flight.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation correctly references the non-stop nature, accurately converts 250 minutes to 4h 10m, mentions the actual price of INR 30,200, and the 'best-experience' framing logically connects shortest travel time with comfort \u2014 all attributes match the flight.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "d80c20a7014748c6996d26c935f28a8b": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the flight's actual price (\u20b916,400), correct duration (420 min = 7h 0m), and stop count (1). The 'best-value' framing is coherent given these specifics, and the claim of lowest-cost aligns with the best-value archetype label.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the flight's actual price (\u20b916,400), correct duration (420 min = 7h 0m), and stop count (1). The 'best-value' framing is coherent given these specifics, and the claim of lowest-cost aligns with the best-value archetype label.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "89a394f26b85eaa16df7ce34a6131514": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly references the non-stop nature, accurately converts 250 minutes to 4h 10m, mentions the actual price of INR 30,200, and the 'best-experience' framing logically connects shortest travel time with comfort \u2014 all attributes match the flight.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation correctly references the non-stop nature, accurately converts 250 minutes to 4h 10m, mentions the actual price of INR 30,200, and the 'best-experience' framing logically connects shortest travel time with comfort \u2014 all attributes match the flight.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "1c79a4876233ffb0fdee4c25977d4b80": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the flight's price (\u20b916,400), stop count (1), and duration (420 min = 7h 0m). The 'best-value' framing is coherent for a budget-conscious traveler, and the claim of lowest cost on the board is consistent with the archetype label.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the flight's price (\u20b916,400), stop count (1), and duration (420 min = 7h 0m). The 'best-value' framing is coherent for a budget-conscious traveler, and the claim of lowest cost on the board is consistent with the archetype label.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "2d6a11f63e7664973d22e2164c0ac141": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly references the non-stop nature, accurately converts 250 minutes to 4h 10m, mentions the actual price of INR 30,200, and the 'best-experience' framing logically ties to shortest travel time on a direct flight.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation correctly references the non-stop nature, accurately converts 250 minutes to 4h 10m, mentions the actual price of INR 30,200, and the 'best-experience' framing logically ties to shortest travel time on a direct flight.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
   }
 }
