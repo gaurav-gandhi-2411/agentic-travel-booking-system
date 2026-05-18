@@ -141,6 +141,23 @@ fields: input message, output action+args (redacted if NO_OP explanation is PII-
 latency_ms, input/output tokens, cost_usd. Pattern identical to `planner_chat` span
 in `PlannerAgent`.
 
+#### Telemetry distinctions for NO_OP outcomes
+
+The user-facing output is identical in all three cases — the same polite redirect
+message is returned. Operations telemetry distinguishes them because the cause informs
+whether intervention is needed:
+
+| Structured log event | Langfuse `fallback_reason` | Meaning |
+|---|---|---|
+| `conversation_manager_classified_no_op` | `none` | LLM understood the input and intentionally chose NO_OP. Healthy — this is a legitimate off-topic message. |
+| `conversation_manager_parse_failed` | `parse_failed` | LLM returned a tool-use response that failed Pydantic validation. Indicates schema drift, output format regression, or a model update that changed JSON structure. Warrants prompt investigation. |
+| `conversation_manager_no_tool_call` | `no_tool_call` | LLM returned free text without calling the tool. Indicates the model is not following the tool-use instruction (prompt compliance failure) or the provider does not enforce tool-use strictly. Warrants system prompt review. |
+
+The `fallback_reason` attribute is set on every Langfuse span — `none` for healthy
+NO_OP, the appropriate failure code otherwise. Alert thresholds in Langfuse should
+watch `parse_failed` and `no_tool_call` rates per profile per day; an elevated rate
+signals a model behaviour change or prompt regression before accuracy metrics degrade.
+
 ---
 
 ## Eval gate
@@ -149,16 +166,24 @@ Cross-profile eval across 15 hand-curated scenarios (5 REFINE, 5 REPLAN, 5 NO_OP
 Each scenario run once per profile; NO_OP explanations scored by `eval-judge-qwen3-32b`
 with median-of-3 sampling.
 
-| Metric | Gate |
-|--------|------|
-| Action classification accuracy | ≥ 90% per profile (≥ 14/15 scenarios) |
-| NO_OP coherence (judge score) | ≥ 4.0 avg across NO_OP scenarios |
-| Latency p95 per profile | ≤ 4000ms |
+| Metric | Soft warn | Hard fail |
+|--------|-----------|-----------|
+| Action classification accuracy | — | < 90% per profile (< 14/15) |
+| NO_OP coherence (judge score) | — | < 4.0 avg across NO_OP scenarios |
+| Latency p95 per profile | > 2500ms | > 4000ms |
 
 The 90% accuracy gate is set at 14/15 — one scenario can be genuinely ambiguous
 without failing the gate. All three profiles must clear the gate for the default to
 be confirmed; failing profiles are documented as incompatible with
 `ConversationManagerAgent` and excluded from the allowed-profiles list in PR 2.
+
+**Latency soft/hard threshold rationale.** The hard 4000ms gate is the maximum
+acceptable for a demo context where users tolerate some SSE latency. The soft 2500ms
+warn is the target for real-user interactive refinement — if p95 lands between 2500ms
+and 4000ms the gate passes but the scorer logs a WARNING so the gap is visible. In
+Phase 2D, once production latency data is available, the hard gate is expected to
+tighten to 2500ms. These constants live in `thresholds.py` as
+`CONVERSATION_LATENCY_P95_WARN_MS = 2500` and `CONVERSATION_LATENCY_P95_MAX_MS = 4000`.
 
 ---
 
