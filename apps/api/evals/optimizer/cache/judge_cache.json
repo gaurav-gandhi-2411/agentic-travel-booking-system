@@ -1100,5 +1100,1923 @@
       4,
       3
     ]
+  },
+  "501a5efd761903a905f2a7bbce385981": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation is logically coherent, accurately references the flight's price (\u20b918,500), duration (8 hours), and 2 stops, and frames the 'ideal traveler' as budget-conscious, which aligns with the tradeoff of lower cost for multiple stops.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation is logically coherent, accurately references the flight's price (\u20b918,500), duration (8 hours), and 2 stops, and frames the 'ideal traveler' as budget-conscious, which aligns with the tradeoff of lower cost for multiple stops.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "03d50599f6be1b37ad2dfe1932a048e9": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation accurately references the flight's non-stop nature (0 stops), 3h45m duration, and refundability. The 'ideal traveler' framing aligns with prioritizing speed/convenience over budget for this premium-priced direct flight.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation accurately references the flight's non-stop nature (0 stops), 3h45m duration, and refundability. The 'ideal traveler' framing aligns with prioritizing speed/convenience over budget for this premium-priced direct flight.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "785dd4ed7f89026bd6753a0450d4cda1": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation accurately references the flight's price (\u20b918,500), stops (2), and duration (8 hours), and logically frames it as 'best-value' for budget travelers accepting tradeoffs in connectivity for cost savings. All attributes align with the flight's actual data.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation accurately references the flight's price (\u20b918,500), stops (2), and duration (8 hours), and logically frames it as 'best-value' for budget travelers accepting tradeoffs in connectivity for cost savings. All attributes align with the flight's actual data.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "87e8646ef89879bf1c2fd392001728ad": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the flight's non-stop nature (0 stops), duration (3h 45m), and refundability. The 'fastest and most convenient' framing aligns with the flight's attributes, making it a coherent 'best-experience' recommendation.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the flight's non-stop nature (0 stops), duration (3h 45m), and refundability. The 'fastest and most convenient' framing aligns with the flight's attributes, making it a coherent 'best-experience' recommendation.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "d383d128ec3392f62fcee6cdf83c3840": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation is logically coherent, accurately references the flight's price (\u20b918,500), duration (8 hours), and 2 stops, and the 'ideal for budget-conscious travelers prioritizing cost over speed' framing aligns with the 'best-value' label and tradeoffs.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation is logically coherent, accurately references the flight's price (\u20b918,500), duration (8 hours), and 2 stops, and the 'ideal for budget-conscious travelers prioritizing cost over speed' framing aligns with the 'best-value' label and tradeoffs.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "89dd99421a164029bda3c201da5fc9fa": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the flight's non-stop nature (0 stops), duration (3h 45m), and refundability. The 'best-experience' framing aligns with the tradeoff of paying a premium for speed/convenience, which fits the archetype label.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the flight's non-stop nature (0 stops), duration (3h 45m), and refundability. The 'best-experience' framing aligns with the tradeoff of paying a premium for speed/convenience, which fits the archetype label.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "8d96b31aaaffcd625142ccfe0a8fc363": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation accurately references the flight's price (\u20b918,500), duration (8 hours), and 2 stops. The 'best-value' framing aligns with the tradeoff of lower cost for a longer, multi-stop journey, which fits budget-conscious travelers.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation accurately references the flight's price (\u20b918,500), duration (8 hours), and 2 stops. The 'best-value' framing aligns with the tradeoff of lower cost for a longer, multi-stop journey, which fits budget-conscious travelers.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "64e0ab1cb211d2ea161ef54dafbdc600": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation accurately references the flight's non-stop nature (0 stops), 3h45m duration, and refundability. The 'ideal traveler' framing aligns with prioritizing speed/convenience over budget, matching the 'best-experience' archetype. All attributes are correctly represented.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation accurately references the flight's non-stop nature (0 stops), 3h45m duration, and refundability. The 'ideal traveler' framing aligns with prioritizing speed/convenience over budget, matching the 'best-experience' archetype. All attributes are correctly represented.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "79b11a31e81cb37bf6fab3acd1d682cb": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation accurately references the flight's price (\u20b924,600), duration (9 hours), and 2 stops, aligning with the 'best-value' label for budget travelers prioritizing cost over direct routes.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 4, \"reason\": \"Explanation correctly references the flight's price (\u20b924,600), duration (9 hours), and 2 stops. The framing as 'best-value' for budget travelers is coherent, though the phrasing 'just 2 stops' slightly downplays a potential tradeoff (more stops may not be ideal for all travelers).\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      4,
+      5,
+      5
+    ]
+  },
+  "e117e87e9ad2d0cec3be4bfe0ebe40f9": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the flight's non-stop nature (0 stops), 5h30m duration, and refundability. The 'fastest and most convenient' framing aligns with the 'best-experience' label by emphasizing time efficiency and flexibility.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the flight's non-stop nature (0 stops), 5h30m duration, and refundability. The 'fastest and most convenient' framing aligns with the 'best-experience' label by emphasizing time efficiency and flexibility.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "a8fd5195709e1d1cb14172f38ac43987": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation is logically coherent, references the flight's exact price (\u20b924,600), duration (9 hours), and 2 stops. The 'budget-conscious traveler' framing aligns with the tradeoff of lower cost for multiple stops and longer duration.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation is logically coherent, references the flight's exact price (\u20b924,600), duration (9 hours), and 2 stops. The 'budget-conscious traveler' framing aligns with the tradeoff of lower cost for multiple stops and longer duration.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "30e5d046f4ce7b9d801e1fb44bf9e5ba": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation correctly references the flight's non-stop nature (0 stops), 5h30m duration, and refundability. The 'ideal traveler' framing aligns with prioritizing speed/convenience over price, which matches the 'best-experience' archetype. All attributes match the actual flight data.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation correctly references the flight's non-stop nature (0 stops), 5h30m duration, and refundability. The 'ideal traveler' framing aligns with prioritizing speed/convenience over price, which matches the 'best-experience' archetype. All attributes match the actual flight data.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "25a9c8560259cc1cc3364be76c6bc2b6": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation is logically coherent, references the flight's exact price (\u20b924,600), duration (9 hours), and 2 stops, and frames the tradeoff (longer duration with stops) as ideal for budget-conscious travelers seeking the lowest price.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation is logically coherent, references the flight's exact price (\u20b924,600), duration (9 hours), and 2 stops, and frames the tradeoff (longer duration with stops) as ideal for budget-conscious travelers seeking the lowest price.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "fa108ebf942b1011f3da277ee4bcde0c": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the flight's non-stop nature (0 stops), 5h30m duration (330 min), and refundability. The 'best-experience' framing aligns with the shortest possible journey and maximum flexibility, which are directly supported by the flight's attributes.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the flight's non-stop nature (0 stops), 5h30m duration (330 min), and refundability. The 'best-experience' framing aligns with the shortest possible journey and maximum flexibility, which are directly supported by the flight's attributes.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "9efb2adee673ac259c925bc9db648c70": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation accurately references the flight's price (\u20b924,600), duration (9 hours), and 2 stops, aligning with the 'best-value' label for budget-conscious travelers. The framing logically connects cost savings to tradeoffs in travel time and stops.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation accurately references the flight's price (\u20b924,600), duration (9 hours), and 2 stops, aligning with the 'best-value' label for budget-conscious travelers. The framing logically connects cost savings to tradeoffs in travel time and stops.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "33e7dcf890d6789045a6cfd7ce8583e8": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the flight's non-stop nature (0 stops), 5h30m duration, and refundability. The 'best-experience' framing aligns with prioritizing speed and flexibility for travelers who value direct flights and hassle-free changes.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the flight's non-stop nature (0 stops), 5h30m duration, and refundability. The 'best-experience' framing aligns with prioritizing speed and flexibility for travelers who value direct flights and hassle-free changes.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "25eaaed53c182e5c2bea426e97556ced": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the flight's non-stop nature (0 stops), duration (4h 15m), and positions it as the fastest option for a seamless experience, aligning with the 'best-experience' archetype. The framing of 'ideal traveler' as someone prioritizing time efficiency and convenience fits the flight's attributes.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the flight's non-stop nature (0 stops), duration (4h 15m), and positions it as the fastest option for a seamless experience, aligning with the 'best-experience' archetype. The framing of 'ideal traveler' as someone prioritizing time efficiency and convenience fits the flight's attributes.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "731a2ba245b30e4c7775dfc41509ddfd": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation is logically coherent, accurately references the flight's non-stop nature (0 stops) and duration (4h 15m/255 min), and the 'fastest way' framing aligns with the flight's attributes. The 'seamless travel experience' positioning makes sense for a non-stop flight.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation is logically coherent, accurately references the flight's non-stop nature (0 stops) and duration (4h 15m/255 min), and the 'fastest way' framing aligns with the flight's attributes. The 'seamless travel experience' positioning makes sense for a non-stop flight.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "61eca7f1a2d6f6821a93b878d1b6f779": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation accurately references the flight's price (\u20b915,800), duration (7 hours), and 1 stop, framing it as 'best-value' for budget travelers. The logic aligns with the tradeoff of a non-refundable, single-stop flight at a low price.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation accurately references the flight's price (\u20b915,800), duration (7 hours), and 1 stop, framing it as 'best-value' for budget travelers. The logic aligns with the tradeoff of a non-refundable, single-stop flight at a low price.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "3f51d52d5ca13be2ba6c70431f12d38d": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation accurately references the flight's non-stop nature (0 stops), duration (4h 15m), and positions it as the fastest/direct option, aligning with the 'best-experience' archetype for travelers prioritizing time efficiency and seamless travel.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation accurately references the flight's non-stop nature (0 stops), duration (4h 15m), and positions it as the fastest/direct option, aligning with the 'best-experience' archetype for travelers prioritizing time efficiency and seamless travel.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "16405fb61da269f87562f14777f14536": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation accurately references the flight's non-stop nature (0 stops), duration (4h 15m), and positions it as the 'fastest' option for a seamless experience, aligning with the 'best-experience' archetype. The framing logically emphasizes time efficiency and convenience.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation accurately references the flight's non-stop nature (0 stops), duration (4h 15m), and positions it as the 'fastest' option for a seamless experience, aligning with the 'best-experience' archetype. The framing logically emphasizes time efficiency and convenience.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "8f1b425681dfd70cd05ba48e3bc230ed": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation is logically coherent, accurately references the flight's price (\u20b918,200), duration (5h30m), and 1 stop, and frames the 'ideal traveler' as budget-conscious, which aligns with the 'best-value' label. All attributes match the flight's specifics.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation is logically coherent, accurately references the flight's price (\u20b918,200), duration (5h30m), and 1 stop, and frames the 'ideal traveler' as budget-conscious, which aligns with the 'best-value' label. All attributes match the flight's specifics.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "1930f984f38b083917e762da96977c41": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the flight's non-stop nature (0 stops) and duration (3h5m), aligning with the 'best-experience' archetype by emphasizing speed and convenience. The framing of 'fastest way' and 'zero layovers' directly matches the flight's attributes.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the flight's non-stop nature (0 stops) and duration (3h5m), aligning with the 'best-experience' archetype by emphasizing speed and convenience. The framing of 'fastest way' and 'zero layovers' directly matches the flight's attributes.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "95ef81e25ce5b94881957eea114c474e": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the flight's non-stop nature (0 stops), duration (3h5m), and positions it as the fastest option, aligning with the 'best-experience' label for time-sensitive travelers. All attributes match the flight's actual data.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the flight's non-stop nature (0 stops), duration (3h5m), and positions it as the fastest option, aligning with the 'best-experience' label for time-sensitive travelers. All attributes match the flight's actual data.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "7bdf66e9d14fa31a64437f295801154d": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation accurately references the flight's price (\u20b918,200), duration (5h30m), and 1 stop, aligning with the 'best-value' label for budget-conscious travelers. The framing is logically coherent and specific to this flight's tradeoffs.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation accurately references the flight's price (\u20b918,200), duration (5h30m), and 1 stop, aligning with the 'best-value' label for budget-conscious travelers. The framing is logically coherent and specific to this flight's tradeoffs.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "87a33726c78d6c0e5f11160eb3231065": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the flight's non-stop nature (0 stops) and duration (3h5m/185min), aligning with the 'best-experience' archetype by emphasizing minimal travel time and convenience. The framing of 'fastest option' logically matches the flight's attributes.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the flight's non-stop nature (0 stops) and duration (3h5m/185min), aligning with the 'best-experience' archetype by emphasizing minimal travel time and convenience. The framing of 'fastest option' logically matches the flight's attributes.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "840a567b2b541d09c3bda8fa11b2601e": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation accurately references the flight's price (\u20b918,200), duration (5h 30m), and 1 stop, aligning with the 'best-value' label by emphasizing cost-effectiveness for budget travelers while acknowledging the tradeoff of a layover.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation accurately references the flight's price (\u20b918,200), duration (5h 30m), and 1 stop, aligning with the 'best-value' label by emphasizing cost-effectiveness for budget travelers while acknowledging the tradeoff of a layover.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "d6cf4f20ad346da4fb344d1306fba545": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation accurately references the flight's non-stop nature (0 stops), duration (3h5m), and positions it as the fastest option. The 'ideal traveler' framing aligns with prioritizing speed and convenience over cost, which fits the 'best-experience' archetype.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation accurately references the flight's non-stop nature (0 stops), duration (3h5m), and positions it as the fastest option. The 'ideal traveler' framing aligns with prioritizing speed and convenience over cost, which fits the 'best-experience' archetype.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "fdceba2b31df53ba01bfd1ac80438118": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation is logically coherent, accurately references the flight's price (\u20b922,800), duration (8 hours), and 1 stop, and frames the 'ideal traveler' as budget-conscious, which aligns with the tradeoff of a non-refundable, connecting flight at a lower price.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation is logically coherent, accurately references the flight's price (\u20b922,800), duration (8 hours), and 1 stop, and frames the 'ideal traveler' as budget-conscious, which aligns with the tradeoff of a non-refundable, connecting flight at a lower price.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "42f31073cbc674a4105ba34d4b0ee946": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation accurately references the flight's non-stop nature (0 stops), duration (5h 40m), and positions it as ideal for minimal travel time/convenience, aligning with the 'best-experience' archetype. All attributes match the flight's actual data.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation accurately references the flight's non-stop nature (0 stops), duration (5h 40m), and positions it as ideal for minimal travel time/convenience, aligning with the 'best-experience' archetype. All attributes match the flight's actual data.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "637b13e261314bd411e80369716faff4": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly references the flight's non-stop nature (0 stops), duration (5h 40m), and positions it as the fastest option, aligning with the 'best-experience' archetype for travelers prioritizing time efficiency. All attributes match the flight's actual data.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation correctly references the flight's non-stop nature (0 stops), duration (5h 40m), and positions it as the fastest option, aligning with the 'best-experience' archetype for travelers prioritizing time efficiency. All attributes match the flight's actual data.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "518330b749c48e3a95d4321896e6dccc": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the flight's price (\u20b922,800), duration (8 hours), and 1 stop, aligning with the 'best-value' label. The framing for budget-conscious travelers logically matches the tradeoff of a single stop for lower cost.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the flight's price (\u20b922,800), duration (8 hours), and 1 stop, aligning with the 'best-value' label. The framing for budget-conscious travelers logically matches the tradeoff of a single stop for lower cost.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "54300811d40cb83ba2d704a722833816": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation accurately references the flight's non-stop nature (0 stops), 5h40m duration, and positions it as the fastest/seamless option for DEL\u2192KUL. The 'best-experience' framing aligns with prioritizing time efficiency and convenience over price, which is consistent with the flight's attributes.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation accurately references the flight's non-stop nature (0 stops), 5h40m duration, and positions it as the fastest/seamless option for DEL\u2192KUL. The 'best-experience' framing aligns with prioritizing time efficiency and convenience over price, which is consistent with the flight's attributes.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "13d38d05ce3f86a1b7c0218dcf958e15": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly references the flight's non-stop nature (0 stops) and duration (5h 40m), aligning with the 'best-experience' archetype by emphasizing time efficiency and comfort. The framing logically matches the flight's attributes.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation correctly references the flight's non-stop nature (0 stops) and duration (5h 40m), aligning with the 'best-experience' archetype by emphasizing time efficiency and comfort. The framing logically matches the flight's attributes.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "97a40438b4129fd804f10b5dfd3c2fc1": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation accurately references the flight's price (\u20b916,400), duration (7 hours), and 1 stop, aligning with the 'best-value' archetype by emphasizing low cost for budget travelers. The framing is logically coherent and specific to this flight's attributes.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation accurately references the flight's price (\u20b916,400), duration (7 hours), and 1 stop, aligning with the 'best-value' archetype by emphasizing low cost for budget travelers. The framing is logically coherent and specific to this flight's attributes.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "10c2a50ddda5235c81376ba84d446e71": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation accurately references the flight's non-stop duration (4h10m) and zero layovers, aligning with the 'best-experience' label. The framing of prioritizing speed/convenience over cost is coherent with the flight's attributes.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation accurately references the flight's non-stop duration (4h10m) and zero layovers, aligning with the 'best-experience' label. The framing of prioritizing speed/convenience over cost is coherent with the flight's attributes.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "0e788188016ee235b09d5fefff809957": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the flight's price (\u20b916,400), duration (7 hours/420 min), and 1 stop, framing it as 'best-value' for budget travelers. The logic is coherent and directly ties the flight's attributes to the archetype label.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the flight's price (\u20b916,400), duration (7 hours/420 min), and 1 stop, framing it as 'best-value' for budget travelers. The logic is coherent and directly ties the flight's attributes to the archetype label.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "5d2767b5ceda0a0776339a46f21177ee": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the flight's non-stop nature (0 stops) and duration (4h10m/250 min), aligning with the 'best-experience' label by emphasizing speed and seamlessness. The 'ideal traveler' framing (valuing time over cost) fits the tradeoff of a potentially higher-priced direct flight.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the flight's non-stop nature (0 stops) and duration (4h10m/250 min), aligning with the 'best-experience' label by emphasizing speed and seamlessness. The 'ideal traveler' framing (valuing time over cost) fits the tradeoff of a potentially higher-priced direct flight.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "e1afe0c4e122b4944235b72754f78ff0": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation accurately references the flight's price (\u20b916,400), duration (7 hours), and 1 stop. The 'best-value' framing aligns with the lowest price and reasonable tradeoff for a budget-conscious traveler.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation accurately references the flight's price (\u20b916,400), duration (7 hours), and 1 stop. The 'best-value' framing aligns with the lowest price and reasonable tradeoff for a budget-conscious traveler.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "7192aae4b41689695c4ea0ffef718cc3": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly references the flight's non-stop nature (0 stops), duration (4h10m), and positions it as the fastest option with no layover hassles, aligning with the 'best-experience' archetype for travelers prioritizing time efficiency and convenience.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation correctly references the flight's non-stop nature (0 stops), duration (4h10m), and positions it as the fastest option with no layover hassles, aligning with the 'best-experience' archetype for travelers prioritizing time efficiency and convenience.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      4
+    ]
+  },
+  "dcf32ee921a7b44a53442339a7b2f8eb": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation accurately references the flight's price (\u20b916,400), duration (7 hours), and 1 stop, framing it as 'best-value' for budget travelers. The logic aligns with the tradeoff of a connecting flight for lower cost on this route.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation accurately references the flight's price (\u20b916,400), duration (7 hours), and 1 stop, framing it as 'best-value' for budget travelers. The logic aligns with the tradeoff of a connecting flight for lower cost on this route.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "0978549efc5e732153b70e1eb262fbd4": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the flight's non-stop nature (0 stops) and duration (4h10m/250 min), aligning with the 'best-experience' archetype by emphasizing speed and convenience. The framing is logically coherent and specific to this flight's attributes.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 4, \"reason\": \"The explanation correctly references the flight's duration (4h10m) and zero stops, aligning with the 'best-experience' framing for convenience. However, it omits the price (\u20b930,200), which is a key attribute for a fully comprehensive assessment of tradeoffs.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      4,
+      5,
+      5
+    ]
+  },
+  "fe1ea73f007efbca07417c66e0c9575c": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly references the non-stop nature (0 stops) and exact duration (3h 45m) of the flight. The 'smooth experience' framing aligns with the 'best-experience' archetype, emphasizing convenience and direct travel without price tradeoffs.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation correctly references the non-stop nature (0 stops) and exact duration (3h 45m) of the flight. The 'smooth experience' framing aligns with the 'best-experience' archetype, emphasizing convenience and direct travel without price tradeoffs.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "25e1975d8489b7e5a986a49ae5490e78": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly references the flight's non-stop nature (0 stops) and duration (3h 45m/225 min), aligning with the 'best-experience' archetype by emphasizing a smooth, direct journey. The framing is logically coherent and specific to this flight's attributes.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation correctly references the flight's non-stop nature (0 stops) and duration (3h 45m/225 min), aligning with the 'best-experience' archetype by emphasizing a smooth, direct journey. The framing is logically coherent and specific to this flight's attributes.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "2ff6fb38aef6ebbf81ebe61e3d50242f": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation accurately references the flight's non-stop nature (0 stops) and exact duration (3h 45m/225 min), aligning with the 'best-experience' archetype by emphasizing smoothness. The price is not mentioned but isn't required for this archetype, which prioritizes comfort over cost.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation accurately references the flight's non-stop nature (0 stops) and exact duration (3h 45m/225 min), aligning with the 'best-experience' archetype by emphasizing smoothness. The price is not mentioned but isn't required for this archetype, which prioritizes comfort over cost.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "4ae39b4ffd195fdfa54cd308d5d6777b": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly references the flight's non-stop nature (0 stops) and duration (3h 45m) while aligning with the 'best-experience' archetype by emphasizing smooth travel. It logically connects the flight's attributes to the ideal traveler's preference for convenience and time efficiency.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation correctly references the flight's non-stop nature (0 stops) and duration (3h 45m) while aligning with the 'best-experience' archetype by emphasizing smooth travel. It logically connects the flight's attributes to the ideal traveler's preference for convenience and time efficiency.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "6047b99717c6506b20f7f07ff9f3f594": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly references the flight's non-stop nature (0 stops) and duration (5h 30m), aligning with the 'best-experience' archetype by emphasizing comfort through direct service. The framing of 'comfortable experience' logically matches the tradeoff of a premium price for convenience.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 4, \"reason\": \"Explanation correctly references the non-stop nature and 5h30m duration of the flight, aligning with the 'best-experience' label. However, it omits the high price (\u20b956,200) and refundable feature, which could strengthen the framing for an 'ideal traveler' prioritizing comfort over cost.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      4,
+      5,
+      5
+    ]
+  },
+  "7d75f545987e27712b8cadb3ef891de8": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly references the flight's non-stop nature (0 stops) and exact duration (5h 30m), aligning with the 'best-experience' archetype by emphasizing convenience. The price is not mentioned but is less critical for this archetype's focus on travel comfort.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation correctly references the flight's non-stop nature (0 stops) and exact duration (5h 30m), aligning with the 'best-experience' archetype by emphasizing convenience. The price is not mentioned but is less critical for this archetype's focus on travel comfort.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "0ea54563927c25bac687d78a809ff259": {
+    "coherence_score": 4,
+    "coherence_reason": "Coherent and references the flight's price and stops, but lacks mention of duration (9 hours) or refundable status, which could affect the 'best-value' framing. The explanation is accurate but slightly generic.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 4, \"reason\": \"Coherent and references the flight's price and stops, but lacks mention of duration (9 hours) or refundable status, which could affect the 'best-value' framing. The explanation is accurate but slightly generic.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      4,
+      4,
+      4
+    ]
+  },
+  "8e41016b38ab1324819796abc29beecd": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly references the flight's non-stop nature (0 stops) and exact duration (5h 30m), aligning with the 'best-experience' archetype by emphasizing convenience. The framing is logically coherent and specific to this flight's attributes.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation correctly references the flight's non-stop nature (0 stops) and exact duration (5h 30m), aligning with the 'best-experience' archetype by emphasizing convenience. The framing is logically coherent and specific to this flight's attributes.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      4,
+      5
+    ]
+  },
+  "e803eab8bd284bd28d3611d531960aaa": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly references the flight's non-stop nature (0 stops) and duration (5h 30m), aligning with the 'best-experience' archetype by emphasizing convenience. The framing is logically coherent and specific to this flight's attributes.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 4, \"reason\": \"The explanation correctly references the non-stop nature and 5h30m duration of the flight, aligning with the 'best-experience' label. However, it omits the high price (\u20b956k) and refundable feature, which are critical to framing the 'ideal traveler' as someone prioritizing convenience over cost. The logic is coherent but incomplete.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      4,
+      5,
+      5
+    ]
+  },
+  "6884f356bd503474002b37418d9bb714": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the flight's non-stop nature (0 stops), exact duration (4h 15m), and precise price (\u20b927,900). The 'best-experience' framing aligns with the non-stop, direct flight tradeoff for comfort.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the flight's non-stop nature (0 stops), exact duration (4h 15m), and precise price (\u20b927,900). The 'best-experience' framing aligns with the non-stop, direct flight tradeoff for comfort.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "1b78a66012d9630ab7c4f76080d19865": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the flight's non-stop nature, duration (4h 15m), price (\u20b927,900), and route (BOM\u2192BKK). The 'best-experience' framing aligns with the non-stop convenience and reasonable price for a direct flight.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the flight's non-stop nature, duration (4h 15m), price (\u20b927,900), and route (BOM\u2192BKK). The 'best-experience' framing aligns with the non-stop convenience and reasonable price for a direct flight.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      3,
+      5
+    ]
+  },
+  "12a50854d75015a6b1ea89b607cfdf69": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation is logically coherent, accurately references the flight's non-stop nature, duration (4h 15m), and price (\u20b927,900). The 'best-experience' framing aligns with the direct flight's convenience and precise cost.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation is logically coherent, accurately references the flight's non-stop nature, duration (4h 15m), and price (\u20b927,900). The 'best-experience' framing aligns with the direct flight's convenience and precise cost.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "cc0c5605ebd125fb9d6ab0201579e9df": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly references the flight's non-stop nature (0 stops) and duration (4h 15m), aligning with the 'best-experience' archetype by emphasizing smoothness and convenience. The price is not mentioned, but the focus on duration and direct routing is appropriate for this label.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation correctly references the flight's non-stop nature (0 stops) and duration (4h 15m), aligning with the 'best-experience' archetype by emphasizing smoothness and convenience. The price is not mentioned, but the focus on duration and direct routing is appropriate for this label.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "4cd83236b5377cb1e664011a0aa35247": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly references the flight's non-stop nature, duration (3h 5m), and flight number (EK-509), aligning with the 'best-experience' archetype by emphasizing convenience and efficiency. It is logically coherent and specific to this flight.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation correctly references the flight's non-stop nature, duration (3h 5m), and flight number (EK-509), aligning with the 'best-experience' archetype by emphasizing convenience and efficiency. It is logically coherent and specific to this flight.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "35568ae610ade6c0e4c3b1bbc4d3c2ef": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation accurately references the flight's non-stop nature, exact duration (3h5m), and precise price (\u20b935,400). The 'best-experience' framing aligns with the tradeoff of paying a premium for a direct flight without layovers.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation accurately references the flight's non-stop nature, exact duration (3h5m), and precise price (\u20b935,400). The 'best-experience' framing aligns with the tradeoff of paying a premium for a direct flight without layovers.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      4,
+      5
+    ]
+  },
+  "291a7cf29f9803a934bedf41f960ca01": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation accurately references the flight's non-stop nature (0 stops), exact duration (3h5m), and precise price (\u20b935,400). The 'best-experience' framing aligns with the tradeoff of paying a premium for direct access and time efficiency.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation accurately references the flight's non-stop nature (0 stops), exact duration (3h5m), and precise price (\u20b935,400). The 'best-experience' framing aligns with the tradeoff of paying a premium for direct access and time efficiency.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "8cb55a87527f9fb2eb981f93b441fc6c": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation is logically coherent, references the specific flight's price (\u20b918,200), duration (5h30m), and 1 stop, and frames 'best-value' as a tradeoff between cost and convenience. All attributes align with the flight's actual data.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation is logically coherent, references the specific flight's price (\u20b918,200), duration (5h30m), and 1 stop, and frames 'best-value' as a tradeoff between cost and convenience. All attributes align with the flight's actual data.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "0c20befca4b4d6974d1aa12df5676125": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation is logically coherent, accurately references the flight's non-stop nature (0 stops), duration (3h 5m), and price (\u20b935,400). The 'ideal traveler' framing as 'fastest and most direct option' aligns with the 'best-experience' label by emphasizing speed and convenience for a smooth journey.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation is logically coherent, accurately references the flight's non-stop nature (0 stops), duration (3h 5m), and price (\u20b935,400). The 'ideal traveler' framing as 'fastest and most direct option' aligns with the 'best-experience' label by emphasizing speed and convenience for a smooth journey.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "e02d9b2e31ff3008e8cd8be33877a295": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation directly references the flight's exact price (\u20b922,800), duration (480 minutes), and stop count (1), framing it as 'best-value' by emphasizing low cost with reasonable tradeoffs for the DEL-KUL route. All attributes align precisely with the flight data.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation directly references the flight's exact price (\u20b922,800), duration (480 minutes), and stop count (1), framing it as 'best-value' by emphasizing low cost with reasonable tradeoffs for the DEL-KUL route. All attributes align precisely with the flight data.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "01d9785fab14dc25e76dc8ae623388ae": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation accurately references the flight's non-stop nature (0 stops), exact duration (5h 40m), and precise price (\u20b938,900). The 'best-experience' framing aligns with the tradeoff of prioritizing speed/convenience over potential cost savings from connecting flights. All attributes match the flight data.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation accurately references the flight's non-stop nature (0 stops), exact duration (5h 40m), and precise price (\u20b938,900). The 'best-experience' framing aligns with the tradeoff of prioritizing speed/convenience over potential cost savings from connecting flights. All attributes match the flight data.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5
+    ]
+  },
+  "3ab7bfe006711636e3bcedcf454b2206": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly references the flight's price (\u20b922,800), duration (8 hours), and 1 stop, aligning with the 'best-value' label. The framing as 'lowest-priced option' with budget prioritization logically matches the tradeoff of a single stop for cost efficiency.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation correctly references the flight's price (\u20b922,800), duration (8 hours), and 1 stop, aligning with the 'best-value' label. The framing as 'lowest-priced option' with budget prioritization logically matches the tradeoff of a single stop for cost efficiency.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "f2db6f073b37bba68a54879fe5294394": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation accurately references the flight's non-stop nature (0 stops), duration (5h40m), and price (\u20b938,900). The 'shortest total travel time with zero layovers' framing aligns with the 'best-experience' label by emphasizing time efficiency and convenience for a smooth journey.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation accurately references the flight's non-stop nature (0 stops), duration (5h40m), and price (\u20b938,900). The 'shortest total travel time with zero layovers' framing aligns with the 'best-experience' label by emphasizing time efficiency and convenience for a smooth journey.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "3509a34e385fff1ea10a3e97f8fe5e34": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly identifies the flight's price (\u20b922,800), duration (8 hours), and 1 stop, aligning with the 'best-value' label by emphasizing budget priority. The framing as 'lowest-priced' with a stop makes sense for the tradeoff described.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation correctly identifies the flight's price (\u20b922,800), duration (8 hours), and 1 stop, aligning with the 'best-value' label by emphasizing budget priority. The framing as 'lowest-priced' with a stop makes sense for the tradeoff described.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "fe34ba846dc0599c8d64e99af15a8428": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation accurately references the flight's non-stop nature (0 stops), exact duration (5h 40m), and precise price (\u20b938,900). The 'fastest and most direct' framing aligns with the 'best-experience' archetype by emphasizing time efficiency and convenience for travelers prioritizing direct flights.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation accurately references the flight's non-stop nature (0 stops), exact duration (5h 40m), and precise price (\u20b938,900). The 'fastest and most direct' framing aligns with the 'best-experience' archetype by emphasizing time efficiency and convenience for travelers prioritizing direct flights.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "0a1a79955f70688f663fde343ca5a1a6": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation accurately references the flight's price (\u20b922,800), duration (8h), and 1 stop, aligning with the 'best-value' label by emphasizing budget-friendliness while acknowledging the tradeoff of a connecting flight.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation accurately references the flight's price (\u20b922,800), duration (8h), and 1 stop, aligning with the 'best-value' label by emphasizing budget-friendliness while acknowledging the tradeoff of a connecting flight.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "ac40da2ff27929cf7e3218c9f769f5cb": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation accurately references the flight's non-stop nature (0 stops) and exact duration (5h40m), aligning with the 'best-experience' archetype which emphasizes seamless travel. The framing of 'seamless experience' logically matches the tradeoff of a direct flight over potential stopovers.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation accurately references the flight's non-stop nature (0 stops) and exact duration (5h40m), aligning with the 'best-experience' archetype which emphasizes seamless travel. The framing of 'seamless experience' logically matches the tradeoff of a direct flight over potential stopovers.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "a586c0433f356fc7a1809dee28aadd6a": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly identifies the flight's price (\u20b916,400), duration (7 hours), and 1 stop, aligning with the 'best-value' archetype by emphasizing cost-effectiveness. The framing is logically coherent and specific to this flight's attributes.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation correctly identifies the flight's price (\u20b916,400), duration (7 hours), and 1 stop, aligning with the 'best-value' archetype by emphasizing cost-effectiveness. The framing is logically coherent and specific to this flight's attributes.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "616a86e12838b0a5a3846c874db630ea": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the flight's non-stop nature (0 stops), duration (4h 10m), and price (\u20b930,200). The 'best-experience' framing aligns with the tradeoff of paying a premium for speed and convenience, which is logical for this direct flight.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the flight's non-stop nature (0 stops), duration (4h 10m), and price (\u20b930,200). The 'best-experience' framing aligns with the tradeoff of paying a premium for speed and convenience, which is logical for this direct flight.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "4caf47a5f89d2b62d530bce66d6e8eb0": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation is logically coherent, accurately references the flight's price (\u20b918,500), duration (8 hours), and 2 stops, and frames the 'ideal traveler' as budget-focused, which aligns with the 'best-value' label. All attributes match the flight's specifics.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation is logically coherent, accurately references the flight's price (\u20b918,500), duration (8 hours), and 2 stops, and frames the 'ideal traveler' as budget-focused, which aligns with the 'best-value' label. All attributes match the flight's specifics.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "8c594d47e50f276b567e993758418f6f": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly identifies the flight's non-stop nature and 3h45m duration, aligning with the 'best-experience' label by emphasizing minimal travel time. It references the flight number and route accurately, and the framing of 'shortest travel time' as a key tradeoff makes sense for this specific flight.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation correctly identifies the flight's non-stop nature and 3h45m duration, aligning with the 'best-experience' label by emphasizing minimal travel time. It references the flight number and route accurately, and the framing of 'shortest travel time' as a key tradeoff makes sense for this specific flight.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "c8289a23eebc84614b9f2778d5aa49f2": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation accurately references the flight's price (\u20b918,500), duration (8h 0m), and 2 stops. The 'ideal if budget is the priority' framing aligns with the 'best-value' label, emphasizing cost efficiency despite tradeoffs in travel time and connections.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation accurately references the flight's price (\u20b918,500), duration (8h 0m), and 2 stops. The 'ideal if budget is the priority' framing aligns with the 'best-value' label, emphasizing cost efficiency despite tradeoffs in travel time and connections.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "0b7ef35f6272955152f03735e151a44c": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation is logically coherent, accurately references the flight's non-stop nature (0 stops), 3h45m duration, refundability, and \u20b943,500 price. The 'best-experience' framing aligns with the tradeoff of paying a premium for convenience and flexibility.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation is logically coherent, accurately references the flight's non-stop nature (0 stops), 3h45m duration, refundability, and \u20b943,500 price. The 'best-experience' framing aligns with the tradeoff of paying a premium for convenience and flexibility.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "f6f3dc9110ff485ad451f94eb1f01af3": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation accurately references the flight's price (\u20b918,500), duration (8h 0m), and 2 stops, aligning with the 'best-value' label. The 'ideal if budget is the priority' framing logically emphasizes the lowest price tradeoff for this flight.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation accurately references the flight's price (\u20b918,500), duration (8h 0m), and 2 stops, aligning with the 'best-value' label. The 'ideal if budget is the priority' framing logically emphasizes the lowest price tradeoff for this flight.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "fa28a05f86b74fbb0fda11cfadcd50c2": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation is logically coherent, references the flight's non-stop nature (0 stops), 3h45m duration, and refundability. The 'ideal traveler' framing (prioritizing speed/flexibility over price) aligns with the flight's attributes.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation is logically coherent, references the flight's non-stop nature (0 stops), 3h45m duration, and refundability. The 'ideal traveler' framing (prioritizing speed/flexibility over price) aligns with the flight's attributes.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "7e22807a4a0d7c814d5e2db6b20810e5": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation accurately references the flight's price (\u20b918,500), duration (8h 0m), and 2 stops, aligning with the 'best-value' label. The 'ideal if budget is the priority' framing logically matches the tradeoff of lower cost for multiple stops.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation accurately references the flight's price (\u20b918,500), duration (8h 0m), and 2 stops, aligning with the 'best-value' label. The 'ideal if budget is the priority' framing logically matches the tradeoff of lower cost for multiple stops.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "0e8ce0d2c63273441cb2a42338af6721": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation is logically coherent, references the flight's non-stop duration (3h45m) and zero stops, and frames the 'ideal traveler' as prioritizing minimal travel time and convenience, which aligns with the flight's attributes.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation is logically coherent, references the flight's non-stop duration (3h45m) and zero stops, and frames the 'ideal traveler' as prioritizing minimal travel time and convenience, which aligns with the flight's attributes.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "f7967f0307bd1479e032cc681fb0bcdd": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation is logically coherent, references the flight's exact price (\u20b924,600), duration (9h 0m), and stops (2), and the 'ideal if budget is the priority' framing aligns with the 'best-value' label by emphasizing cost over convenience tradeoffs.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation is logically coherent, references the flight's exact price (\u20b924,600), duration (9h 0m), and stops (2), and the 'ideal if budget is the priority' framing aligns with the 'best-value' label by emphasizing cost over convenience tradeoffs.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "2a7b0dbe8a3d0a1fc2987a6a760b040f": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation is logically coherent, references the flight's non-stop nature (0 stops) and exact duration (5h30m), and frames 'best-experience' as minimizing travel time and maximizing comfort, which aligns with the flight's attributes. The refundable feature is not mentioned but is not required for this archetype.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation is logically coherent, references the flight's non-stop nature (0 stops) and exact duration (5h30m), and frames 'best-experience' as minimizing travel time and maximizing comfort, which aligns with the flight's attributes. The refundable feature is not mentioned but is not required for this archetype.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "4cc9b1a7d49a7304e69ea14671d54c28": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation is logically coherent, accurately references the flight's price (\u20b924,600), duration (9h 0m), and stops (2), and aligns with the 'best-value' label by emphasizing budget priority despite tradeoffs in stops and duration.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation is logically coherent, accurately references the flight's price (\u20b924,600), duration (9h 0m), and stops (2), and aligns with the 'best-value' label by emphasizing budget priority despite tradeoffs in stops and duration.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "58a97c00c9501c91e4675688b378e2f4": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly references the flight's non-stop nature (0 stops) and duration (5h30m/330 min), aligning with the 'best-experience' label by emphasizing time efficiency and comfort. The framing of minimizing travel time and maximizing comfort logically matches the flight's attributes.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation correctly references the flight's non-stop nature (0 stops) and duration (5h30m/330 min), aligning with the 'best-experience' label by emphasizing time efficiency and comfort. The framing of minimizing travel time and maximizing comfort logically matches the flight's attributes.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "7584623065e326152ed0acd682e9b36d": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation is logically coherent, accurately references the flight's price (\u20b924,600), duration (9h 0m), and 2 stops, and aligns with the 'best-value' label by emphasizing budget priority despite tradeoffs in stops and duration.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation is logically coherent, accurately references the flight's price (\u20b924,600), duration (9h 0m), and 2 stops, and aligns with the 'best-value' label by emphasizing budget priority despite tradeoffs in stops and duration.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "c4fabc6e973a6f7b2263f7e39092c3a1": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly references the flight's non-stop nature (0 stops), duration (5h30m), and positions it as ideal for minimizing travel time and maximizing comfort, aligning with the 'best-experience' archetype. All attributes match the flight data.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation correctly references the flight's non-stop nature (0 stops), duration (5h30m), and positions it as ideal for minimizing travel time and maximizing comfort, aligning with the 'best-experience' archetype. All attributes match the flight data.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "a984942753f46ba73baf824c01068d12": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the flight's price (\u20b924,600), duration (9h 0m), and stops (2), aligning with the 'best-value' label by emphasizing budget priority. The framing is logically coherent and specific to this flight's tradeoffs.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the flight's price (\u20b924,600), duration (9h 0m), and stops (2), aligning with the 'best-value' label by emphasizing budget priority. The framing is logically coherent and specific to this flight's tradeoffs.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "83667e1cc764dd594506d5fa9e73a1f2": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation is logically coherent, accurately references the flight's non-stop nature, duration (5h30m), price (\u20b956,200), and aligns with the 'best-experience' framing by emphasizing speed and comfort. All attributes match the flight's actual details.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation is logically coherent, accurately references the flight's non-stop nature, duration (5h30m), price (\u20b956,200), and aligns with the 'best-experience' framing by emphasizing speed and comfort. All attributes match the flight's actual details.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "7300b9653148f054679d603fc0ff15d3": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation accurately references the flight's price (\u20b915,800), duration (7h 0m), and 1 stop, aligning with the 'best-value' label by emphasizing budget priority. The framing logically connects low cost to ideal traveler needs without contradictions.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation accurately references the flight's price (\u20b915,800), duration (7h 0m), and 1 stop, aligning with the 'best-value' label by emphasizing budget priority. The framing logically connects low cost to ideal traveler needs without contradictions.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "08a405e460546854ba66b4350bb2a1e6": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly references the flight's non-stop nature (0 stops) and duration (4h 15m/255 min), aligning with the 'best-experience' archetype by emphasizing comfort/speed tradeoffs. The framing of prioritizing time over price is consistent with the flight's attributes.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation correctly references the flight's non-stop nature (0 stops) and duration (4h 15m/255 min), aligning with the 'best-experience' archetype by emphasizing comfort/speed tradeoffs. The framing of prioritizing time over price is consistent with the flight's attributes.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "06965a67595ed0ec472b7a6074217494": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation is logically coherent, references the specific flight's price (\u20b915,800), duration (7h 0m), and stops (1), and the 'best-value' framing aligns with the tradeoff of a lower price for a longer duration with one stop.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation is logically coherent, references the specific flight's price (\u20b915,800), duration (7h 0m), and stops (1), and the 'best-value' framing aligns with the tradeoff of a lower price for a longer duration with one stop.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "9505210d1524959f87edd39956094ea9": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly references the flight's non-stop nature (0 stops), duration (4h 15m), and positions it as a 'best-experience' choice by emphasizing time efficiency and comfort. The 'ideal traveler' framing aligns with prioritizing direct flights for convenience.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation correctly references the flight's non-stop nature (0 stops), duration (4h 15m), and positions it as a 'best-experience' choice by emphasizing time efficiency and comfort. The 'ideal traveler' framing aligns with prioritizing direct flights for convenience.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "125b6abd2a742ed3a469d773cd127cb8": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation accurately references the flight's price (\u20b915,800), duration (7h 0m), and 1 stop, aligning with the 'best-value' label by emphasizing budget priority. The framing is logically coherent and specific to this flight's tradeoffs.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation accurately references the flight's price (\u20b915,800), duration (7h 0m), and 1 stop, aligning with the 'best-value' label by emphasizing budget priority. The framing is logically coherent and specific to this flight's tradeoffs.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "d43783327c87b789fa60b3f278c79779": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly references the flight's non-stop nature (0 stops) and duration (4h 15m), aligning with the 'best-experience' archetype by emphasizing comfort/speed over cost. The framing logically matches the tradeoff of a direct flight.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation correctly references the flight's non-stop nature (0 stops) and duration (4h 15m), aligning with the 'best-experience' archetype by emphasizing comfort/speed over cost. The framing logically matches the tradeoff of a direct flight.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "a3a38bc40ca10a762986c0a9774ca49c": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation accurately references the flight's price (\u20b915,800), duration (7h 0m), and 1 stop, aligning with the 'best-value' label by emphasizing budget priority over direct flights. The framing is logically coherent and specific to this flight's tradeoffs.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation accurately references the flight's price (\u20b915,800), duration (7h 0m), and 1 stop, aligning with the 'best-value' label by emphasizing budget priority over direct flights. The framing is logically coherent and specific to this flight's tradeoffs.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "5c56f0c164764ba6d71e35293fea2174": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the flight's non-stop nature (0 stops), duration (4h 15m), and positions it as ideal for prioritizing comfort/speed over price, aligning with the 'best-experience' archetype. All attributes match the flight's actual data.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the flight's non-stop nature (0 stops), duration (4h 15m), and positions it as ideal for prioritizing comfort/speed over price, aligning with the 'best-experience' archetype. All attributes match the flight's actual data.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "86685793cbcc05ebf3a4282f0e4df78b": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation is logically coherent, accurately references the flight's price (\u20b918,200), duration (5h 30m), and 1 stop, and frames the 'best-value' label effectively for budget-conscious travelers seeking cost-effectiveness with reasonable trade-offs in travel time and connectivity.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation is logically coherent, accurately references the flight's price (\u20b918,200), duration (5h 30m), and 1 stop, and frames the 'best-value' label effectively for budget-conscious travelers seeking cost-effectiveness with reasonable trade-offs in travel time and connectivity.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "76d7cac2912c89910d7ff23514e51b8f": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation is logically coherent, references the flight's exact duration (3h 5m) and zero stops, and frames the 'best-experience' label as ideal for travelers prioritizing non-stop, time-efficient travel. All attributes align with the flight's data.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation is logically coherent, references the flight's exact duration (3h 5m) and zero stops, and frames the 'best-experience' label as ideal for travelers prioritizing non-stop, time-efficient travel. All attributes align with the flight's data.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "3f9b396f3697aac267dd9c67462449ce": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation is logically coherent, accurately references the flight's price (\u20b918,500), duration (8h 0m), and 2 stops, and correctly frames the 'ideal traveler' as budget-focused despite tradeoffs in travel time and connections.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation is logically coherent, accurately references the flight's price (\u20b918,500), duration (8h 0m), and 2 stops, and correctly frames the 'ideal traveler' as budget-focused despite tradeoffs in travel time and connections.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "d278ff43df9f4b264fe9734bf6d1f147": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation is logically coherent, accurately references the flight's non-stop nature (0 stops), duration (3h45m), price (\u20b943,500), and frames 'best-experience' as a tradeoff for direct travel time and comfort. All attributes align with the flight's actual data.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation is logically coherent, accurately references the flight's non-stop nature (0 stops), duration (3h45m), price (\u20b943,500), and frames 'best-experience' as a tradeoff for direct travel time and comfort. All attributes align with the flight's actual data.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "3480e96720d77528c818ebf6745382ef": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation is logically coherent, references the flight's exact price (\u20b918,500), duration (8h 0m), and 2 stops. The 'ideal budget choice' framing aligns with the tradeoff of lowest price for a multi-stop flight.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation is logically coherent, references the flight's exact price (\u20b918,500), duration (8h 0m), and 2 stops. The 'ideal budget choice' framing aligns with the tradeoff of lowest price for a multi-stop flight.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "3a421caa2e029514b48595fa1e6a3af4": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly references the flight's non-stop nature (0 stops), duration (3h 45m), and positions it as ideal for a seamless experience, aligning with the 'best-experience' archetype. All attributes match the flight's actual data.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation correctly references the flight's non-stop nature (0 stops), duration (3h 45m), and positions it as ideal for a seamless experience, aligning with the 'best-experience' archetype. All attributes match the flight's actual data.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "de611bc385426ecbc252ee200af44217": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation accurately references the flight's price (\u20b918,500), duration (8h 0m), and 2 stops, and logically frames it as 'ideal for budget-conscious travelers' by emphasizing low cost despite tradeoffs in travel time and connections. The 'best-value' label aligns with this reasoning.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation accurately references the flight's price (\u20b918,500), duration (8h 0m), and 2 stops, and logically frames it as 'ideal for budget-conscious travelers' by emphasizing low cost despite tradeoffs in travel time and connections. The 'best-value' label aligns with this reasoning.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "2063bdf2745b403bbb782a33486fa447": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly references the flight's non-stop nature (0 stops), duration (3h 45m), and positions it as the 'best experience' due to shortest travel time and implied comfort. The framing aligns with the 'best-experience' label and matches all specified flight attributes.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation correctly references the flight's non-stop nature (0 stops), duration (3h 45m), and positions it as the 'best experience' due to shortest travel time and implied comfort. The framing aligns with the 'best-experience' label and matches all specified flight attributes.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "f8649e06a52d0dfecec64e4c450074fc": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation correctly references the flight's non-stop nature (0 stops), exact duration (3h 45m), refundability, and price (\u20b943,500). The 'best-experience' framing logically connects these attributes to traveler convenience and flexibility.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation correctly references the flight's non-stop nature (0 stops), exact duration (3h 45m), refundability, and price (\u20b943,500). The 'best-experience' framing logically connects these attributes to traveler convenience and flexibility.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "f22a0a2e149924fb38c83ea15028eb3a": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation is logically coherent, correctly references the flight's non-stop nature (0 stops), duration (5h30m), and aligns with the 'best-experience' label by emphasizing shortest travel time and comfort. All attributes match the flight's actual data.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation is logically coherent, correctly references the flight's non-stop nature (0 stops), duration (5h30m), and aligns with the 'best-experience' label by emphasizing shortest travel time and comfort. All attributes match the flight's actual data.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "cafde2392adc10c48d46c3bbf3bd6e98": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation is logically coherent, accurately references the flight's price (\u20b924,600), duration (9h 0m), and 2 stops, and frames the 'ideal traveler' as budget-focused, aligning with the 'best-value' archetype. All attributes match the flight's specifics.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation is logically coherent, accurately references the flight's price (\u20b924,600), duration (9h 0m), and 2 stops, and frames the 'ideal traveler' as budget-focused, aligning with the 'best-value' archetype. All attributes match the flight's specifics.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "9f13251bedade534a4a8f3d6c1a43ce8": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation is logically coherent, accurately references the flight's non-stop nature (0 stops), duration (5h30m), price (\u20b956,200), and refundability. The 'best-experience' framing aligns with the tradeoff of prioritizing comfort/convenience over cost, which matches the flight's attributes.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation is logically coherent, accurately references the flight's non-stop nature (0 stops), duration (5h30m), price (\u20b956,200), and refundability. The 'best-experience' framing aligns with the tradeoff of prioritizing comfort/convenience over cost, which matches the flight's attributes.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "f60497f609feeaff1a92b17fc22a53d6": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly references the flight's non-stop nature (0 stops), duration (5h30m), and positions it as the 'shortest travel time' for comfort, aligning with the 'best-experience' archetype. The framing logically connects the flight's attributes to the ideal traveler's priorities.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation correctly references the flight's non-stop nature (0 stops), duration (5h30m), and positions it as the 'shortest travel time' for comfort, aligning with the 'best-experience' archetype. The framing logically connects the flight's attributes to the ideal traveler's priorities.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "25358cde54c12884a2ae9fd6e9dbb4f7": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the flight's non-stop nature (0 stops), duration (5h30m), and correctly frames it as 'best-experience' due to shortest travel time and implied comfort. All attributes align with the flight's actual data.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the flight's non-stop nature (0 stops), duration (5h30m), and correctly frames it as 'best-experience' due to shortest travel time and implied comfort. All attributes align with the flight's actual data.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "fa1a8e2462f90b07f3df1cd797027b12": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation is logically coherent, accurately references the flight's price (\u20b915,800), duration (7h 0m), and 1 stop, and frames the 'best-value' label effectively by emphasizing the lowest price for the route despite the stop.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation is logically coherent, accurately references the flight's price (\u20b915,800), duration (7h 0m), and 1 stop, and frames the 'best-value' label effectively by emphasizing the lowest price for the route despite the stop.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "b0e73b9ff48d7e628d1e9307eebb1f20": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the flight's non-stop nature (0 stops) and duration (4h15m), aligning with the 'best-experience' archetype by emphasizing time efficiency and comfort. The 'ideal traveler' framing fits a user prioritizing minimal travel time over cost.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the flight's non-stop nature (0 stops) and duration (4h15m), aligning with the 'best-experience' archetype by emphasizing time efficiency and comfort. The 'ideal traveler' framing fits a user prioritizing minimal travel time over cost.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "5139a5d2b3d607b9f87b25205fa74712": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation accurately references the flight's price (\u20b915,800), duration (7h 0m), and 1 stop, aligning with the 'best-value' label by emphasizing budget priority. The framing is logically coherent and specific to this flight's tradeoffs.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation accurately references the flight's price (\u20b915,800), duration (7h 0m), and 1 stop, aligning with the 'best-value' label by emphasizing budget priority. The framing is logically coherent and specific to this flight's tradeoffs.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "60768d567c953b072ff54639b9c34030": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly references the flight's non-stop nature and duration (4h 15m), aligning with the 'best-experience' archetype by emphasizing time efficiency and comfort. The framing is logically coherent and specific to this flight's attributes.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation correctly references the flight's non-stop nature and duration (4h 15m), aligning with the 'best-experience' archetype by emphasizing time efficiency and comfort. The framing is logically coherent and specific to this flight's attributes.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "3f951f87fb0b13ccb81f44588deb2316": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation is logically coherent, references the specific flight's price (\u20b915,800), duration (7h 0m), and stops (1), and the 'best-value' framing aligns with budget travelers prioritizing cost over direct flights or shorter durations.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation is logically coherent, references the specific flight's price (\u20b915,800), duration (7h 0m), and stops (1), and the 'best-value' framing aligns with budget travelers prioritizing cost over direct flights or shorter durations.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "54ae30ebed092f93c0a5ea4cc1a54965": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly references the flight's non-stop nature and 4h15m duration (255 minutes), aligning with the 'best-experience' label by emphasizing time efficiency and comfort. It logically connects the flight's attributes to the ideal traveler's priorities.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation correctly references the flight's non-stop nature and 4h15m duration (255 minutes), aligning with the 'best-experience' label by emphasizing time efficiency and comfort. It logically connects the flight's attributes to the ideal traveler's priorities.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "991d4d44326baa0908635734f52504f6": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation accurately references the flight's price (\u20b915,800), duration (7h 0m), and 1 stop. The 'ideal if budget is the priority' framing aligns with the 'best-value' label, emphasizing the tradeoff between cost and convenience.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation accurately references the flight's price (\u20b915,800), duration (7h 0m), and 1 stop. The 'ideal if budget is the priority' framing aligns with the 'best-value' label, emphasizing the tradeoff between cost and convenience.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "532a42794c9b7648dd12ac66303737d4": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation accurately references the flight's non-stop nature (0 stops) and duration (4h 15m/255 min), aligning with the 'best-experience' archetype by emphasizing time efficiency and comfort. The framing of 'ideal traveler' as someone prioritizing direct flights and minimal travel time is coherent with the flight's attributes.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation accurately references the flight's non-stop nature (0 stops) and duration (4h 15m/255 min), aligning with the 'best-experience' archetype by emphasizing time efficiency and comfort. The framing of 'ideal traveler' as someone prioritizing direct flights and minimal travel time is coherent with the flight's attributes.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      4,
+      5
+    ]
+  },
+  "df6489dd0782326cf366d7816f7c82ec": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly references the flight's price (INR 18,200), duration (5h 30m), and 1 stop. The 'ideal budget choice' framing aligns with the 'best-value' archetype label and makes logical sense given the flight's attributes.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation correctly references the flight's price (INR 18,200), duration (5h 30m), and 1 stop. The 'ideal budget choice' framing aligns with the 'best-value' archetype label and makes logical sense given the flight's attributes.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "5833935f7540f585e69ae3f7391cab74": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly identifies the non-stop nature (0 stops) and duration (3h 5m) of EK-509, aligning with the flight's attributes. The 'ideal traveler' framing (prioritizing speed/convenience over price) logically matches the tradeoff of a direct flight with a higher price (\u20b935,400).",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation correctly identifies the non-stop nature (0 stops) and duration (3h 5m) of EK-509, aligning with the flight's attributes. The 'ideal traveler' framing (prioritizing speed/convenience over price) logically matches the tradeoff of a direct flight with a higher price (\u20b935,400).\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "d07b1ab24bd95e04556252efecbce627": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation accurately references the flight's price (\u20b918,200), duration (5h 30m), and 1 stop, aligning with the 'best-value' label by emphasizing budget priority despite the stop. The logic is coherent and specific to this flight's attributes.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation accurately references the flight's price (\u20b918,200), duration (5h 30m), and 1 stop, aligning with the 'best-value' label by emphasizing budget priority despite the stop. The logic is coherent and specific to this flight's attributes.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "926ed8a02779f660479521fb56219f48": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation is logically coherent, accurately references the flight's duration (3h 5m), zero stops, and price (\u20b935,400). The 'best-experience' framing aligns with prioritizing speed/convenience for a direct flight, which matches the flight's attributes.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation is logically coherent, accurately references the flight's duration (3h 5m), zero stops, and price (\u20b935,400). The 'best-experience' framing aligns with prioritizing speed/convenience for a direct flight, which matches the flight's attributes.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "4373c34f124832ed02fdd3c1d0ce962c": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation correctly references the flight's price (\u20b918,500) and 2 stops, aligning with the 'best-value' label by emphasizing budget priority. The framing logically matches the tradeoff of lower cost with multiple stops.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation correctly references the flight's price (\u20b918,500) and 2 stops, aligning with the 'best-value' label by emphasizing budget priority. The framing logically matches the tradeoff of lower cost with multiple stops.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      4
+    ]
+  },
+  "61a4d25caa7a096552785821230da269": {
+    "coherence_score": 2,
+    "coherence_reason": "The explanation incorrectly states the flight duration as '3h total' when the actual duration is 225 minutes (3h45m). This factual mismatch undermines coherence. While the non-stop aspect and 'best-experience' framing are relevant, the duration error creates a logical inconsistency.",
+    "structural_valid": false,
+    "raw_judge_output": "{\"score\": 3, \"reason\": \"The explanation mentions the flight is non-stop and fastest, which aligns with the flight's attributes, but incorrectly states the duration as '3h total' when the actual duration is 225 minutes (3h45m). The 'best-experience' framing is generic and doesn't address the high price (\u20b943,500) or refundable nature, which could impact the ideal traveler's decision.\", \"structural_valid\": false}",
+    "high_variance": false,
+    "all_scores": [
+      3,
+      2,
+      2
+    ]
+  },
+  "9d715cc4e0200618c79cb227c592210f": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation correctly identifies the flight's price (\u20b918,500) and 2 stops, framing it as 'best-value' for budget-focused travelers. The tradeoff of longer duration (implied by 2 stops) is consistent with the 'best-value' archetype prioritizing cost over time.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation correctly identifies the flight's price (\u20b918,500) and 2 stops, framing it as 'best-value' for budget-focused travelers. The tradeoff of longer duration (implied by 2 stops) is consistent with the 'best-value' archetype prioritizing cost over time.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "45e9cb072d22f881cb7da41cd29e8a92": {
+    "coherence_score": 2,
+    "coherence_reason": "The explanation incorrectly states the flight duration as '3h total' when the actual duration is 225 minutes (3h45m). This factual mismatch undermines coherence. While it correctly notes the non-stop aspect, the duration error creates a logical break.",
+    "structural_valid": false,
+    "raw_judge_output": "{\"score\": 2, \"reason\": \"The explanation incorrectly states the flight duration as '3h total' when the actual duration is 225 minutes (3h45m). This factual mismatch undermines coherence. While it correctly notes the non-stop aspect, the duration error creates a logical break.\", \"structural_valid\": false}",
+    "high_variance": false,
+    "all_scores": [
+      2,
+      3,
+      2
+    ]
+  },
+  "cf7a2b972b8e00fe5de2f85da3236cd6": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly identifies the flight's price (\u20b924,600) and 2 stops, framing it as 'best-value' for budget-focused travelers. It logically connects the lowest price to the tradeoff of multiple stops, aligning with the archetype label.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation correctly identifies the flight's price (\u20b924,600) and 2 stops, framing it as 'best-value' for budget-focused travelers. It logically connects the lowest price to the tradeoff of multiple stops, aligning with the archetype label.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "e6e1ed5c0fc9ea277e40fe63123c5282": {
+    "coherence_score": 4,
+    "coherence_reason": "The explanation correctly identifies the non-stop nature and positions it as the fastest option, aligning with the 'best-experience' label. However, the duration is inaccurately stated as '5h total' when the actual duration is 5h30m, creating a minor factual mismatch. The framing of comfort and convenience is appropriate for a premium, refundable flight.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 4, \"reason\": \"The explanation correctly identifies the non-stop nature and positions it as the fastest option, aligning with the 'best-experience' label. However, the duration is inaccurately stated as '5h total' when the actual duration is 5h30m, creating a minor factual mismatch. The framing of comfort and convenience is appropriate for a premium, refundable flight.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      4,
+      4,
+      2
+    ]
+  },
+  "b670a9ca5118d03c4fe3d55f9b08f188": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly references the flight's price (\u20b924,600) and 2 stops, aligning with the 'best-value' archetype by emphasizing budget priority. It is logically coherent and specific to the flight's attributes.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation correctly references the flight's price (\u20b924,600) and 2 stops, aligning with the 'best-value' archetype by emphasizing budget priority. It is logically coherent and specific to the flight's attributes.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      4
+    ]
+  },
+  "8a4daa565558f2d1002c8fc0ee91c2a6": {
+    "coherence_score": 4,
+    "coherence_reason": "The explanation correctly identifies the non-stop nature and positions it as the fastest option, aligning with the 'best-experience' label. However, the duration is inaccurately stated as '5h total' when the actual duration is 5h30m. The refundable feature is also omitted, which could be relevant for framing the ideal traveler. The logic holds but has minor factual inconsistencies.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 4, \"reason\": \"The explanation correctly identifies the non-stop nature and positions it as the fastest option, aligning with the 'best-experience' label. However, the duration is inaccurately stated as '5h total' when the actual duration is 5h30m. The refundable feature is also omitted, which could be relevant for framing the ideal traveler. The logic holds but has minor factual inconsistencies.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      4,
+      4,
+      2
+    ]
+  },
+  "dad01b9b3f897e2ebf749a44a8299ba0": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly identifies the flight's price (\u20b924,600) and 2 stops, framing it as 'best-value' for budget-focused travelers. It logically connects low cost to the tradeoff of multiple stops, aligning with the archetype label.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 4, \"reason\": \"The explanation correctly references the flight's price (\u20b924,600) and 2 stops, aligning with the 'best-value' label. It frames the tradeoff (lower price with multiple stops) as ideal for budget-focused travelers. Minor omission of duration (540 min) and non-refundable status, but these are less critical for the 'best-value' framing.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      4,
+      5,
+      5
+    ]
+  },
+  "8e0baf30f750e19320d6ab83b46f8a3c": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation accurately references the flight's non-stop nature (0 stops), exact duration (5h30m), and precise price (\u20b956,200). The 'minimal travel time' framing aligns with the direct DEL-SIN route's tradeoff of no layovers, making it coherent for the 'best-experience' archetype.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation accurately references the flight's non-stop nature (0 stops), exact duration (5h30m), and precise price (\u20b956,200). The 'minimal travel time' framing aligns with the direct DEL-SIN route's tradeoff of no layovers, making it coherent for the 'best-experience' archetype.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "45627f89c61029852a719f2586df011e": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly identifies the flight's price (\u20b924,600) and 2 stops, framing it as 'best-value' for budget-focused travelers. It logically connects low cost to the tradeoff of multiple stops, aligning with the archetype label.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation correctly identifies the flight's price (\u20b924,600) and 2 stops, framing it as 'best-value' for budget-focused travelers. It logically connects low cost to the tradeoff of multiple stops, aligning with the archetype label.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "7c81755d5e0495a997cf2b73c62d8147": {
+    "coherence_score": 2,
+    "coherence_reason": "The explanation incorrectly states the duration as '5h total' when the actual flight duration is 330 minutes (5h30m). This factual mismatch with the flight's actual attributes reduces coherence. While the non-stop aspect is correctly noted, the duration error creates a logical inconsistency.",
+    "structural_valid": false,
+    "raw_judge_output": "{\"score\": 2, \"reason\": \"The explanation incorrectly states the duration as '5h total' when the actual flight duration is 330 minutes (5h30m). This factual mismatch with the flight's actual attributes reduces coherence. While the non-stop aspect is correctly noted, the duration error creates a logical inconsistency.\", \"structural_valid\": false}",
+    "high_variance": false,
+    "all_scores": [
+      2,
+      2,
+      4
+    ]
+  },
+  "ed8c1686ed2daf1f05019db257f31f67": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation correctly identifies the flight's price (\u20b915,800), stop count (1), and frames it as 'best choice for budget' which aligns with the 'best-value' label. The tradeoff of a single stop for a lower price is logically coherent.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation correctly identifies the flight's price (\u20b915,800), stop count (1), and frames it as 'best choice for budget' which aligns with the 'best-value' label. The tradeoff of a single stop for a lower price is logically coherent.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "7af24646bce19344824d8d3e3b16a61d": {
+    "coherence_score": 4,
+    "coherence_reason": "The explanation correctly identifies the flight as non-stop and fastest (though duration is slightly off: 255 min = 4h15m vs stated 4h). It aligns with 'best-experience' framing by emphasizing convenience, but omits price context which could affect the 'best' assessment. Structural validity holds as it references actual flight attributes.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 4, \"reason\": \"The explanation correctly identifies the flight as non-stop and fastest (though duration is slightly off: 255 min = 4h15m vs stated 4h). It aligns with 'best-experience' framing by emphasizing convenience, but omits price context which could affect the 'best' assessment. Structural validity holds as it references actual flight attributes.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      4,
+      4,
+      4
+    ]
+  },
+  "aac0acd9a658e3ce9f050b3f05ec3d65": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly identifies the flight's price (\u20b915,800) and 1 stop, aligning with the 'best-value' label by emphasizing budget priority. The framing logically connects low cost with the tradeoff of a stop, which matches the flight's attributes.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation correctly identifies the flight's price (\u20b915,800) and 1 stop, aligning with the 'best-value' label by emphasizing budget priority. The framing logically connects low cost with the tradeoff of a stop, which matches the flight's attributes.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "f13444e0df025af09645c4ea09d81e72": {
+    "coherence_score": 4,
+    "coherence_reason": "The explanation correctly identifies the flight as non-stop and highlights its speed (close to the actual 4h15m duration). The 'best-experience' framing aligns with comfort/convenience tradeoffs, though the price is omitted and the duration is slightly rounded. Minor factual rounding (4h vs 4h15m) is acceptable.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 4, \"reason\": \"The explanation correctly identifies the flight as non-stop and highlights its speed (close to the actual 4h15m duration). The 'best-experience' framing aligns with comfort/convenience tradeoffs, though the price is omitted and the duration is slightly rounded. Minor factual rounding (4h vs 4h15m) is acceptable.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      4,
+      4,
+      4
+    ]
+  },
+  "4e752afacba26a18b29321be8a6967a1": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation correctly identifies the flight's price (\u20b915,800), stop count (1), and frames it as 'best choice for budget' which aligns with the 'best-value' label. The tradeoff of a single stop for lower cost is logically coherent.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation correctly identifies the flight's price (\u20b915,800), stop count (1), and frames it as 'best choice for budget' which aligns with the 'best-value' label. The tradeoff of a single stop for lower cost is logically coherent.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "48e2cf284e703b4cd216e1e03194ddf7": {
+    "coherence_score": 4,
+    "coherence_reason": "The explanation correctly identifies the flight as non-stop and highlights its speed (4h vs. actual 4h15m), which is a minor duration discrepancy. The 'best-experience' framing aligns with comfort/convenience tradeoffs, but the duration mismatch prevents a perfect score.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 4, \"reason\": \"The explanation correctly identifies the flight as non-stop and highlights its speed (4h vs. actual 4h15m), which is a minor duration discrepancy. The 'best-experience' framing aligns with comfort/convenience tradeoffs, but the duration mismatch prevents a perfect score.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      4,
+      4,
+      4
+    ]
+  },
+  "3a6eb62debf91d804e8c0eecd953f0b4": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation is logically coherent, references the flight's exact price (\u20b915,800) and stop count (1), and frames the 'best-value' label effectively for budget-focused travelers accepting a single stop for cost savings.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation is logically coherent, references the flight's exact price (\u20b915,800) and stop count (1), and frames the 'best-value' label effectively for budget-focused travelers accepting a single stop for cost savings.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "7e287d2576a9cc7be463322ebccb4838": {
+    "coherence_score": 4,
+    "coherence_reason": "The explanation correctly identifies the flight as non-stop and references the duration (4h vs actual 4h15m, minor discrepancy). The 'best choice for comfort and convenience' framing aligns with the non-stop nature, though it omits the high price point which is a key tradeoff for the 'best-experience' archetype.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 4, \"reason\": \"The explanation correctly identifies the flight as non-stop and references the duration (4h vs actual 4h15m, minor discrepancy). The 'best choice for comfort and convenience' framing aligns with the non-stop nature, though it omits the high price point which is a key tradeoff for the 'best-experience' archetype.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      4,
+      4,
+      4
+    ]
+  },
+  "7124514dbd93ea6fb6009a9a90a5d937": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation is logically coherent, references the flight's price (\u20b918,200) and 1 stop, and aligns with the 'best-value' framing by prioritizing budget over direct flights or refundability.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation is logically coherent, references the flight's price (\u20b918,200) and 1 stop, and aligns with the 'best-value' framing by prioritizing budget over direct flights or refundability.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "ae1c7189373398cc5a2f70bd0be430a7": {
+    "coherence_score": 4,
+    "coherence_reason": "The explanation correctly identifies the non-stop nature and duration (3h vs actual 3h5m, minor rounding discrepancy). The 'best-experience' framing aligns with comfort/convenience tradeoffs for a direct flight, though the price is not mentioned.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 4, \"reason\": \"The explanation correctly identifies the non-stop nature and duration (3h vs actual 3h5m, minor rounding discrepancy). The 'best-experience' framing aligns with comfort/convenience tradeoffs for a direct flight, though the price is not mentioned.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      4,
+      4,
+      4
+    ]
+  },
+  "ce022fb967908f0e76039a5e612cf9d7": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation is logically coherent, correctly references the flight's price (\u20b918,200) and 1 stop, and aligns with the 'best-value' label by emphasizing budget priority despite the stop. The framing makes sense for travelers prioritizing cost over direct flights.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation is logically coherent, correctly references the flight's price (\u20b918,200) and 1 stop, and aligns with the 'best-value' label by emphasizing budget priority despite the stop. The framing makes sense for travelers prioritizing cost over direct flights.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "e605629a729e1f64811f9ed88c99f9f2": {
+    "coherence_score": 4,
+    "coherence_reason": "The explanation correctly identifies the flight as non-stop and fast (3h vs actual 3h5m), aligning with 'best-experience' framing. Minor duration rounding discrepancy exists but doesn't break logic.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 4, \"reason\": \"The explanation correctly identifies the flight as non-stop and fast (3h vs actual 3h5m), aligning with 'best-experience' framing. Minor duration rounding discrepancy exists but doesn't break logic.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      4,
+      4,
+      4
+    ]
+  },
+  "8bd548bb71423243ecdf85ab14cf4fc0": {
+    "coherence_score": 5,
+    "coherence_reason": "Explanation is logically coherent, references the specific flight's price (\u20b918,200) and stops (1), and the 'best-value' framing aligns with prioritizing budget over duration (330 min) or refundability.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"Explanation is logically coherent, references the specific flight's price (\u20b918,200) and stops (1), and the 'best-value' framing aligns with prioritizing budget over duration (330 min) or refundability.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      4,
+      5
+    ]
+  },
+  "e7a049d1268c543555efd09616022dbb": {
+    "coherence_score": 4,
+    "coherence_reason": "The explanation correctly identifies the flight as non-stop and the fastest option (though the duration is slightly rounded from 3h5m to 3h). It aligns with the 'best-experience' archetype by emphasizing comfort and convenience. Minor discrepancy in duration rounding, but overall coherent and specific to the flight's attributes.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 4, \"reason\": \"The explanation correctly identifies the flight as non-stop and the fastest option (though the duration is slightly rounded from 3h5m to 3h). It aligns with the 'best-experience' archetype by emphasizing comfort and convenience. Minor discrepancy in duration rounding, but overall coherent and specific to the flight's attributes.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      4,
+      4,
+      4
+    ]
+  },
+  "7e71b66360bbe2ea56d95c1f519d0d56": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly identifies the flight's lowest price (\u20b918,200) and 1 stop, aligning with the 'best-value' label. It logically frames the tradeoff of a connecting flight for budget priority, which matches the flight's attributes.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation correctly identifies the flight's lowest price (\u20b918,200) and 1 stop, aligning with the 'best-value' label. It logically frames the tradeoff of a connecting flight for budget priority, which matches the flight's attributes.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "465b0aaa20a03c39c41091b0bc3fc1d3": {
+    "coherence_score": 4,
+    "coherence_reason": "The explanation correctly identifies the flight as non-stop and fastest (3h vs actual 3h5m, minor rounding discrepancy). It aligns with 'best-experience' framing by emphasizing comfort/convenience for a direct flight. However, it omits the price (\u20b935,400) which is a key attribute for evaluating 'best experience' tradeoffs.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 4, \"reason\": \"The explanation correctly identifies the flight as non-stop and fastest (3h vs actual 3h5m, minor rounding discrepancy). It aligns with 'best-experience' framing by emphasizing comfort/convenience for a direct flight. However, it omits the price (\u20b935,400) which is a key attribute for evaluating 'best experience' tradeoffs.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      4,
+      4,
+      4
+    ]
+  },
+  "9483f34c60601c782aef6a67e1af5968": {
+    "coherence_score": 4,
+    "coherence_reason": "Explanation correctly references the flight's price (\u20b922,800) and 1 stop, aligning with the 'best-value' label. The framing is coherent for budget-focused travelers, though it omits duration (480 min) and refundability (non-refundable), which could affect value perception.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 4, \"reason\": \"Explanation correctly references the flight's price (\u20b922,800) and 1 stop, aligning with the 'best-value' label. The framing is coherent for budget-focused travelers, though it omits duration (480 min) and refundability (non-refundable), which could affect value perception.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      4,
+      4,
+      5
+    ]
+  },
+  "7ac988c5e90667a6802710cccddd6caa": {
+    "coherence_score": 4,
+    "coherence_reason": "The explanation correctly identifies the flight as non-stop and fastest (though duration is slightly off: 340 min is 5h40m, not 5h). The 'best-experience' framing aligns with comfort/convenience tradeoffs for a direct flight, but the duration discrepancy is a minor factual weakness.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 3, \"reason\": \"The explanation is generally coherent but generic. It correctly notes the non-stop nature and comfort/convenience tradeoff, but the duration is inaccurately stated as '5h total' when the actual flight is 5h40m. The price (\u20b938,900) and refundable status are not addressed, making the explanation applicable to many non-stop flights, not specifically this one.\", \"structural_valid\": false}",
+    "high_variance": false,
+    "all_scores": [
+      3,
+      4,
+      4
+    ]
+  },
+  "f073f55c0c95a7405dd2ac07715481e9": {
+    "coherence_score": 4,
+    "coherence_reason": "Explanation is coherent and correctly references the flight's price (\u20b922,800) and stops (1), aligning with the 'best-value' label. However, it omits the flight duration (480 minutes/8 hours), which could provide a more complete picture of the tradeoff between cost and time. The framing is appropriate for budget-focused travelers.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 4, \"reason\": \"Explanation is coherent and correctly references the flight's price (\u20b922,800) and stops (1), aligning with the 'best-value' label. However, it omits the flight duration (480 minutes/8 hours), which could provide a more complete picture of the tradeoff between cost and time. The framing is appropriate for budget-focused travelers.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      4,
+      4,
+      5
+    ]
+  },
+  "9620460fc614f63bd55a0cd3890ed5b6": {
+    "coherence_score": 4,
+    "coherence_reason": "The explanation correctly identifies the non-stop nature and highlights comfort/convenience as ideal for 'best-experience,' but the duration is inaccurately stated as '5h total' when the actual flight is 5h40m. The price is omitted, which could be relevant for a tradeoff analysis, but the core attributes (non-stop, duration ballpark) are referenced.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 4, \"reason\": \"The explanation correctly identifies the non-stop nature and highlights comfort/convenience as ideal for 'best-experience,' but the duration is inaccurately stated as '5h total' when the actual flight is 5h40m. The price is omitted, which could be relevant for a tradeoff analysis, but the core attributes (non-stop, duration ballpark) are referenced.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      4,
+      4,
+      4
+    ]
+  },
+  "f5834198b50a4079703c509a127357ca": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly identifies the flight's price (\u20b922,800) and stop count (1), aligning with the 'best-value' label by emphasizing budget priority. The framing is coherent and directly references the flight's attributes without contradictions.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation correctly identifies the flight's price (\u20b922,800) and stop count (1), aligning with the 'best-value' label by emphasizing budget priority. The framing is coherent and directly references the flight's attributes without contradictions.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5
+    ]
+  },
+  "bcf436892be043d1eb9064b151c31705": {
+    "coherence_score": 4,
+    "coherence_reason": "The explanation correctly identifies the non-stop nature and positions it as the fastest option, aligning with the 'best-experience' label. However, the duration is inaccurately stated as '5h total' when the actual duration is 5h40m (340 minutes), creating a minor factual mismatch. The framing of comfort and convenience is appropriate for a direct flight.",
+    "structural_valid": false,
+    "raw_judge_output": "{\"score\": 4, \"reason\": \"The explanation correctly identifies the non-stop nature and positions it as the fastest option, aligning with the 'best-experience' label. However, the duration is inaccurately stated as '5h total' when the actual duration is 5h40m (340 minutes), creating a minor factual mismatch. The framing of comfort and convenience is appropriate for a direct flight.\", \"structural_valid\": false}",
+    "high_variance": false,
+    "all_scores": [
+      4,
+      4,
+      3
+    ]
+  },
+  "09da57a51cdf1525cc0eccafa092c3e2": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly identifies the flight's lowest price (\u20b916,400) and 1 stop, aligning with the 'best-value' archetype. The framing as 'best choice if budget is the priority' logically matches the tradeoff of a non-refundable, connecting flight at a lower cost.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation correctly identifies the flight's lowest price (\u20b916,400) and 1 stop, aligning with the 'best-value' archetype. The framing as 'best choice if budget is the priority' logically matches the tradeoff of a non-refundable, connecting flight at a lower cost.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      5
+    ]
+  },
+  "85af3153300c92f0d20debcd6c6dd573": {
+    "coherence_score": 4,
+    "coherence_reason": "The explanation correctly identifies the flight as non-stop and the fastest option (approx. 4h 10m duration), aligning with the 'best-experience' label. However, it omits the price (\u20b930,200), which is a critical tradeoff for a premium experience. The framing is coherent but incomplete.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 4, \"reason\": \"The explanation correctly identifies the flight as non-stop and the fastest option (approx. 4h 10m duration), aligning with the 'best-experience' label. However, it omits the price (\u20b930,200), which is a critical tradeoff for a premium experience. The framing is coherent but incomplete.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      4,
+      4,
+      4
+    ]
+  },
+  "a3762e88951756d04622e8cf0593eb58": {
+    "coherence_score": 5,
+    "coherence_reason": "The explanation correctly identifies the flight's price (\u20b916,400) and number of stops (1), aligning with the 'best-value' archetype by emphasizing budget priority. The framing is logically coherent and matches the flight's attributes.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 5, \"reason\": \"The explanation correctly identifies the flight's price (\u20b916,400) and number of stops (1), aligning with the 'best-value' archetype by emphasizing budget priority. The framing is logically coherent and matches the flight's attributes.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      5,
+      5,
+      4
+    ]
+  },
+  "cb62d2e8e62942c8817a329a498e29b6": {
+    "coherence_score": 4,
+    "coherence_reason": "Explanation is coherent and references the flight's non-stop nature and duration (rounded to 4h). The 'best-experience' framing aligns with comfort/convenience tradeoffs, though the duration is slightly mismatched (250 min vs. 4h) and price is omitted.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 4, \"reason\": \"Explanation is coherent and references the flight's non-stop nature and duration (rounded to 4h). The 'best-experience' framing aligns with comfort/convenience tradeoffs, though the duration is slightly mismatched (250 min vs. 4h) and price is omitted.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      4,
+      4,
+      4
+    ]
+  },
+  "d49fdbd71e43ca2f8843c08f285c8e6d": {
+    "coherence_score": 4,
+    "coherence_reason": "The explanation correctly identifies the flight's price (\u20b916,400) and 1 stop, aligning with the 'best-value' label for budget-focused travelers. However, it omits the flight's duration (420 min) and refundable status (non-refundable), which could affect value perception for some users.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 4, \"reason\": \"The explanation correctly identifies the flight's price (\u20b916,400) and 1 stop, aligning with the 'best-value' label for budget-focused travelers. However, it omits the flight's duration (420 min) and refundable status (non-refundable), which could affect value perception for some users.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      4,
+      5,
+      4
+    ]
+  },
+  "b93cf9e35156c2f5533e01e51195527f": {
+    "coherence_score": 4,
+    "coherence_reason": "The explanation correctly identifies the flight as non-stop and the fastest option (though duration is rounded from 4h10m to 4h). It aligns with the 'best-experience' label by emphasizing comfort and convenience. However, it omits the price (\u20b930,200), which is a key tradeoff for the 'best-experience' framing. The minor discrepancy in duration rounding is acceptable but slightly weakens the framing.",
+    "structural_valid": true,
+    "raw_judge_output": "{\"score\": 4, \"reason\": \"The explanation correctly identifies the flight as non-stop and the fastest option (though duration is rounded from 4h10m to 4h). It aligns with the 'best-experience' label by emphasizing comfort and convenience. However, it omits the price (\u20b930,200), which is a key tradeoff for the 'best-experience' framing. The minor discrepancy in duration rounding is acceptable but slightly weakens the framing.\", \"structural_valid\": true}",
+    "high_variance": false,
+    "all_scores": [
+      4,
+      4,
+      4
+    ]
   }
 }
