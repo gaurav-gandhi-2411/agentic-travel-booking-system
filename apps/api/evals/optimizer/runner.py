@@ -30,7 +30,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 import structlog
-from optimizer.throttle import TPM_LIMITS, ThrottledLLMClient, TokenTracker
+from optimizer.throttle import RPM_LIMITS, RequestTracker, TPM_LIMITS, ThrottledLLMClient, TokenTracker
 
 from travel_agent.agents.optimizer import OptimizerAgent
 from travel_agent.coordinator.state import FlightOption, RequestState, Window
@@ -140,20 +140,27 @@ async def run_profile(profile: str, scenarios: list[dict], dry_run: bool) -> lis
             provider = profile_cfg.get("provider", "")
             client, model = _resolve_client_and_model(profile, routing, profile_cfg)
 
-            if provider in TPM_LIMITS:
-                tracker = TokenTracker(TPM_LIMITS[provider])
-                try:
-                    fallback_client, fallback_model = _build_nim_fallback(routing)
-                except Exception as fb_exc:
-                    _logger.warning("nim_fallback_unavailable", reason=str(fb_exc))
-                    fallback_client, fallback_model = None, ""
-                if fallback_client is None and profile != "demo-deepseek-v4":
-                    _logger.warning(
-                        "nim_fallback_disabled",
-                        reason="NVIDIA_API_KEY not set — 429s will not fall back to NIM",
-                    )
+            if provider in TPM_LIMITS or provider in RPM_LIMITS:
+                tpm_tracker = TokenTracker(TPM_LIMITS[provider]) if provider in TPM_LIMITS else None
+                rpm_tracker = RequestTracker(RPM_LIMITS[provider]) if provider in RPM_LIMITS else None
+                fallback_client, fallback_model = None, ""
+                if provider in TPM_LIMITS:
+                    # Groq-primary: build NIM fallback so 429s can retry on NIM.
+                    try:
+                        fallback_client, fallback_model = _build_nim_fallback(routing)
+                    except Exception as fb_exc:
+                        _logger.warning("nim_fallback_unavailable", reason=str(fb_exc))
+                    if fallback_client is None:
+                        _logger.warning(
+                            "nim_fallback_disabled",
+                            reason="NVIDIA_API_KEY not set — 429s will not fall back to NIM",
+                        )
                 client = ThrottledLLMClient(
-                    client, tracker, fallback=fallback_client, fallback_model=fallback_model
+                    client,
+                    tpm_tracker,
+                    rpm_tracker=rpm_tracker,
+                    fallback=fallback_client,
+                    fallback_model=fallback_model,
                 )
         except Exception as exc:
             _logger.warning("eval_profile_skipped", profile=profile, reason=str(exc))
