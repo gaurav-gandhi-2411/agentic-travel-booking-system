@@ -92,14 +92,18 @@ profiles:
     temperature: 0.0
     max_tokens:  1024
 
-  # ── demo-qwen3-5 ─────────────────────────────────────────────────────────────
-  # NVIDIA NIM hosted Qwen3.5-397b-a17b (397B MoE, 17B active, free tier 40 RPM).
-  # Alibaba family. Replaces the demoted Qwen 2.5 72B that OpenRouter dropped on
-  # 2026-05-16. Pure instruct variant — does NOT emit <think> blocks (verified
-  # via free-tier probe 2026-05-17). Strong on instruction following and JSON tool use.
-  demo-qwen3-5:
-    provider:    nvidia
-    model:       qwen/qwen3.5-397b-a17b
+  # ── demo-gpt-oss-120b ────────────────────────────────────────────────────────
+  # Groq-hosted GPT-OSS-120B (OpenAI's open-weight flagship, 120B params, free tier).
+  # Replaces the demoted Qwen3.5 slot (NIM credit pool ruled out NIM for nightly evals;
+  # Groq's Qwen3-32B already used as judge — same-family bias disqualifies it here).
+  # New vendor lineage in the demo set (OpenAI open-weight). Strong reasoning model;
+  # probe 2026-05-18 confirmed clean instruct behavior — no <think> blocks in content.
+  # Default medium reasoning effort produces hidden chain-of-thought (not in content),
+  # consistent with high coherence scores at free-tier cost.
+  # See ADR-0008 amendment for full selection rationale.
+  demo-gpt-oss-120b:
+    provider:    groq
+    model:       openai/gpt-oss-120b
     temperature: 0.0
     max_tokens:  1024
 

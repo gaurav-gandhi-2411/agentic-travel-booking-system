@@ -64,12 +64,11 @@ All free-tier profiles run at $0 cost. Haiku is kept as the paid premium referen
 |---|---|---|---|---|
 | `demo-haiku` | claude-haiku-4-5-20251001 | Anthropic | Paid | Premium reference — opt-in |
 | `demo-llama` | llama-3.3-70b-versatile | Meta (Groq) | Free tier | Default eval profile |
-| `demo-deepseek-v4` | deepseek-ai/deepseek-v4-flash | DeepSeek (NIM) | Free tier | Default eval profile |
-| `demo-qwen3-5` | qwen/qwen3.5-397b-a17b | Alibaba (NIM) | Free tier | Default eval profile |
+| `demo-deepseek-v4` | deepseek-ai/deepseek-v4-flash | DeepSeek (NIM) | Free tier | Opt-in |
+| `demo-gpt-oss-120b` | openai/gpt-oss-120b | OpenAI (Groq) | Free tier | Default eval profile |
 
 The demoted `demo-qwen` profile (Qwen 2.5 72B on OpenRouter) is preserved as a
 commented-out entry in `config/llm_routing.yaml`. OpenRouter removed that model on 2026-05-16.
-`demo-qwen3-5` is the Alibaba-family replacement on NVIDIA NIM.
 
 ## Known Limitations
 

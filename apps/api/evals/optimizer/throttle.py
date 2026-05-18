@@ -5,12 +5,12 @@ sleeping before calls that would exceed the limit.
 
 Two pacing modes:
 - TPM (tokens per minute): Groq enforces per-minute token quotas.
-- RPM (requests per minute): NVIDIA NIM enforces per-minute request counts.
+- RPM (requests per minute): reserved for providers with request-count limits (e.g. NIM).
 
 A provider may appear in TPM_LIMITS, RPM_LIMITS, both, or neither.
 - Neither:  no throttle, calls fire freely.
 - TPM only: token-based pacing (Groq).
-- RPM only: request-count pacing (NIM).
+- RPM only: request-count pacing.
 - Both:     enforce whichever limit is more restrictive at call time.
 
 On a 429 rate-limit error, retries once with the configured fallback client.
@@ -35,11 +35,10 @@ TPM_LIMITS: dict[str, int] = {
     "groq": 5_000,
 }
 
-# Conservative RPM limits per provider — below actual caps to leave request headroom.
-# NVIDIA NIM free tier: 40 RPM documented; use 37 (3-request buffer).
-RPM_LIMITS: dict[str, int] = {
-    "nvidia": 37,
-}
+# RPM limits per provider. No active entries: NIM free tier uses a finite credit pool
+# (not a resettable RPM window) so it is excluded from nightly eval defaults.
+# Extend here when a future provider exposes a true per-minute request cap.
+RPM_LIMITS: dict[str, int] = {}
 
 # Token estimate used as a pre-call reservation.
 # Actual usage is recorded after each call; this estimate prevents burst over-shoots.
@@ -171,7 +170,9 @@ class ThrottledLLMClient:
         tools: list[ToolDefinition] | None = None,
         **kwargs: Any,
     ) -> LLMResponse:
-        tpm_wait = self._tpm_tracker.wait_seconds(_CALL_TOKEN_ESTIMATE) if self._tpm_tracker else 0.0
+        tpm_wait = (
+            self._tpm_tracker.wait_seconds(_CALL_TOKEN_ESTIMATE) if self._tpm_tracker else 0.0
+        )
         rpm_wait = self._rpm_tracker.wait_seconds() if self._rpm_tracker else 0.0
         wait = max(tpm_wait, rpm_wait)
         if wait > 0:

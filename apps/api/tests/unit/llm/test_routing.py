@@ -21,7 +21,7 @@ from travel_agent.llm.routing import (
 # Agent profiles: full per-agent model keys. Flat profiles: single model + provider.
 _AGENT_PROFILES = {"local", "free", "prod", "eval", "demo", "demo-haiku", "demo-llama"}
 # Flat profiles: model+provider only (no per-agent keys). Same skip logic as judge profiles.
-_FLAT_PROVIDER_PROFILES = {"demo-deepseek-v4", "demo-qwen3-5"}
+_FLAT_PROVIDER_PROFILES = {"demo-deepseek-v4", "demo-gpt-oss-120b"}
 _JUDGE_PROFILES = {"eval-judge-qwen3-32b", "eval-judge-sonnet"}
 _EXPECTED_PROFILES = _AGENT_PROFILES | _FLAT_PROVIDER_PROFILES | _JUDGE_PROFILES
 
@@ -141,16 +141,16 @@ def test_demo_deepseek_v4_profile_uses_nvidia_flash() -> None:
     )
 
 
-def test_demo_qwen3_5_profile_uses_nvidia_qwen35() -> None:
+def test_demo_gpt_oss_120b_profile_uses_groq_openai() -> None:
     config = load_routing_config()
-    profile = config["demo-qwen3-5"]
-    assert profile["provider"] == "nvidia"
-    assert profile["model"] == "qwen/qwen3.5-397b-a17b"
+    profile = config["demo-gpt-oss-120b"]
+    assert profile["provider"] == "groq"
+    assert profile["model"] == "openai/gpt-oss-120b"
     assert profile["temperature"] == 0.0
     assert profile["max_tokens"] == 1024
     # Flat profile: no per-agent keys
     assert not AGENT_KEYS.intersection(profile.keys()), (
-        "demo-qwen3-5 must be flat (model+provider only), not agent-routed"
+        "demo-gpt-oss-120b must be flat (model+provider only), not agent-routed"
     )
 
 

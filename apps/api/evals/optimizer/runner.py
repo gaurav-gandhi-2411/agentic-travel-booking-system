@@ -1,14 +1,13 @@
 """Optimizer eval runner.
 
 Usage:
-    python -m evals.optimizer.runner           # default: demo-llama, demo-deepseek-v4, demo-qwen3-5
+    python -m evals.optimizer.runner                    # default profiles (llama + gpt-oss-120b)
     python -m evals.optimizer.runner --profile demo-llama
-    python -m evals.optimizer.runner --profile demo-llama --profile demo-deepseek-v4
+    python -m evals.optimizer.runner --profile demo-llama --profile demo-gpt-oss-120b
     python -m evals.optimizer.runner --all-profiles     # all active profiles
     python -m evals.optimizer.runner --dry-run          # deterministic only, no LLM
 
-Default profiles: demo-llama (Groq/Meta), demo-deepseek-v4 (NIM/DeepSeek),
-demo-qwen3-5 (NIM/Alibaba) — all free tier.
+Default profiles: demo-llama (Groq/Meta), demo-gpt-oss-120b (Groq/OpenAI) — both free tier.
 Haiku is excluded from defaults — Phase 2C.1 baseline proved Llama matches Haiku on
 label correctness and coherence within margin. Use --profile demo-haiku explicitly
 when comparing against the paid Anthropic baseline.
@@ -30,7 +29,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 import structlog
-from optimizer.throttle import RPM_LIMITS, RequestTracker, TPM_LIMITS, ThrottledLLMClient, TokenTracker
+from optimizer.throttle import (
+    RPM_LIMITS,
+    TPM_LIMITS,
+    RequestTracker,
+    ThrottledLLMClient,
+    TokenTracker,
+)
 
 from travel_agent.agents.optimizer import OptimizerAgent
 from travel_agent.coordinator.state import FlightOption, RequestState, Window
@@ -49,9 +54,11 @@ _EST_COMPARE_OUT = 190
 # demo-haiku excluded 2026-05-18: Phase 2C.1 baseline proved Llama matches Haiku on
 # label correctness and coherence — Haiku is opt-in via --profile demo-haiku.
 # demo-qwen demoted 2026-05-16: OpenRouter removed qwen-2.5-72b-instruct:free.
-# demo-deepseek-v4 added 2026-05-17: NIM fallback for Groq quota exhaustion.
-# demo-qwen3-5 added 2026-05-18: NIM Qwen3.5-397B (Alibaba family, instruct, 40 RPM).
-_PROFILES = ["demo-llama", "demo-deepseek-v4", "demo-qwen3-5"]
+# demo-deepseek-v4 available via --profile but excluded from nightly: NIM uses a finite
+# credit pool (1000 lifetime free) incompatible with daily eval cadence.
+# demo-gpt-oss-120b added 2026-05-18: Groq GPT-OSS-120B (OpenAI open-weight, new vendor
+# lineage in demo set). Replaces Qwen3.5 NIM slot. Daily rate-limit reset, 24/24 eval.
+_PROFILES = ["demo-llama", "demo-gpt-oss-120b"]
 
 _logger = structlog.get_logger(__name__)
 
@@ -142,7 +149,9 @@ async def run_profile(profile: str, scenarios: list[dict], dry_run: bool) -> lis
 
             if provider in TPM_LIMITS or provider in RPM_LIMITS:
                 tpm_tracker = TokenTracker(TPM_LIMITS[provider]) if provider in TPM_LIMITS else None
-                rpm_tracker = RequestTracker(RPM_LIMITS[provider]) if provider in RPM_LIMITS else None
+                rpm_tracker = (
+                    RequestTracker(RPM_LIMITS[provider]) if provider in RPM_LIMITS else None
+                )
                 fallback_client, fallback_model = None, ""
                 if provider in TPM_LIMITS:
                     # Groq-primary: build NIM fallback so 429s can retry on NIM.

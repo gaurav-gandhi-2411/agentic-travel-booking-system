@@ -56,6 +56,11 @@ def test_provider_deepseek_nim_routes_nvidia() -> None:
     assert _provider_from_model("deepseek-ai/deepseek-v4-flash") == "nvidia"
 
 
+def test_provider_gpt_oss_groq_routes_groq() -> None:
+    # Groq hosts OpenAI open-weight models under openai/ namespace — not NIM.
+    assert _provider_from_model("openai/gpt-oss-120b") == "groq"
+
+
 def test_provider_llama_groq_routes_groq() -> None:
     assert _provider_from_model("llama-3.3-70b-versatile") == "groq"
 
