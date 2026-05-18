@@ -39,6 +39,8 @@ _RATES: dict[str, TokenRates] = {
     # NVIDIA NIM free tier (https://build.nvidia.com/deepseek-ai/deepseek-v4-flash, 2026-05-16)
     "deepseek-ai/deepseek-v4-flash": TokenRates(0.0, 0.0),  # free tier (40 RPM)
     "deepseek-ai/deepseek-v4-pro": TokenRates(0.0, 0.0),  # free tier
+    # NVIDIA NIM free tier — Qwen3.5-397B-A17B (Alibaba, instruct, 40 RPM, 2026-05-18)
+    "qwen/qwen3.5-397b-a17b": TokenRates(0.0, 0.0),  # free tier
 }
 
 

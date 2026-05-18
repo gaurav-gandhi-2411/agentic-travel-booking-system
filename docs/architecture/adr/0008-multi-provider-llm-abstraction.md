@@ -210,3 +210,35 @@ Keep the Anthropic SDK, but configure it to point at an OpenAI-compatible proxy
 
 *Referenced plan.md sections: §4.1, §9, §11 (Phase 2.5), §20*
 *See also: ADR-0009 (model selection), ADR-0010 (eval harness), apps/api/config/llm_routing.yaml*
+
+---
+
+## Amendment — 2026-05-17: NVIDIA NIM provider and 4th demo profile
+
+**NIMAdapter added (Phase 2C.2):** `apps/api/src/travel_agent/llm/nvidia.py`. NVIDIA NIM
+exposes an OpenAI-compatible endpoint at `integrate.api.nvidia.com/v1`, so the adapter
+delegates to the same `openai_compat_chat` transport used by the OpenRouter adapter. The
+`NIMAdapter` authenticates with `NVIDIA_API_KEY` (free dev tier at build.nvidia.com). Free
+tier: 40 RPM (request-rate limited, not TPM-based). This adapter was introduced primarily
+as the Groq TPD fallback for eval runs (Issue #15) and surfaces as a demo profile.
+
+**demo-deepseek-v4 profile added (Phase 2C.2):** Flat model+provider profile targeting
+`deepseek-ai/deepseek-v4-flash` (284B MoE, 17B active parameters). First NIM-hosted demo
+profile.
+
+**demo-qwen3-5 profile added (Phase 2C.3):** `qwen/qwen3.5-397b-a17b` (397B MoE, 17B
+active parameters) on NVIDIA NIM. Alibaba family, pure instruct variant — does not emit
+`<think>` blocks (verified via free-tier probe 2026-05-17). Replaces the demoted
+`demo-qwen` (OpenRouter Qwen 2.5 72B, removed by OpenRouter on 2026-05-16). This restores
+the four-vendor demo profile set: Anthropic / Meta / DeepSeek / Alibaba.
+
+**Why instruct over thinking variant:** The Qwen3-235B model on NIM (`qwen/qwen3-235b-a22b`)
+is a hybrid thinking/instruct model that defaults to emitting `<think>` blocks. The runtime
+path does not include a strip-thinking helper for flat NIM profiles, and adding per-profile
+strip logic was rejected as scope creep (Phase 2C.3). Qwen3.5-397B-A17B is a pure instruct
+model; no strip logic required.
+
+**Why NVIDIA NIM over OpenRouter for Alibaba family:** OpenRouter's free tier for Qwen
+models has proven unstable — the Qwen 2.5 72B endpoint was removed with no notice on
+2026-05-16. NVIDIA NIM's free tier (1000 no-expiry credits, 40 RPM) is more reliable for
+the eval harness, which runs 24 scenarios × 3 LLM calls = 72 calls per profile per batch.

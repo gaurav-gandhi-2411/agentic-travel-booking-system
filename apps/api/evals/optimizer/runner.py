@@ -1,13 +1,14 @@
 """Optimizer eval runner.
 
 Usage:
-    python -m evals.optimizer.runner                    # default profiles (llama + deepseek-v4)
+    python -m evals.optimizer.runner           # default: demo-llama, demo-deepseek-v4, demo-qwen3-5
     python -m evals.optimizer.runner --profile demo-llama
     python -m evals.optimizer.runner --profile demo-llama --profile demo-deepseek-v4
     python -m evals.optimizer.runner --all-profiles     # all active profiles
     python -m evals.optimizer.runner --dry-run          # deterministic only, no LLM
 
-Default profiles: demo-llama, demo-deepseek-v4 (both free tier).
+Default profiles: demo-llama (Groq/Meta), demo-deepseek-v4 (NIM/DeepSeek),
+demo-qwen3-5 (NIM/Alibaba) — all free tier.
 Haiku is excluded from defaults — Phase 2C.1 baseline proved Llama matches Haiku on
 label correctness and coherence within margin. Use --profile demo-haiku explicitly
 when comparing against the paid Anthropic baseline.
@@ -49,7 +50,8 @@ _EST_COMPARE_OUT = 190
 # label correctness and coherence — Haiku is opt-in via --profile demo-haiku.
 # demo-qwen demoted 2026-05-16: OpenRouter removed qwen-2.5-72b-instruct:free.
 # demo-deepseek-v4 added 2026-05-17: NIM fallback for Groq quota exhaustion.
-_PROFILES = ["demo-llama", "demo-deepseek-v4"]
+# demo-qwen3-5 added 2026-05-18: NIM Qwen3.5-397B (Alibaba family, instruct, 40 RPM).
+_PROFILES = ["demo-llama", "demo-deepseek-v4", "demo-qwen3-5"]
 
 _logger = structlog.get_logger(__name__)
 

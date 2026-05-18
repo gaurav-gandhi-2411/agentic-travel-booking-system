@@ -21,7 +21,7 @@ from travel_agent.llm.routing import (
 # Agent profiles: full per-agent model keys. Flat profiles: single model + provider.
 _AGENT_PROFILES = {"local", "free", "prod", "eval", "demo", "demo-haiku", "demo-llama"}
 # Flat profiles: model+provider only (no per-agent keys). Same skip logic as judge profiles.
-_FLAT_PROVIDER_PROFILES = {"demo-deepseek-v4"}
+_FLAT_PROVIDER_PROFILES = {"demo-deepseek-v4", "demo-qwen3-5"}
 _JUDGE_PROFILES = {"eval-judge-qwen3-32b", "eval-judge-sonnet"}
 _EXPECTED_PROFILES = _AGENT_PROFILES | _FLAT_PROVIDER_PROFILES | _JUDGE_PROFILES
 
@@ -138,6 +138,19 @@ def test_demo_deepseek_v4_profile_uses_nvidia_flash() -> None:
 
     assert not AGENT_KEYS.intersection(profile.keys()), (
         "demo-deepseek-v4 must be flat (model+provider only), not agent-routed"
+    )
+
+
+def test_demo_qwen3_5_profile_uses_nvidia_qwen35() -> None:
+    config = load_routing_config()
+    profile = config["demo-qwen3-5"]
+    assert profile["provider"] == "nvidia"
+    assert profile["model"] == "qwen/qwen3.5-397b-a17b"
+    assert profile["temperature"] == 0.0
+    assert profile["max_tokens"] == 1024
+    # Flat profile: no per-agent keys
+    assert not AGENT_KEYS.intersection(profile.keys()), (
+        "demo-qwen3-5 must be flat (model+provider only), not agent-routed"
     )
 
 
