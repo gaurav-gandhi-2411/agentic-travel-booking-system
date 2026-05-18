@@ -25,6 +25,7 @@ async def openai_compat_chat(
     temperature: float,
     system: str | None,
     tools: list[ToolDefinition] | None,
+    extra_params: dict[str, Any] | None = None,
 ) -> LLMResponse:
     """Execute a chat completion against any OpenAI-compatible endpoint."""
     api_messages: list[dict[str, Any]] = []
@@ -41,6 +42,8 @@ async def openai_compat_chat(
     if tools:
         create_kwargs["tools"] = to_openai_tools(tools)
         create_kwargs["tool_choice"] = "auto"
+    if extra_params:
+        create_kwargs.update(extra_params)
 
     start = time.monotonic()
     try:

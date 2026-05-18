@@ -13,6 +13,7 @@ import asyncio
 import contextlib
 from datetime import UTC, date, datetime
 from pathlib import Path
+from typing import Any
 
 import structlog
 
@@ -47,10 +48,12 @@ class OptimizerAgent:
         client: LLMClient | None = None,
         model: str = "claude-sonnet-4-6",
         partner_marker: str = "",
+        extra_params: dict[str, Any] | None = None,
     ) -> None:
         self._client = client
         self._model = model
         self._partner_marker = partner_marker
+        self._extra_params = extra_params or {}
 
     async def run(
         self,
@@ -129,6 +132,7 @@ class OptimizerAgent:
             system=system,
             tools=[GENERATE_ARCHETYPE_EXPLANATION],
             cache_system_prompt=True,
+            extra_params=self._extra_params or None,
         )
 
         # Cost telemetry + Langfuse generation — optional, never breaks the agent
@@ -204,6 +208,7 @@ class OptimizerAgent:
             system=system,
             tools=[GENERATE_ARCHETYPE_COMPARISONS],
             cache_system_prompt=True,
+            extra_params=self._extra_params or None,
         )
 
         # Cost telemetry + Langfuse generation — optional, never breaks the agent

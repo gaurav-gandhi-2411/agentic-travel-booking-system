@@ -12,7 +12,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "src"))
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "evals"))
 
-from optimizer.throttle import ThrottledLLMClient, TokenTracker
+from optimizer.throttle import RequestTracker, ThrottledLLMClient, TokenTracker
 
 from travel_agent.llm.base import LLMError, LLMResponse, Message
 
@@ -216,3 +216,75 @@ async def test_throttled_client_fallback_records_tokens() -> None:
     await client.chat(_msg(), model="test", max_tokens=256)
 
     assert tracker.current_usage() == 310  # 250 + 60
+
+
+# ── RequestTracker (RPM) ──────────────────────────────────────────────────────
+
+
+def test_rpm_throttle_paces_under_limit() -> None:
+    tracker = RequestTracker(rpm_limit=37)
+    for _ in range(36):
+        tracker.record()
+    assert tracker.wait_seconds() == 0.0
+
+
+def test_rpm_throttle_waits_when_at_limit() -> None:
+    tracker = RequestTracker(rpm_limit=37)
+    for _ in range(37):
+        tracker.record()
+    assert tracker.wait_seconds() > 0.0
+
+
+def test_rpm_oldest_request_expires_correctly(monkeypatch: pytest.MonkeyPatch) -> None:
+    """After the window advances past the oldest request, wait returns 0.0."""
+    tracker = RequestTracker(rpm_limit=3, window_s=1.0)
+    for _ in range(3):
+        tracker.record()
+    original_monotonic = time.monotonic
+    monkeypatch.setattr(time, "monotonic", lambda: original_monotonic() + 2.0)
+    assert tracker.wait_seconds() == 0.0
+
+
+async def test_provider_with_both_tpm_and_rpm_uses_stricter_constraint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When both trackers fire a wait, the client sleeps for the longer of the two."""
+    inner = AsyncMock()
+    inner.chat = AsyncMock(return_value=_response(10, 10))
+
+    tpm_tracker = TokenTracker(tpm_limit=5_000)
+    tpm_tracker.record(4_900)  # TPM needs ~0.5s wait
+
+    rpm_tracker = RequestTracker(rpm_limit=3)
+    for _ in range(3):
+        rpm_tracker.record()  # RPM needs ~60s wait — stricter
+
+    sleep_calls: list[float] = []
+
+    async def fake_sleep(s: float) -> None:
+        sleep_calls.append(s)
+
+    monkeypatch.setattr("optimizer.throttle.asyncio.sleep", fake_sleep)
+
+    client = ThrottledLLMClient(inner, tpm_tracker, rpm_tracker=rpm_tracker)
+    await client.chat(_msg(), model="test", max_tokens=256)
+
+    assert len(sleep_calls) == 1
+    assert sleep_calls[0] > 0.5  # RPM wait dominates
+
+
+async def test_provider_without_throttle_config_proceeds_freely() -> None:
+    """No trackers configured → no sleep, call fires immediately."""
+    inner = AsyncMock()
+    inner.chat = AsyncMock(return_value=_response(10, 10))
+
+    sleep_called = False
+
+    async def fake_sleep(s: float) -> None:
+        nonlocal sleep_called
+        sleep_called = True
+
+    client = ThrottledLLMClient(inner, None, rpm_tracker=None)
+    await client.chat(_msg(), model="test", max_tokens=256)
+
+    assert not sleep_called

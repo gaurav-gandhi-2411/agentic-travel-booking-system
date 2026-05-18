@@ -55,6 +55,21 @@ Each `/search` request creates one Langfuse trace with:
 If `LANGFUSE_PUBLIC_KEY` is absent or empty, tracing is silently disabled — no warnings
 in production, no pipeline breakage. See `docs/runbooks/observability.md` for ops guidance.
 
+## LLM Demo Profiles
+
+Four profiles are available via the `X-LLM-Profile` request header (or `LLM_ROUTING_PROFILE` env var).
+All free-tier profiles run at $0 cost. Haiku is kept as the paid premium reference.
+
+| Profile | Model | Vendor | Cost | Note |
+|---|---|---|---|---|
+| `demo-haiku` | claude-haiku-4-5-20251001 | Anthropic | Paid | Premium reference — opt-in |
+| `demo-llama` | llama-3.3-70b-versatile | Meta (Groq) | Free tier | Default eval profile |
+| `demo-deepseek-v4` | deepseek-ai/deepseek-v4-flash | DeepSeek (NIM) | Free tier | Opt-in |
+| `demo-gpt-oss-120b` | openai/gpt-oss-120b | OpenAI (Groq) | Free tier | Default eval profile |
+
+The demoted `demo-qwen` profile (Qwen 2.5 72B on OpenRouter) is preserved as a
+commented-out entry in `config/llm_routing.yaml`. OpenRouter removed that model on 2026-05-16.
+
 ## Known Limitations
 
 - Sentry error alerting: deferred to Phase 2c (SENTRY_DSN needs provisioning)

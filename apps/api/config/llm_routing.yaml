@@ -92,6 +92,27 @@ profiles:
     temperature: 0.0
     max_tokens:  1024
 
+  # ── demo-gpt-oss-120b ────────────────────────────────────────────────────────
+  # Groq-hosted GPT-OSS-120B (OpenAI's open-weight flagship, 120B params, free tier).
+  # Replaces the demoted Qwen3.5 slot (NIM credit pool ruled out NIM for nightly evals;
+  # Groq's Qwen3-32B already used as judge — same-family bias disqualifies it here).
+  # New vendor lineage in the demo set (OpenAI open-weight). Strong reasoning model;
+  # probe 2026-05-18 confirmed clean instruct behavior — no <think> blocks in content.
+  # Default medium reasoning effort produces hidden chain-of-thought (not in content),
+  # consistent with high coherence scores at free-tier cost.
+  # See ADR-0008 amendment for full selection rationale.
+  demo-gpt-oss-120b:
+    provider:    groq
+    model:       openai/gpt-oss-120b
+    temperature: 0.0
+    max_tokens:  1024
+    extra_params:
+      reasoning_effort: low  # GPT-OSS-120B hides reasoning by default (~500 tokens).
+      # At reasoning_effort=low, hidden reasoning drops to ~10 tokens, freeing budget
+      # for the structured tool response. Tested 2026-05-18: with reasoning
+      # unconstrained, 4/24 truncation failures; with reasoning_effort=low, 24/24
+      # + coherence 4.75.
+
   # ── demo-qwen ────────────────────────────────────────────────────────────────
   # DEMOTED 2026-05-16: OpenRouter removed qwen/qwen-2.5-72b-instruct:free
   # (HTTP 404 "No endpoints found"). Profile commented out until a replacement

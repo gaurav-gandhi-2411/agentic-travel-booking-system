@@ -78,10 +78,17 @@ def _provider_from_model(model: str) -> str:
     """Map a model name to its billing provider."""
     if model.startswith("claude-"):
         return "anthropic"
+    # Groq hosts some models under a vendor namespace (e.g. "openai/gpt-oss-120b").
+    # Check these before the generic slash check to avoid misrouting them to NIM.
+    if model.startswith("openai/"):
+        return "groq"
+    # NIM-hosted models use vendor-prefixed IDs with a slash (e.g. "qwen/qwen3.5-397b-a17b",
+    # "deepseek-ai/deepseek-v4-flash"). Groq models use bare IDs (e.g. "llama-3.3-70b-versatile",
+    # "qwen3-32b"). Check slash first so any future NIM Qwen variant routes correctly.
+    if "/" in model:
+        return "nvidia"
     if model.startswith(("llama", "qwen")):
         return "groq"
-    if model.startswith(("deepseek-ai/", "nvidia/")):
-        return "nvidia"
     return "unknown"
 
 

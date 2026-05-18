@@ -210,3 +210,68 @@ Keep the Anthropic SDK, but configure it to point at an OpenAI-compatible proxy
 
 *Referenced plan.md sections: §4.1, §9, §11 (Phase 2.5), §20*
 *See also: ADR-0009 (model selection), ADR-0010 (eval harness), apps/api/config/llm_routing.yaml*
+
+---
+
+## Amendment — 2026-05-17: NVIDIA NIM provider (Phase 2C.2)
+
+**NIMAdapter added (Phase 2C.2):** `apps/api/src/travel_agent/llm/nvidia.py`. NVIDIA NIM
+exposes an OpenAI-compatible endpoint at `integrate.api.nvidia.com/v1`, so the adapter
+delegates to the same `openai_compat_chat` transport used by the OpenRouter adapter. The
+`NIMAdapter` authenticates with `NVIDIA_API_KEY` (free dev tier at build.nvidia.com). Free
+tier: 40 RPM (request-rate limited, not TPM-based). This adapter was introduced primarily
+as the Groq TPD fallback for eval runs (Issue #15) and surfaces as a demo profile.
+
+**demo-deepseek-v4 profile added (Phase 2C.2):** Flat model+provider profile targeting
+`deepseek-ai/deepseek-v4-flash` (284B MoE, 17B active parameters). First NIM-hosted demo
+profile. Available as opt-in via `--profile demo-deepseek-v4`; excluded from nightly
+default due to NIM's finite credit pool (1000 lifetime free credits) being incompatible
+with daily eval cadence.
+
+---
+
+## Amendment — 2026-05-18: GPT-OSS-120B as 4th demo profile (Phase 2C.3)
+
+**Context:** The original Phase 2C.3 plan targeted `qwen/qwen3.5-397b-a17b` on NVIDIA NIM
+as the fourth demo profile (Alibaba family). Two full eval runs were attempted (14/24 each);
+both failed at the same cumulative call count (~42 calls) regardless of timing gap between
+runs. Root cause confirmed: NIM's free tier uses a **finite credit pool** (1,000 lifetime
+credits), not a resettable per-minute or per-day rate limit. The 72 calls required per full
+eval run (24 scenarios × 3 LLM calls) + cross-run carryover exhausted the credit pool.
+NIM's free tier is viable for one-time probes and occasional manual evals, but incompatible
+with a nightly eval cadence.
+
+**Why not Groq's Qwen3-32B in the 4th slot:** `qwen/qwen3-32b` is already used as the
+eval judge (`eval-judge-qwen3-32b` profile). Running the optimizer eval on Qwen3-32B and
+then scoring it with Qwen3-32B would introduce within-family bias — the judge would
+systematically favour its own family's output style. Cross-family judging is a documented
+requirement in ADR-0016; violating it here would invalidate the coherence metric.
+
+**Decision — GPT-OSS-120B on Groq:** `openai/gpt-oss-120b` via Groq's free tier was
+selected as the fourth profile. Selection rationale:
+
+1. **Zero new infrastructure.** Uses the existing `GroqAdapter` and GROQ_API_KEY. No new
+   adapter code, no new secrets.
+2. **Daily-reset rate limits.** Groq enforces TPM/TPD limits that reset daily, unlike
+   NIM's finite credit pool. 24/24 eval completion is achievable without credit management.
+3. **New vendor lineage.** OpenAI open-weight family (GPT-OSS) adds a fourth distinct
+   vendor lineage to the demo set: Anthropic / Meta (Llama) / DeepSeek (NIM) / OpenAI
+   (open-weight Groq). The original Alibaba-family slot is deferred until NIM credit pool
+   constraints are resolved (e.g. requesting credit increase to 5,000 or upgrading to
+   paid NIM tier).
+4. **Strong instruct behavior.** Probe 2026-05-18 confirmed clean output — no `<think>`
+   blocks in content. Default medium reasoning effort produces hidden chain-of-thought
+   (counted in `output_tokens`, not returned in content), consistent with high coherence.
+
+**RPM throttle infrastructure:** The `RequestTracker` class and `RPM_LIMITS` dict in
+`evals/optimizer/throttle.py` are retained (empty dict) for future NIM or other
+RPM-limited providers. `ThrottledLLMClient` already handles TPM + RPM dually.
+
+**Operational model distinction (for future NIM use):**
+- **Groq (and most cloud LLM APIs):** Rate limits reset on a fixed window (TPM per minute,
+  TPD per day). The eval harness can run nightly because the quota refills.
+- **NIM free tier:** Finite credit pool (1,000 credits at signup, up to 5,000 on request).
+  Credits are consumed per inference call and do not refill. Running NIM nightly would
+  exhaust the pool in ~2 weeks. NIM free tier is appropriate for one-time benchmarks and
+  occasional manual evals; for production-volume eval cadences, paid NIM or self-hosted
+  NIMs are required.

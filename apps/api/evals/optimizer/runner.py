@@ -1,13 +1,13 @@
 """Optimizer eval runner.
 
 Usage:
-    python -m evals.optimizer.runner                    # default profiles (llama + deepseek-v4)
+    python -m evals.optimizer.runner                    # default profiles (llama + gpt-oss-120b)
     python -m evals.optimizer.runner --profile demo-llama
-    python -m evals.optimizer.runner --profile demo-llama --profile demo-deepseek-v4
+    python -m evals.optimizer.runner --profile demo-llama --profile demo-gpt-oss-120b
     python -m evals.optimizer.runner --all-profiles     # all active profiles
     python -m evals.optimizer.runner --dry-run          # deterministic only, no LLM
 
-Default profiles: demo-llama, demo-deepseek-v4 (both free tier).
+Default profiles: demo-llama (Groq/Meta), demo-gpt-oss-120b (Groq/OpenAI) — both free tier.
 Haiku is excluded from defaults — Phase 2C.1 baseline proved Llama matches Haiku on
 label correctness and coherence within margin. Use --profile demo-haiku explicitly
 when comparing against the paid Anthropic baseline.
@@ -29,7 +29,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 import structlog
-from optimizer.throttle import TPM_LIMITS, ThrottledLLMClient, TokenTracker
+from optimizer.throttle import (
+    RPM_LIMITS,
+    TPM_LIMITS,
+    RequestTracker,
+    ThrottledLLMClient,
+    TokenTracker,
+)
 
 from travel_agent.agents.optimizer import OptimizerAgent
 from travel_agent.coordinator.state import FlightOption, RequestState, Window
@@ -48,8 +54,11 @@ _EST_COMPARE_OUT = 190
 # demo-haiku excluded 2026-05-18: Phase 2C.1 baseline proved Llama matches Haiku on
 # label correctness and coherence — Haiku is opt-in via --profile demo-haiku.
 # demo-qwen demoted 2026-05-16: OpenRouter removed qwen-2.5-72b-instruct:free.
-# demo-deepseek-v4 added 2026-05-17: NIM fallback for Groq quota exhaustion.
-_PROFILES = ["demo-llama", "demo-deepseek-v4"]
+# demo-deepseek-v4 available via --profile but excluded from nightly: NIM uses a finite
+# credit pool (1000 lifetime free) incompatible with daily eval cadence.
+# demo-gpt-oss-120b added 2026-05-18: Groq GPT-OSS-120B (OpenAI open-weight, new vendor
+# lineage in demo set). Replaces Qwen3.5 NIM slot. Daily rate-limit reset, 24/24 eval.
+_PROFILES = ["demo-llama", "demo-gpt-oss-120b"]
 
 _logger = structlog.get_logger(__name__)
 
@@ -118,6 +127,7 @@ def _make_flight_sets() -> list[dict]:
 
 async def run_profile(profile: str, scenarios: list[dict], dry_run: bool) -> list[dict]:
     """Run all scenarios under one profile. Returns list of result records."""
+    extra_params: dict | None = None
     if dry_run:
         client = None
         model = "dry-run"
@@ -137,27 +147,37 @@ async def run_profile(profile: str, scenarios: list[dict], dry_run: bool) -> lis
             profile_cfg = routing[profile]
             provider = profile_cfg.get("provider", "")
             client, model = _resolve_client_and_model(profile, routing, profile_cfg)
+            extra_params: dict | None = profile_cfg.get("extra_params") or None
 
-            if provider in TPM_LIMITS:
-                tracker = TokenTracker(TPM_LIMITS[provider])
-                try:
-                    fallback_client, fallback_model = _build_nim_fallback(routing)
-                except Exception as fb_exc:
-                    _logger.warning("nim_fallback_unavailable", reason=str(fb_exc))
-                    fallback_client, fallback_model = None, ""
-                if fallback_client is None and profile != "demo-deepseek-v4":
-                    _logger.warning(
-                        "nim_fallback_disabled",
-                        reason="NVIDIA_API_KEY not set — 429s will not fall back to NIM",
-                    )
+            if provider in TPM_LIMITS or provider in RPM_LIMITS:
+                tpm_tracker = TokenTracker(TPM_LIMITS[provider]) if provider in TPM_LIMITS else None
+                rpm_tracker = (
+                    RequestTracker(RPM_LIMITS[provider]) if provider in RPM_LIMITS else None
+                )
+                fallback_client, fallback_model = None, ""
+                if provider in TPM_LIMITS:
+                    # Groq-primary: build NIM fallback so 429s can retry on NIM.
+                    try:
+                        fallback_client, fallback_model = _build_nim_fallback(routing)
+                    except Exception as fb_exc:
+                        _logger.warning("nim_fallback_unavailable", reason=str(fb_exc))
+                    if fallback_client is None:
+                        _logger.warning(
+                            "nim_fallback_disabled",
+                            reason="NVIDIA_API_KEY not set — 429s will not fall back to NIM",
+                        )
                 client = ThrottledLLMClient(
-                    client, tracker, fallback=fallback_client, fallback_model=fallback_model
+                    client,
+                    tpm_tracker,
+                    rpm_tracker=rpm_tracker,
+                    fallback=fallback_client,
+                    fallback_model=fallback_model,
                 )
         except Exception as exc:
             _logger.warning("eval_profile_skipped", profile=profile, reason=str(exc))
             return []
 
-    optimizer = OptimizerAgent(client=client, model=model)
+    optimizer = OptimizerAgent(client=client, model=model, extra_params=extra_params)
     results = []
 
     for scenario in scenarios:

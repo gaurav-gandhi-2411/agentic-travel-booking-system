@@ -36,6 +36,8 @@ _RATES: dict[str, TokenRates] = {
     # OpenRouter Qwen free (https://openrouter.ai/qwen/qwen-2.5-72b-instruct:free, 2026-05-16)
     "qwen/qwen-2.5-72b-instruct:free": TokenRates(0.0, 0.0),  # free tier
     "qwen-2.5-72b-instruct": TokenRates(0.0, 0.0),  # alias
+    # Groq free tier — GPT-OSS-120B (OpenAI open-weight, 2026-05-18)
+    "openai/gpt-oss-120b": TokenRates(0.0, 0.0),  # free tier
     # NVIDIA NIM free tier (https://build.nvidia.com/deepseek-ai/deepseek-v4-flash, 2026-05-16)
     "deepseek-ai/deepseek-v4-flash": TokenRates(0.0, 0.0),  # free tier (40 RPM)
     "deepseek-ai/deepseek-v4-pro": TokenRates(0.0, 0.0),  # free tier
