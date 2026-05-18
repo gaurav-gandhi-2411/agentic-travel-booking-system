@@ -107,7 +107,11 @@ profiles:
     temperature: 0.0
     max_tokens:  1024
     extra_params:
-      reasoning_effort: low  # Groq rejects 'none'; 'low' yields ~10 reasoning tokens vs 500+ at medium
+      reasoning_effort: low  # GPT-OSS-120B hides reasoning by default (~500 tokens).
+      # At reasoning_effort=low, hidden reasoning drops to ~10 tokens, freeing budget
+      # for the structured tool response. Tested 2026-05-18: with reasoning
+      # unconstrained, 4/24 truncation failures; with reasoning_effort=low, 24/24
+      # + coherence 4.75.
 
   # ── demo-qwen ────────────────────────────────────────────────────────────────
   # DEMOTED 2026-05-16: OpenRouter removed qwen/qwen-2.5-72b-instruct:free
