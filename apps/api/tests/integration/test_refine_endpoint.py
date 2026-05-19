@@ -45,7 +45,7 @@ def _parse_sse(raw: str) -> list[dict[str, Any]]:
     for line in raw.splitlines():
         stripped = line.strip()
         if stripped.startswith("data:"):
-            events.append(json.loads(stripped[len("data:"):].strip()))
+            events.append(json.loads(stripped[len("data:") :].strip()))
     return events
 
 
@@ -80,9 +80,7 @@ def _make_flights(n: int = 4) -> list[FlightOption]:
     ]
 
 
-def _make_state_with_archetypes(
-    intent: TravelIntent, flights: list[FlightOption]
-) -> RequestState:
+def _make_state_with_archetypes(intent: TravelIntent, flights: list[FlightOption]) -> RequestState:
     archetypes = [
         Archetype(
             label=ArchetypeLabel.BEST_VALUE,
@@ -144,9 +142,7 @@ def test_refine_first_event_is_conversation_thinking(client: TestClient) -> None
     with (
         patch.object(search_cache, "get", new=AsyncMock(return_value=(intent, flights))),
         patch(_LLM_ROUTE, return_value=_mock_client_model()),
-        patch.object(
-            ConversationManagerAgent, "understand", new=AsyncMock(return_value=no_op)
-        ),
+        patch.object(ConversationManagerAgent, "understand", new=AsyncMock(return_value=no_op)),
     ):
         resp = client.post("/refine", json=_REQ_BODY)
 
@@ -166,9 +162,7 @@ def test_refine_no_op_emits_conversation_message(client: TestClient) -> None:
     with (
         patch.object(search_cache, "get", new=AsyncMock(return_value=(intent, flights))),
         patch(_LLM_ROUTE, return_value=_mock_client_model()),
-        patch.object(
-            ConversationManagerAgent, "understand", new=AsyncMock(return_value=no_op)
-        ),
+        patch.object(ConversationManagerAgent, "understand", new=AsyncMock(return_value=no_op)),
     ):
         resp = client.post("/refine", json=_REQ_BODY)
 
@@ -204,9 +198,7 @@ def test_refine_action_classified_contains_args_summary(client: TestClient) -> N
         resp = client.post("/refine", json=_REQ_BODY)
 
     events = _parse_sse(resp.text)
-    classified = next(
-        (e for e in events if e["type"] == "conversation_action_classified"), None
-    )
+    classified = next((e for e in events if e["type"] == "conversation_action_classified"), None)
     assert classified is not None
     assert classified["args_summary"] == "Direct flights only"
     assert classified["action"] == "refine"

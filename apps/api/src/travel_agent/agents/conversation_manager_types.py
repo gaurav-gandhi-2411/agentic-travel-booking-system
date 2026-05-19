@@ -84,6 +84,7 @@ class ConversationManagerOutput(BaseModel):
         if isinstance(v, str):
             return v.lower()
         return v
+
     replan_args: ReplanArgs | None = None
     no_op_args: NoOpArgs | None = None
     args_summary: str = Field(

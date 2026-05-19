@@ -99,8 +99,7 @@ def test_conversation_message_empty_pool_payload() -> None:
     payload = {
         "type": StreamEventType.CONVERSATION_MESSAGE,
         "text": (
-            "No flights match those filters. "
-            "Want to try different criteria or start a new search?"
+            "No flights match those filters. Want to try different criteria or start a new search?"
         ),
     }
     serialized = json.loads(json.dumps(payload))

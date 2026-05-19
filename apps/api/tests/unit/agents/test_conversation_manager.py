@@ -338,9 +338,7 @@ _REFINE_PRICE_INPUT = {
 async def test_extra_params_passed_through_to_llm() -> None:
     """extra_params from profile config reach the LLM client chat() call."""
     client = _mock_client(_REFINE_PRICE_INPUT)
-    agent = ConversationManagerAgent(
-        client, _MODEL, extra_params={"reasoning_effort": "low"}
-    )
+    agent = ConversationManagerAgent(client, _MODEL, extra_params={"reasoning_effort": "low"})
     await agent.understand("cheaper", _minimal_state())
 
     _, kwargs = client.chat.call_args

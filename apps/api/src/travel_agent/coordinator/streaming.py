@@ -66,6 +66,7 @@ class StreamEventType(StrEnum):
     CONVERSATION_ACTION_CLASSIFIED = "conversation_action_classified"
     CONVERSATION_MESSAGE = "conversation_message"
 
+
 # Popular destinations used for route alternatives when no data found.
 _POPULAR_DESTINATIONS: list[str] = ["BKK", "DXB", "KUL", "CMB", "SIN", "DEL", "BOM"]
 _DESTINATION_NAMES: dict[str, str] = {

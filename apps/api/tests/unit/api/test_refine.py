@@ -181,9 +181,7 @@ def test_filter_morning_keeps_0600_to_1159() -> None:
 
 
 def test_filter_afternoon_keeps_1200_to_1659() -> None:
-    result = _apply_refine_filters(
-        _POOL, RefineArgs(departure_window="afternoon", sort_by="price")
-    )
+    result = _apply_refine_filters(_POOL, RefineArgs(departure_window="afternoon", sort_by="price"))
     assert len(result) == 1
     assert result[0].price_inr == 20000  # dep_hour=14
 

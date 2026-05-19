@@ -56,14 +56,13 @@ router = APIRouter()
 _ALLOWED_PROFILES: frozenset[str] = frozenset({"demo-haiku", "demo-llama", "demo-gpt-oss-120b"})
 
 # Departure-window hour boundaries (24h clock, inclusive start, exclusive end)
-_DEP_HOUR_MORNING_START = 6   # 06:00
-_DEP_HOUR_NOON = 12           # 12:00
+_DEP_HOUR_MORNING_START = 6  # 06:00
+_DEP_HOUR_NOON = 12  # 12:00
 _DEP_HOUR_AFTERNOON_END = 17  # 17:00
-_DEP_HOUR_EVENING_END = 21    # 21:00
+_DEP_HOUR_EVENING_END = 21  # 21:00
 
 _EMPTY_POOL_TEXT = (
-    "No flights match those filters. "
-    "Want to try different criteria or start a new search?"
+    "No flights match those filters. Want to try different criteria or start a new search?"
 )
 
 
@@ -107,22 +106,26 @@ def _apply_refine_filters(flights: list[FlightOption], args: RefineArgs) -> list
 
         if args.departure_window == "morning":
             pool = [
-                f for f in pool
+                f
+                for f in pool
                 if _DEP_HOUR_MORNING_START <= _hour(f.outbound_departure_at) < _DEP_HOUR_NOON
             ]
         elif args.departure_window == "afternoon":
             pool = [
-                f for f in pool
+                f
+                for f in pool
                 if _DEP_HOUR_NOON <= _hour(f.outbound_departure_at) < _DEP_HOUR_AFTERNOON_END
             ]
         elif args.departure_window == "evening":
             pool = [
-                f for f in pool
+                f
+                for f in pool
                 if _DEP_HOUR_AFTERNOON_END <= _hour(f.outbound_departure_at) < _DEP_HOUR_EVENING_END
             ]
         elif args.departure_window == "night":
             pool = [
-                f for f in pool
+                f
+                for f in pool
                 if not (
                     _DEP_HOUR_MORNING_START
                     <= _hour(f.outbound_departure_at)
@@ -180,10 +183,12 @@ async def _refine_generator(  # noqa: PLR0911, PLR0912, PLR0915
 
     cached = await search_cache.get(request_id)
     if cached is None:
-        yield _event({
-            "type": StreamEventType.ERROR,
-            "message": "Session expired. Please start a new search.",
-        })
+        yield _event(
+            {
+                "type": StreamEventType.ERROR,
+                "message": "Session expired. Please start a new search.",
+            }
+        )
         return
 
     intent, flights = cached
@@ -199,10 +204,12 @@ async def _refine_generator(  # noqa: PLR0911, PLR0912, PLR0915
     try:
         classification = await conv_agent.understand(refinement, state)
     except Exception as exc:
-        yield _event({
-            "type": StreamEventType.ERROR,
-            "message": f"Classification failed: {exc}",
-        })
+        yield _event(
+            {
+                "type": StreamEventType.ERROR,
+                "message": f"Classification failed: {exc}",
+            }
+        )
         return
 
     if classification.action == ConversationAction.REFINE and classification.refine_args:
@@ -212,22 +219,26 @@ async def _refine_generator(  # noqa: PLR0911, PLR0912, PLR0915
     else:
         args_dict = {}
 
-    yield _event({
-        "type": StreamEventType.CONVERSATION_ACTION_CLASSIFIED,
-        "action": classification.action,
-        "args_summary": classification.args_summary,
-        "args": args_dict,
-    })
+    yield _event(
+        {
+            "type": StreamEventType.CONVERSATION_ACTION_CLASSIFIED,
+            "action": classification.action,
+            "args_summary": classification.args_summary,
+            "args": args_dict,
+        }
+    )
 
     if classification.action == ConversationAction.REFINE:
         assert classification.refine_args is not None  # noqa: S101 — invariant from model_validator
         filtered = _apply_refine_filters(flights, classification.refine_args)
 
         if not filtered:
-            yield _event({
-                "type": StreamEventType.CONVERSATION_MESSAGE,
-                "text": _EMPTY_POOL_TEXT,
-            })
+            yield _event(
+                {
+                    "type": StreamEventType.CONVERSATION_MESSAGE,
+                    "text": _EMPTY_POOL_TEXT,
+                }
+            )
             return
 
         try:
@@ -246,26 +257,32 @@ async def _refine_generator(  # noqa: PLR0911, PLR0912, PLR0915
         try:
             refine_state = await optimizer.run(refine_state)
         except Exception as exc:
-            yield _event({
-                "type": StreamEventType.ERROR,
-                "message": f"Optimizer failed: {exc}",
-            })
+            yield _event(
+                {
+                    "type": StreamEventType.ERROR,
+                    "message": f"Optimizer failed: {exc}",
+                }
+            )
             return
 
         if not refine_state.archetypes:
-            yield _event({
-                "type": StreamEventType.CONVERSATION_MESSAGE,
-                "text": _EMPTY_POOL_TEXT,
-            })
+            yield _event(
+                {
+                    "type": StreamEventType.CONVERSATION_MESSAGE,
+                    "text": _EMPTY_POOL_TEXT,
+                }
+            )
             return
 
         await search_cache.put(request_id, intent, filtered)
 
         for archetype in refine_state.archetypes:
-            yield _event({
-                "type": StreamEventType.ARCHETYPE_READY,
-                "archetype": archetype.model_dump(mode="json"),
-            })
+            yield _event(
+                {
+                    "type": StreamEventType.ARCHETYPE_READY,
+                    "archetype": archetype.model_dump(mode="json"),
+                }
+            )
 
         yield _event({"type": StreamEventType.DONE, "request_id": request_id})
 
@@ -289,10 +306,12 @@ async def _refine_generator(  # noqa: PLR0911, PLR0912, PLR0915
 
     else:  # NO_OP
         assert classification.no_op_args is not None  # noqa: S101 — invariant from model_validator
-        yield _event({
-            "type": StreamEventType.CONVERSATION_MESSAGE,
-            "text": classification.no_op_args.explanation,
-        })
+        yield _event(
+            {
+                "type": StreamEventType.CONVERSATION_MESSAGE,
+                "text": classification.no_op_args.explanation,
+            }
+        )
 
     with contextlib.suppress(Exception):
         if lf is not None and trace is not None:
