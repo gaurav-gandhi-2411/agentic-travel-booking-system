@@ -1,0 +1,415 @@
+[
+  {
+    "id": "conv-001",
+    "category": "refine",
+    "description": "User wants cheapest options — primary sort signal",
+    "prior_intent": {
+      "origin_iata": "DEL",
+      "destination_iata": "DXB",
+      "departure_window_start": "2026-12-01",
+      "departure_window_end": "2026-12-31",
+      "budget_max_inr": 30000
+    },
+    "prior_flights_summary": {
+      "count": 24,
+      "price_min": 18500,
+      "price_max": 45000,
+      "stops_min": 0,
+      "stops_max": 2
+    },
+    "prior_archetypes": [
+      {"label": "best-value", "price_inr": 18500, "stops": 1},
+      {"label": "best-experience", "price_inr": 35000, "stops": 0}
+    ],
+    "user_message": "show me cheaper options",
+    "expected_action": "refine",
+    "expected_args": {
+      "refine_args": {"sort_by": "price"}
+    }
+  },
+  {
+    "id": "conv-002",
+    "category": "refine",
+    "description": "User wants direct flights only",
+    "prior_intent": {
+      "origin_iata": "DEL",
+      "destination_iata": "DXB",
+      "departure_window_start": "2026-12-01",
+      "departure_window_end": "2026-12-31",
+      "budget_max_inr": null
+    },
+    "prior_flights_summary": {
+      "count": 20,
+      "price_min": 22000,
+      "price_max": 48000,
+      "stops_min": 0,
+      "stops_max": 2
+    },
+    "prior_archetypes": [
+      {"label": "best-value", "price_inr": 22000, "stops": 2},
+      {"label": "best-experience", "price_inr": 38000, "stops": 0}
+    ],
+    "user_message": "only direct flights please",
+    "expected_action": "refine",
+    "expected_args": {
+      "refine_args": {"direct_only": true}
+    }
+  },
+  {
+    "id": "conv-003",
+    "category": "refine",
+    "description": "User wants shortest flight time — duration sort",
+    "prior_intent": {
+      "origin_iata": "BOM",
+      "destination_iata": "SIN",
+      "departure_window_start": "2026-11-01",
+      "departure_window_end": "2026-11-30",
+      "budget_max_inr": null
+    },
+    "prior_flights_summary": {
+      "count": 18,
+      "price_min": 15000,
+      "price_max": 42000,
+      "stops_min": 0,
+      "stops_max": 1
+    },
+    "prior_archetypes": [
+      {"label": "best-value", "price_inr": 15000, "stops": 1},
+      {"label": "best-experience", "price_inr": 32000, "stops": 0}
+    ],
+    "user_message": "sort by shortest flight time",
+    "expected_action": "refine",
+    "expected_args": {
+      "refine_args": {"sort_by": "duration"}
+    }
+  },
+  {
+    "id": "conv-004",
+    "category": "refine",
+    "description": "User specifies morning departures only",
+    "prior_intent": {
+      "origin_iata": "DEL",
+      "destination_iata": "LHR",
+      "departure_window_start": "2026-10-01",
+      "departure_window_end": "2026-10-31",
+      "budget_max_inr": null
+    },
+    "prior_flights_summary": {
+      "count": 22,
+      "price_min": 45000,
+      "price_max": 110000,
+      "stops_min": 0,
+      "stops_max": 2
+    },
+    "prior_archetypes": [
+      {"label": "best-value", "price_inr": 45000, "stops": 2},
+      {"label": "best-experience", "price_inr": 85000, "stops": 0}
+    ],
+    "user_message": "I want morning departures only",
+    "expected_action": "refine",
+    "expected_args": {
+      "refine_args": {"departure_window": "morning"}
+    }
+  },
+  {
+    "id": "conv-005",
+    "category": "refine",
+    "description": "Multi-constraint: price ceiling and direct only",
+    "prior_intent": {
+      "origin_iata": "DEL",
+      "destination_iata": "DXB",
+      "departure_window_start": "2026-12-01",
+      "departure_window_end": "2026-12-31",
+      "budget_max_inr": 40000
+    },
+    "prior_flights_summary": {
+      "count": 24,
+      "price_min": 18500,
+      "price_max": 45000,
+      "stops_min": 0,
+      "stops_max": 2
+    },
+    "prior_archetypes": [
+      {"label": "best-value", "price_inr": 18500, "stops": 1},
+      {"label": "best-experience", "price_inr": 35000, "stops": 0}
+    ],
+    "user_message": "under 25000 rupees and no layovers",
+    "expected_action": "refine",
+    "expected_args": {
+      "refine_args": {"price_max_inr": 25000, "direct_only": true}
+    }
+  },
+  {
+    "id": "conv-006",
+    "category": "replan",
+    "description": "User wants a completely different destination",
+    "prior_intent": {
+      "origin_iata": "DEL",
+      "destination_iata": "DXB",
+      "departure_window_start": "2026-12-01",
+      "departure_window_end": "2026-12-31",
+      "budget_max_inr": 30000
+    },
+    "prior_flights_summary": {
+      "count": 24,
+      "price_min": 18500,
+      "price_max": 45000,
+      "stops_min": 0,
+      "stops_max": 2
+    },
+    "prior_archetypes": [
+      {"label": "best-value", "price_inr": 18500, "stops": 1},
+      {"label": "best-experience", "price_inr": 35000, "stops": 0}
+    ],
+    "user_message": "actually, what about Singapore instead?",
+    "expected_action": "replan",
+    "expected_args": {
+      "replan_args": {"destination_iata": "SIN"}
+    }
+  },
+  {
+    "id": "conv-007",
+    "category": "replan",
+    "description": "User specifies explicit new date range",
+    "prior_intent": {
+      "origin_iata": "DEL",
+      "destination_iata": "DXB",
+      "departure_window_start": "2027-01-01",
+      "departure_window_end": "2027-01-31",
+      "budget_max_inr": null
+    },
+    "prior_flights_summary": {
+      "count": 20,
+      "price_min": 21000,
+      "price_max": 50000,
+      "stops_min": 0,
+      "stops_max": 2
+    },
+    "prior_archetypes": [
+      {"label": "best-value", "price_inr": 21000, "stops": 1},
+      {"label": "best-experience", "price_inr": 42000, "stops": 0}
+    ],
+    "user_message": "let me try December 15 to 20 instead",
+    "expected_action": "replan",
+    "expected_args": {
+      "replan_args": {
+        "departure_window_start": "2026-12-15",
+        "departure_window_end": "2026-12-20"
+      }
+    }
+  },
+  {
+    "id": "conv-008",
+    "category": "replan",
+    "description": "User wants to change origin airport",
+    "prior_intent": {
+      "origin_iata": "DEL",
+      "destination_iata": "DXB",
+      "departure_window_start": "2026-12-01",
+      "departure_window_end": "2026-12-31",
+      "budget_max_inr": null
+    },
+    "prior_flights_summary": {
+      "count": 24,
+      "price_min": 18500,
+      "price_max": 45000,
+      "stops_min": 0,
+      "stops_max": 2
+    },
+    "prior_archetypes": [
+      {"label": "best-value", "price_inr": 18500, "stops": 1},
+      {"label": "best-experience", "price_inr": 35000, "stops": 0}
+    ],
+    "user_message": "let me try flying from Mumbai instead",
+    "expected_action": "replan",
+    "expected_args": {
+      "replan_args": {"origin_iata": "BOM"}
+    }
+  },
+  {
+    "id": "conv-009",
+    "category": "replan",
+    "description": "User explicitly broadens to flexible dates",
+    "prior_intent": {
+      "origin_iata": "DEL",
+      "destination_iata": "BKK",
+      "departure_window_start": "2026-12-20",
+      "departure_window_end": "2026-12-27",
+      "budget_max_inr": null
+    },
+    "prior_flights_summary": {
+      "count": 12,
+      "price_min": 16000,
+      "price_max": 35000,
+      "stops_min": 0,
+      "stops_max": 1
+    },
+    "prior_archetypes": [
+      {"label": "best-value", "price_inr": 16000, "stops": 1},
+      {"label": "best-experience", "price_inr": 28000, "stops": 0}
+    ],
+    "user_message": "try with flexible dates — anything in early December works",
+    "expected_action": "replan",
+    "expected_args": {
+      "replan_args": {"flexible_dates": true}
+    }
+  },
+  {
+    "id": "conv-010",
+    "category": "replan",
+    "description": "User raises budget ceiling above prior pool max — price_max set below 25k so a price filter on existing results is vacuous, making REPLAN the only semantically valid action",
+    "prior_intent": {
+      "origin_iata": "DEL",
+      "destination_iata": "DXB",
+      "departure_window_start": "2026-12-01",
+      "departure_window_end": "2026-12-31",
+      "budget_max_inr": 25000
+    },
+    "prior_flights_summary": {
+      "count": 10,
+      "price_min": 18500,
+      "price_max": 24800,
+      "stops_min": 1,
+      "stops_max": 2
+    },
+    "prior_archetypes": [
+      {"label": "best-value", "price_inr": 18500, "stops": 2},
+      {"label": "best-experience", "price_inr": 24000, "stops": 1}
+    ],
+    "user_message": "my budget is actually 50000 rupees, not 25000",
+    "expected_action": "replan",
+    "expected_args": {
+      "replan_args": {"budget_max_inr": 50000}
+    }
+  },
+  {
+    "id": "conv-011",
+    "category": "no_op",
+    "description": "Weather question — clearly off-topic",
+    "prior_intent": {
+      "origin_iata": "DEL",
+      "destination_iata": "DXB",
+      "departure_window_start": "2026-12-01",
+      "departure_window_end": "2026-12-31",
+      "budget_max_inr": null
+    },
+    "prior_flights_summary": {
+      "count": 24,
+      "price_min": 18500,
+      "price_max": 45000,
+      "stops_min": 0,
+      "stops_max": 2
+    },
+    "prior_archetypes": [
+      {"label": "best-value", "price_inr": 18500, "stops": 1},
+      {"label": "best-experience", "price_inr": 35000, "stops": 0}
+    ],
+    "user_message": "what's the weather like in Dubai in December?",
+    "expected_action": "no_op",
+    "expected_args": {}
+  },
+  {
+    "id": "conv-012",
+    "category": "no_op",
+    "description": "Simple thank-you — polite but non-actionable",
+    "prior_intent": {
+      "origin_iata": "DEL",
+      "destination_iata": "DXB",
+      "departure_window_start": "2026-12-01",
+      "departure_window_end": "2026-12-31",
+      "budget_max_inr": null
+    },
+    "prior_flights_summary": {
+      "count": 24,
+      "price_min": 18500,
+      "price_max": 45000,
+      "stops_min": 0,
+      "stops_max": 2
+    },
+    "prior_archetypes": [
+      {"label": "best-value", "price_inr": 18500, "stops": 1},
+      {"label": "best-experience", "price_inr": 35000, "stops": 0}
+    ],
+    "user_message": "thanks!",
+    "expected_action": "no_op",
+    "expected_args": {}
+  },
+  {
+    "id": "conv-013",
+    "category": "no_op",
+    "description": "Completely unrelated conversational request",
+    "prior_intent": {
+      "origin_iata": "BOM",
+      "destination_iata": "LHR",
+      "departure_window_start": "2026-10-01",
+      "departure_window_end": "2026-10-31",
+      "budget_max_inr": null
+    },
+    "prior_flights_summary": {
+      "count": 15,
+      "price_min": 55000,
+      "price_max": 120000,
+      "stops_min": 0,
+      "stops_max": 1
+    },
+    "prior_archetypes": [
+      {"label": "best-value", "price_inr": 55000, "stops": 1},
+      {"label": "best-experience", "price_inr": 95000, "stops": 0}
+    ],
+    "user_message": "tell me a joke",
+    "expected_action": "no_op",
+    "expected_args": {}
+  },
+  {
+    "id": "conv-014",
+    "category": "no_op",
+    "description": "User makes conversational comment, no actionable intent",
+    "prior_intent": {
+      "origin_iata": "DEL",
+      "destination_iata": "DXB",
+      "departure_window_start": "2026-12-01",
+      "departure_window_end": "2026-12-31",
+      "budget_max_inr": null
+    },
+    "prior_flights_summary": {
+      "count": 24,
+      "price_min": 18500,
+      "price_max": 45000,
+      "stops_min": 0,
+      "stops_max": 2
+    },
+    "prior_archetypes": [
+      {"label": "best-value", "price_inr": 18500, "stops": 1},
+      {"label": "best-experience", "price_inr": 35000, "stops": 0}
+    ],
+    "user_message": "these all look pretty good, I'll think about it",
+    "expected_action": "no_op",
+    "expected_args": {}
+  },
+  {
+    "id": "conv-015",
+    "category": "no_op",
+    "description": "Travel-adjacent but not flight refinement (visa question)",
+    "prior_intent": {
+      "origin_iata": "DEL",
+      "destination_iata": "DXB",
+      "departure_window_start": "2026-12-01",
+      "departure_window_end": "2026-12-31",
+      "budget_max_inr": null
+    },
+    "prior_flights_summary": {
+      "count": 24,
+      "price_min": 18500,
+      "price_max": 45000,
+      "stops_min": 0,
+      "stops_max": 2
+    },
+    "prior_archetypes": [
+      {"label": "best-value", "price_inr": 18500, "stops": 1},
+      {"label": "best-experience", "price_inr": 35000, "stops": 0}
+    ],
+    "user_message": "do I need a visa for Dubai?",
+    "expected_action": "no_op",
+    "expected_args": {}
+  }
+]

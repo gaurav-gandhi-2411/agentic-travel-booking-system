@@ -1,11 +1,7 @@
-"""ConversationManagerAgent stub — multi-turn dialogue lands in Phase F."""
+"""Re-export shim — the full implementation lives in conversation_manager.py."""
 
 from __future__ import annotations
 
-from travel_agent.coordinator.state import RequestState
+from travel_agent.agents.conversation_manager import ConversationManagerAgent
 
-
-class ConversationManagerAgent:
-    async def run(self, state: RequestState) -> RequestState:
-        msg = "ConversationManagerAgent lands in Phase F"
-        raise NotImplementedError(msg)
+__all__ = ["ConversationManagerAgent"]
