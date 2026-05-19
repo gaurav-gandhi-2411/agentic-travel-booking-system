@@ -257,7 +257,7 @@
   {
     "id": "conv-010",
     "category": "replan",
-    "description": "User states a higher budget than the original search",
+    "description": "User raises budget ceiling above prior pool max — price_max set below 25k so a price filter on existing results is vacuous, making REPLAN the only semantically valid action",
     "prior_intent": {
       "origin_iata": "DEL",
       "destination_iata": "DXB",
@@ -268,7 +268,7 @@
     "prior_flights_summary": {
       "count": 10,
       "price_min": 18500,
-      "price_max": 25000,
+      "price_max": 24800,
       "stops_min": 1,
       "stops_max": 2
     },
