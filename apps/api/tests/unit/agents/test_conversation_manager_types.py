@@ -15,7 +15,6 @@ from travel_agent.agents.conversation_manager_types import (
     ReplanArgs,
 )
 
-
 # ── ConversationAction ────────────────────────────────────────────────────────
 
 
@@ -190,6 +189,7 @@ def test_output_refine_valid() -> None:
     out = ConversationManagerOutput(
         action=ConversationAction.REFINE,
         refine_args=RefineArgs(direct_only=True),
+        args_summary="Direct flights only",
     )
     assert out.action == ConversationAction.REFINE
     assert out.refine_args is not None
@@ -201,6 +201,7 @@ def test_output_replan_valid() -> None:
     out = ConversationManagerOutput(
         action=ConversationAction.REPLAN,
         replan_args=ReplanArgs(destination_iata="SIN"),
+        args_summary="Searching Delhi to Singapore",
     )
     assert out.action == ConversationAction.REPLAN
     assert out.replan_args is not None

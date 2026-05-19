@@ -14,6 +14,7 @@ See ADR-0019 for the Level 2 design rationale and eval gate.
 from __future__ import annotations
 
 import contextlib
+import copy
 from pathlib import Path
 from typing import Any
 
@@ -36,7 +37,17 @@ _SYSTEM_PROMPT = (Path(__file__).parent / "prompts" / "conversation_manager_syst
 
 # Tool schema derived from the Pydantic output model — stays in sync automatically.
 # The LLM must call this tool; free-text responses are treated as no_tool_call fallbacks.
-_OUTPUT_SCHEMA = ConversationManagerOutput.model_json_schema()
+#
+# Post-processed to allow uppercase action values (e.g. "NO_OP"). Some Groq-hosted models
+# (notably GPT-OSS-120B) return uppercase enum values; Groq validates tool call outputs
+# against this schema before returning them, so the 400 would hit before our code runs.
+# Expanding the enum to include uppercase variants lets Groq pass the response through;
+# the field_validator in ConversationManagerOutput normalises to lowercase before coercion.
+_OUTPUT_SCHEMA = copy.deepcopy(ConversationManagerOutput.model_json_schema())
+if "ConversationAction" in _OUTPUT_SCHEMA.get("$defs", {}):
+    _ca = _OUTPUT_SCHEMA["$defs"]["ConversationAction"]
+    existing: list[str] = _ca.get("enum", [])
+    _ca["enum"] = sorted({v.lower() for v in existing} | {v.upper() for v in existing})
 
 EXTRACT_CONVERSATION_ACTION = ToolDefinition(
     name="extract_conversation_action",

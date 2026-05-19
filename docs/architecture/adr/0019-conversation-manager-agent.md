@@ -46,7 +46,7 @@ Three mutually exclusive action types:
 | Action | Meaning | Code path (PR 2) |
 |--------|---------|------------------|
 | `REFINE` | Filter or sort the existing cached flight pool. No new provider calls. | Apply `RefineArgs` to cached `FlightOption` list, re-run `OptimizerAgent`. |
-| `REPLAN` | Start a new search with modified `TravelIntent`. | Merge `ReplanArgs` into current intent, re-run full pipeline via `stream_search`. |
+| `REPLAN` | Start a new search with modified `TravelIntent`. | Merge `ReplanArgs` into current intent, re-run full pipeline via `stream_replan` (skips `PlannerAgent`; accepts pre-built `TravelIntent`). |
 | `NO_OP` | Off-topic input. Acknowledge and redirect. | Return polite redirect SSE event; do not touch cache or run any agent. |
 
 ### Args schema
@@ -237,6 +237,45 @@ Adding more keyword lists (e.g. destination patterns, month names) would expand 
 current `/refine` coverage but would not scale to arbitrary user input and would not
 produce structured args (e.g. `price_max_inr`). The LLM classifier supersedes the
 keyword list; extending the list further is not worth the maintenance cost.
+
+---
+
+## Amendment — PR 2 wire-up (2026-05-19)
+
+The following decisions were made or confirmed during implementation of PR 2 (wiring
+`ConversationManagerAgent` into `/refine`):
+
+**`stream_replan()` instead of parameterising `stream_search()`.**
+REPLAN generates a new `RequestState` (and therefore a new `request_id`) rather than
+reusing the original. The new ID is emitted in the `done` event; the frontend picks it
+up and uses it for subsequent refines. `stream_search` had already accumulated
+complexity noqa suppressions; a separate `stream_replan` function keeps both functions
+readable at the cost of ~80 lines of structural duplication — acceptable per project
+style.
+
+**`args_summary` field on `ConversationManagerOutput`.**
+A `str` field (default `""`, max 120 chars) carrying a human-readable one-liner for UI
+display. `@model_validator` enforces non-empty for REFINE and REPLAN; NO_OP leaves it
+empty because `no_op_args.explanation` carries the user-facing text. Used by the
+`conversation_action_classified` SSE event so the frontend can show intent feedback
+without parsing raw args.
+
+**REFINE empty-pool behaviour.**
+`_apply_refine_filters()` returns `[]` when no flights survive the filter spec. The
+caller emits a `conversation_message` SSE event with a fixed redirect string instead of
+falling back to the unfiltered pool. This is intentional: silently showing unfiltered
+results when the user requested filtering is confusing. The user is invited to try
+different criteria or start a new search.
+
+**Groq tool-schema pre-validation and uppercase enum values.**
+Groq validates LLM tool-call outputs against the tool's JSON Schema before returning
+them. When `gpt-oss-120b` returned `"action": "NO_OP"` (uppercase), Groq rejected the
+response with HTTP 400 before Python received it — the fallback handler in
+`ConversationManagerAgent` never ran. Fix: (1) post-process `_OUTPUT_SCHEMA` to add
+uppercase variants of every `ConversationAction` enum value, so Groq passes the
+response through; (2) add `@field_validator("action", mode="before")` to normalise to
+lowercase before Pydantic's enum coercion. Verified with 3-scenario sanity eval across
+`demo-gpt-oss-120b` (including conv-011 NO_OP scenario that previously returned 400).
 
 ---
 

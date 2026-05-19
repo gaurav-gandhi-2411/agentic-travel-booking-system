@@ -14,7 +14,7 @@ from datetime import date
 from enum import StrEnum
 from typing import Annotated, Literal, Self
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class ConversationAction(StrEnum):
@@ -69,12 +69,32 @@ class ConversationManagerOutput(BaseModel):
     Exactly one of refine_args / replan_args / no_op_args must be set.
     This invariant is enforced by the model_validator and mirrors the
     action enum: action=REFINE implies refine_args is set, etc.
+
+    args_summary is a human-readable one-liner for UI display (e.g. "Direct
+    flights only, under ₹25,000"). Empty string for NO_OP — the explanation
+    field on no_op_args is the user-facing text in that case.
     """
 
     action: ConversationAction
     refine_args: RefineArgs | None = None
+
+    @field_validator("action", mode="before")
+    @classmethod
+    def normalise_action_case(cls, v: object) -> object:
+        if isinstance(v, str):
+            return v.lower()
+        return v
+
     replan_args: ReplanArgs | None = None
     no_op_args: NoOpArgs | None = None
+    args_summary: str = Field(
+        default="",
+        max_length=120,
+        description=(
+            "Human-readable one-line summary of the classified action for UI display. "
+            "Non-empty for REFINE and REPLAN. Empty string for NO_OP."
+        ),
+    )
 
     @model_validator(mode="after")
     def exactly_one_args(self) -> Self:
@@ -86,5 +106,9 @@ class ConversationManagerOutput(BaseModel):
                 f"exactly one of refine_args/replan_args/no_op_args must be set; "
                 f"got {populated} populated"
             )
+            raise ValueError(msg)
+        needs_summary = self.action in (ConversationAction.REFINE, ConversationAction.REPLAN)
+        if needs_summary and not self.args_summary:
+            msg = f"args_summary must be non-empty for {self.action} actions"
             raise ValueError(msg)
         return self

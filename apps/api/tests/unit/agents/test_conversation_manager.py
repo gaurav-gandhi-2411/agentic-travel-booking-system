@@ -13,15 +13,11 @@ from datetime import date
 from typing import Any
 from unittest.mock import AsyncMock
 
-import pytest
 import structlog.testing
 
 from travel_agent.agents.conversation_manager import ConversationManagerAgent
 from travel_agent.agents.conversation_manager_types import (
     ConversationAction,
-    ConversationManagerOutput,
-    RefineArgs,
-    ReplanArgs,
 )
 from travel_agent.coordinator.state import (
     Archetype,
@@ -39,28 +35,34 @@ from travel_agent.llm.base import LLMClient, LLMResponse, ToolCall
 _MODEL = "llama-3.3-70b-versatile"
 
 
-def _mock_client(tool_call_input: dict[str, Any] | None = None, *, free_text: str = "") -> LLMClient:
+def _mock_client(
+    tool_call_input: dict[str, Any] | None = None, *, free_text: str = ""
+) -> LLMClient:
     """Return a mock LLMClient with a configurable response."""
+    tool_calls = (
+        [ToolCall(name="extract_conversation_action", input=tool_call_input or {}, id="tc-001")]
+        if tool_call_input is not None
+        else []
+    )
     response = LLMResponse(
         content=free_text,
         model=_MODEL,
         input_tokens=300,
         output_tokens=60,
         latency_ms=800.0,
-        tool_calls=(
-            [ToolCall(name="extract_conversation_action", input=tool_call_input or {}, id="tc-001")]
-            if tool_call_input is not None
-            else []
-        ),
+        tool_calls=tool_calls,
     )
     client = AsyncMock(spec=LLMClient)
     client.chat = AsyncMock(return_value=response)
     return client  # type: ignore[return-value]
 
 
+_NO_OP_DEFAULT = {"action": "no_op", "no_op_args": {"explanation": "I help with flights."}}
+
+
 def _agent(client: LLMClient | None = None, **kwargs: Any) -> ConversationManagerAgent:
     if client is None:
-        client = _mock_client({"action": "no_op", "no_op_args": {"explanation": "I help with flights."}})
+        client = _mock_client(_NO_OP_DEFAULT)
     return ConversationManagerAgent(client, _MODEL, **kwargs)
 
 
@@ -105,13 +107,12 @@ def _full_state() -> RequestState:
             deeplink_url="https://example.com",
         )
     ]
-    state = RequestState(
+    return RequestState(
         raw_input="show me something cheaper",
         intent=intent,
         flight_options=flights,
         archetypes=archetypes,
     )
-    return state
 
 
 # ── happy path — REFINE ───────────────────────────────────────────────────────
@@ -121,6 +122,7 @@ async def test_refine_action_parsed_correctly() -> None:
     tool_input = {
         "action": "refine",
         "refine_args": {"direct_only": True, "sort_by": "price"},
+        "args_summary": "Direct flights only",
     }
     agent = _agent(_mock_client(tool_input))
     out = await agent.understand("only direct flights", _minimal_state())
@@ -137,6 +139,7 @@ async def test_refine_price_max_parsed() -> None:
     tool_input = {
         "action": "refine",
         "refine_args": {"price_max_inr": 20000, "sort_by": "price"},
+        "args_summary": "Under ₹20,000",
     }
     agent = _agent(_mock_client(tool_input))
     out = await agent.understand("under 20000 rupees", _minimal_state())
@@ -150,6 +153,7 @@ async def test_refine_departure_window_parsed() -> None:
     tool_input = {
         "action": "refine",
         "refine_args": {"departure_window": "morning", "sort_by": "price"},
+        "args_summary": "Morning departures only",
     }
     agent = _agent(_mock_client(tool_input))
     out = await agent.understand("morning flights only", _minimal_state())
@@ -165,6 +169,7 @@ async def test_replan_action_parsed_correctly() -> None:
     tool_input = {
         "action": "replan",
         "replan_args": {"destination_iata": "SIN"},
+        "args_summary": "Searching Delhi to Singapore",
     }
     agent = _agent(_mock_client(tool_input))
     out = await agent.understand("actually try Singapore", _minimal_state())
@@ -183,6 +188,7 @@ async def test_replan_date_change_parsed() -> None:
             "departure_window_start": "2026-11-01",
             "departure_window_end": "2026-11-30",
         },
+        "args_summary": "Searching in November",
     }
     agent = _agent(_mock_client(tool_input))
     out = await agent.understand("try November instead", _minimal_state())
@@ -297,7 +303,11 @@ async def test_completely_invalid_tool_output_falls_back() -> None:
 
 async def test_understand_with_full_state_calls_llm() -> None:
     """Agent calls LLM even when state has full intent+flights+archetypes."""
-    tool_input = {"action": "refine", "refine_args": {"sort_by": "price"}}
+    tool_input = {
+        "action": "refine",
+        "refine_args": {"sort_by": "price"},
+        "args_summary": "Sorted by price",
+    }
     client = _mock_client(tool_input)
     agent = _agent(client)
 
@@ -318,13 +328,17 @@ async def test_understand_with_empty_state_does_not_crash() -> None:
 # ── extra_params threading ────────────────────────────────────────────────────
 
 
+_REFINE_PRICE_INPUT = {
+    "action": "refine",
+    "refine_args": {"sort_by": "price"},
+    "args_summary": "Sorted by price",
+}
+
+
 async def test_extra_params_passed_through_to_llm() -> None:
     """extra_params from profile config reach the LLM client chat() call."""
-    tool_input = {"action": "refine", "refine_args": {"sort_by": "price"}}
-    client = _mock_client(tool_input)
-    agent = ConversationManagerAgent(
-        client, _MODEL, extra_params={"reasoning_effort": "low"}
-    )
+    client = _mock_client(_REFINE_PRICE_INPUT)
+    agent = ConversationManagerAgent(client, _MODEL, extra_params={"reasoning_effort": "low"})
     await agent.understand("cheaper", _minimal_state())
 
     _, kwargs = client.chat.call_args
@@ -335,8 +349,7 @@ async def test_extra_params_passed_through_to_llm() -> None:
 
 
 async def test_agent_passes_correct_tool_to_llm() -> None:
-    tool_input = {"action": "refine", "refine_args": {"sort_by": "price"}}
-    client = _mock_client(tool_input)
+    client = _mock_client(_REFINE_PRICE_INPUT)
     agent = _agent(client)
     await agent.understand("make it cheaper", _minimal_state())
 
@@ -347,10 +360,62 @@ async def test_agent_passes_correct_tool_to_llm() -> None:
 
 
 async def test_agent_uses_zero_temperature() -> None:
-    tool_input = {"action": "refine", "refine_args": {"sort_by": "price"}}
-    client = _mock_client(tool_input)
+    client = _mock_client(_REFINE_PRICE_INPUT)
     agent = _agent(client)
     await agent.understand("cheaper", _minimal_state())
 
     _, kwargs = client.chat.call_args
     assert kwargs.get("temperature") == 0.0
+
+
+# ── args_summary field ────────────────────────────────────────────────────────
+
+
+async def test_args_summary_non_empty_for_refine() -> None:
+    tool_input = {
+        "action": "refine",
+        "refine_args": {"sort_by": "price"},
+        "args_summary": "Sorted by price",
+    }
+    out = await _agent(_mock_client(tool_input)).understand("cheaper", _minimal_state())
+    assert out.args_summary == "Sorted by price"
+    assert len(out.args_summary) > 0
+
+
+async def test_args_summary_non_empty_for_replan() -> None:
+    tool_input = {
+        "action": "replan",
+        "replan_args": {"destination_iata": "BKK"},
+        "args_summary": "Searching Delhi to Bangkok",
+    }
+    out = await _agent(_mock_client(tool_input)).understand("try Bangkok", _minimal_state())
+    assert out.args_summary == "Searching Delhi to Bangkok"
+    assert len(out.args_summary) > 0
+
+
+async def test_args_summary_empty_for_no_op() -> None:
+    tool_input = {
+        "action": "no_op",
+        "no_op_args": {"explanation": "I help refine flight searches. Try filtering options?"},
+        "args_summary": "",
+    }
+    out = await _agent(_mock_client(tool_input)).understand("tell me a joke", _minimal_state())
+    assert out.args_summary == ""
+
+
+async def test_args_summary_within_max_length() -> None:
+    summary = "A" * 120
+    tool_input = {
+        "action": "refine",
+        "refine_args": {"sort_by": "price"},
+        "args_summary": summary,
+    }
+    out = await _agent(_mock_client(tool_input)).understand("cheaper", _minimal_state())
+    assert len(out.args_summary) <= 120
+
+
+async def test_args_summary_missing_for_refine_falls_back_to_no_op() -> None:
+    """REFINE without args_summary fails validation → agent falls back to NO_OP."""
+    tool_input = {"action": "refine", "refine_args": {"sort_by": "price"}}
+    out = await _agent(_mock_client(tool_input)).understand("cheaper", _minimal_state())
+    assert out.action == ConversationAction.NO_OP
