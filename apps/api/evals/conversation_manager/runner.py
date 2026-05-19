@@ -17,10 +17,11 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import re
 import sys
-import time
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 sys.path.insert(0, str(Path(__file__).parent.parent))  # exposes optimizer.throttle
@@ -44,6 +45,44 @@ from travel_agent.coordinator.state import (
     TravelIntent,
     Window,
 )
+
+
+def _parse_tpd_retry_after(error_str: str) -> float | None:
+    """Return seconds to wait from a Groq tokens-per-day 429 message, or None."""
+    if "tokens per day" not in error_str.lower():
+        return None
+    m = re.search(r"try again in (?:(\d+)m)?(\d+(?:\.\d+)?)s", error_str)
+    if not m:
+        return None
+    return int(m.group(1) or 0) * 60 + float(m.group(2))
+
+
+class _LatencyCapturingClient:
+    """Thin proxy that records LLMResponse.latency_ms from the last chat() call.
+
+    Wraps a (possibly throttled) LLM client so the runner can report actual
+    API latency rather than wall-clock time that includes throttle sleeps.
+    Retries automatically on Groq tokens-per-day (TPD) 429s.
+    """
+
+    def __init__(self, inner: Any) -> None:
+        self._inner = inner
+        self.last_latency_ms: float = 0.0
+
+    async def chat(self, messages: Any, **kwargs: Any) -> Any:
+        while True:
+            try:
+                response = await self._inner.chat(messages, **kwargs)
+            except Exception as exc:
+                wait_s = _parse_tpd_retry_after(str(exc))
+                if wait_s is None:
+                    raise
+                _logger.info("tpd_rate_limit_sleep", wait_s=round(wait_s + 5, 1))
+                await asyncio.sleep(wait_s + 5)
+            else:
+                self.last_latency_ms = response.latency_ms
+                return response
+
 
 _SCENARIOS_FILE = Path(__file__).parent / "scenarios.json"
 _RUNS_DIR = Path(__file__).parent / "runs"
@@ -211,15 +250,16 @@ async def run_profile(
         _logger.warning("eval_profile_skipped", profile=profile, reason=str(exc))
         return []
 
-    agent = ConversationManagerAgent(client=client, model=model, extra_params=extra_params)
+    # Wrap with latency capture so we record actual API latency, not throttle wait.
+    latency_client = _LatencyCapturingClient(client)
+    agent = ConversationManagerAgent(client=latency_client, model=model, extra_params=extra_params)
     results: list[dict] = []
 
     for scenario in scenarios:
         state = _build_state(scenario)
-        t0 = time.monotonic()
         try:
             output = await agent.understand(scenario["user_message"], state)
-            latency_ms = (time.monotonic() - t0) * 1000
+            latency_ms = latency_client.last_latency_ms
             results.append(
                 {
                     "id": scenario["id"],

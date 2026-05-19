@@ -204,10 +204,28 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Conversation manager eval scorer")
     parser.add_argument("--run", help="Path to a single run JSONL file")
     parser.add_argument("--all", action="store_true", help="Score all run files")
+    parser.add_argument(
+        "--latest",
+        action="store_true",
+        help="Score only the latest run per profile (default when no flags given)",
+    )
     args = parser.parse_args()
 
     ts = datetime.now(tz=UTC).strftime("%Y%m%dT%H%M%S")
-    paths = [Path(args.run)] if args.run else sorted(_RUNS_DIR.glob("*.jsonl"))
+    all_paths = sorted(_RUNS_DIR.glob("*.jsonl"))
+
+    if args.run:
+        paths = [Path(args.run)]
+    elif args.all:
+        paths = all_paths
+    else:
+        # Default: latest run per profile (by ISO-timestamp filename sort)
+        profile_latest: dict[str, Path] = {}
+        for path in all_paths:
+            stem = path.stem
+            profile = stem.split("_", 1)[-1] if "_" in stem else stem
+            profile_latest[profile] = path
+        paths = list(profile_latest.values())
 
     if not paths:
         print("No run files found. Run runner.py first.")
