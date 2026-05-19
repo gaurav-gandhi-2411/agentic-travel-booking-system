@@ -40,5 +40,15 @@ CONTEXT YOU HAVE:
 
 You do NOT have memory of previous conversation turns. Treat each message as standalone given the current search state.
 
+Also generate an args_summary string: a one-line, human-readable summary of what you decided, suitable for showing to the user while the action runs. Keep it under 120 characters. Examples:
+
+  - REFINE (direct_only=true, price_max_inr=25000): args_summary: "Direct flights only, under ₹25,000"
+  - REFINE (sort_by=duration): args_summary: "Sorted by shortest flight time"
+  - REPLAN (destination_iata=SIN): args_summary: "Searching Delhi to Singapore"
+  - REPLAN (departure_window_start, departure_window_end): args_summary: "Searching Mumbai to Bangkok in December"
+  - NO_OP: args_summary: ""  (empty — the explanation field is the user-facing text)
+
+Write naturally, not as a structured filter spec. Match the user's framing where possible. args_summary must be non-empty for REFINE and REPLAN.
+
 Always call the extract_conversation_action tool. Never respond in free text.
 The action field value must be lowercase exactly as shown in the schema: "refine", "replan", or "no_op".

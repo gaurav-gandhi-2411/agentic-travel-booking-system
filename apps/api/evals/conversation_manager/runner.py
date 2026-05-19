@@ -308,10 +308,22 @@ async def main() -> int:
     parser.add_argument("--profile", action="append", dest="profiles", metavar="PROFILE")
     parser.add_argument("--all-profiles", action="store_true")
     parser.add_argument("--dry-run", action="store_true", default=False)
+    parser.add_argument("--limit", type=int, default=None, metavar="N", help="Run only first N")
+    parser.add_argument(
+        "--scenarios",
+        default=None,
+        metavar="IDS",
+        help="Comma-separated scenario IDs to run (e.g. conv-001,conv-006,conv-011)",
+    )
     args = parser.parse_args()
 
     profiles = _PROFILES if args.all_profiles else (args.profiles or _PROFILES)
     scenarios = _load_scenarios()
+    if args.scenarios is not None:
+        ids = {s.strip() for s in args.scenarios.split(",")}
+        scenarios = [s for s in scenarios if s["id"] in ids]
+    elif args.limit is not None:
+        scenarios = scenarios[: args.limit]
     print(f"Loaded {len(scenarios)} scenarios")
 
     for profile in profiles:
