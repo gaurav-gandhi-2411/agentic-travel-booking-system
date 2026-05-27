@@ -69,6 +69,10 @@ export interface SseEvent {
   origin_iata?: string;
   destination_iata?: string;
   alternatives?: RouteAlternative[];
+  // conversation_action_classified
+  args_summary?: string;
+  // conversation_message
+  text?: string;
 }
 
 /**
@@ -85,16 +89,6 @@ export function buildProgressRows(events: SseEvent[]): ProgressRow[] {
 
   for (const event of events) {
     switch (event.type) {
-      case 'refine_started': {
-        if (!find('refine')) {
-          const label = event.change_type === 'cheaper' ? 'Make it cheaper'
-            : event.change_type === 'skip_red_eyes' ? 'Skip red-eyes'
-            : event.change_type === 'non_stop' ? 'Non-stop only'
-            : (event.refinement ?? 'Refining…');
-          rows.push({ id: 'refine', iconName: 'Sparkles', title: `Refining: ${label}`, subtitle: null, isDone: true });
-        }
-        break;
-      }
       case 'planner_started': {
         if (!find('planner')) {
           rows.push({ id: 'planner', iconName: 'Brain', title: 'Understanding your trip', subtitle: null, isDone: false });
