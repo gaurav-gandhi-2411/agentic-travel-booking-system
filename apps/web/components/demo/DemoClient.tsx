@@ -1,12 +1,14 @@
 'use client';
 
-import { useEffect, useCallback, useState } from 'react';
+import { useEffect, useCallback, useState, useRef } from 'react';
 import { useSearchStream, type NoDataState } from '@/hooks/useSearchStream';
 import SearchInput from '@/components/demo/SearchInput';
 import AgentProgressFeed from '@/components/demo/AgentProgressFeed';
 import ArchetypeCard from '@/components/demo/ArchetypeCard';
 import ErrorBanner from '@/components/demo/ErrorBanner';
 import ProfileToggle, { useProfilePreference, type LLMProfile } from '@/components/demo/ProfileToggle';
+import ChatLog from '@/components/demo/ChatLog';
+import type { ChatMessage } from '@/lib/chat-types';
 import { cn } from '@/lib/utils';
 
 const REFINE_CHIPS = [
@@ -73,6 +75,8 @@ export default function DemoClient() {
   const [profile, setProfile] = useProfilePreference();
   const [activeProfile, setActiveProfile] = useState<LLMProfile>('demo-gpt-oss-120b');
   const [refineInput, setRefineInput] = useState('');
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const lastProcessedIndex = useRef(0);
 
   // Cmd+K / Ctrl+K focuses the search textarea
   useEffect(() => {
@@ -88,15 +92,61 @@ export default function DemoClient() {
     return () => document.removeEventListener('keydown', handler);
   }, []);
 
+  useEffect(() => {
+    if (events.length <= lastProcessedIndex.current) return;
+
+    const newEvents = events.slice(lastProcessedIndex.current);
+
+    for (const event of newEvents) {
+      if (event.type === 'conversation_thinking') {
+        setChatMessages(prev => [...prev, {
+          id: crypto.randomUUID(),
+          kind: 'agent_thinking',
+          text: '···',
+          timestamp: Date.now(),
+          isResolved: false,
+        }]);
+      } else if (event.type === 'conversation_action_classified') {
+        setChatMessages(prev => prev.map(m =>
+          m.kind === 'agent_thinking' && !m.isResolved
+            ? { ...m, isResolved: true }
+            : m
+        ));
+        if (event.args_summary) {
+          const summary = event.args_summary;
+          setChatMessages(prev => [...prev, {
+            id: crypto.randomUUID(),
+            kind: 'agent_action',
+            text: summary,
+            timestamp: Date.now(),
+          }]);
+        }
+      } else if (event.type === 'conversation_message') {
+        setChatMessages(prev => [...prev, {
+          id: crypto.randomUUID(),
+          kind: 'agent_message',
+          text: event.text ?? '',
+          timestamp: Date.now(),
+        }]);
+      }
+    }
+
+    lastProcessedIndex.current = events.length;
+  }, [events]);
+
   const isStreaming = status === 'streaming';
 
   const handleSearch = useCallback((query: string) => {
     setActiveProfile(profile);
+    setChatMessages([]);
+    lastProcessedIndex.current = 0;
     start(query, profile);
   }, [start, profile]);
 
   const handleRetry = useCallback(() => {
     reset();
+    setChatMessages([]);
+    lastProcessedIndex.current = 0;
     if (lastQuery) {
       setActiveProfile(profile);
       start(lastQuery, profile);
@@ -105,6 +155,13 @@ export default function DemoClient() {
 
   const handleChip = useCallback((chipValue: string) => {
     if (!requestId || isStreaming) return;
+    const label = REFINE_CHIPS.find(c => c.value === chipValue)?.label ?? chipValue;
+    setChatMessages(prev => [...prev, {
+      id: crypto.randomUUID(),
+      kind: 'user',
+      text: label,
+      timestamp: Date.now(),
+    }]);
     refine(chipValue, profile);
   }, [requestId, isStreaming, refine, profile]);
 
@@ -112,6 +169,12 @@ export default function DemoClient() {
     e.preventDefault();
     const text = refineInput.trim();
     if (!text || !requestId || isStreaming) return;
+    setChatMessages(prev => [...prev, {
+      id: crypto.randomUUID(),
+      kind: 'user',
+      text,
+      timestamp: Date.now(),
+    }]);
     refine(text, profile);
     setRefineInput('');
   }, [refineInput, requestId, isStreaming, refine, profile]);
@@ -164,6 +227,9 @@ export default function DemoClient() {
       {status !== 'idle' && (
         <AgentProgressFeed events={events} status={status} />
       )}
+
+      {/* Chat log — appears after first refinement, above archetype results */}
+      <ChatLog messages={chatMessages} />
 
       {/* Results section */}
       {showResults && (

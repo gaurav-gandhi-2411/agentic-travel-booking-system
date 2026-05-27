@@ -239,6 +239,7 @@ async def _refine_generator(  # noqa: PLR0911, PLR0912, PLR0915
                     "text": _EMPTY_POOL_TEXT,
                 }
             )
+            yield _event({"type": StreamEventType.DONE, "request_id": request_id})
             return
 
         try:
@@ -312,6 +313,7 @@ async def _refine_generator(  # noqa: PLR0911, PLR0912, PLR0915
                 "text": classification.no_op_args.explanation,
             }
         )
+        yield _event({"type": StreamEventType.DONE, "request_id": request_id})
 
     with contextlib.suppress(Exception):
         if lf is not None and trace is not None:

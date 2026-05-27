@@ -171,6 +171,7 @@ def test_refine_no_op_emits_conversation_message(client: TestClient) -> None:
     assert "conversation_message" in types
     msg = next(e for e in events if e["type"] == "conversation_message")
     assert len(msg["text"]) > 0
+    assert events[-1]["type"] == "done"
 
 
 # ── conversation_action_classified ────────────────────────────────────────────
@@ -260,9 +261,9 @@ def test_refine_empty_pool_emits_conversation_message(client: TestClient) -> Non
     events = _parse_sse(resp.text)
     types = [e["type"] for e in events]
     assert "conversation_message" in types
-    assert "done" not in types
     msg = next(e for e in events if e["type"] == "conversation_message")
     assert "No flights match" in msg["text"]
+    assert events[-1]["type"] == "done"
 
 
 # ── REPLAN path ───────────────────────────────────────────────────────────────
