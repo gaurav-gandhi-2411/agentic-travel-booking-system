@@ -177,6 +177,27 @@ def _coherence_summary(scored: list[dict]) -> dict:
     }
 
 
+def _cache_summary(scored: list[dict]) -> dict:
+    """Aggregate cache token counts across all completed records."""
+    total_read = sum(
+        (rec.get("cache_read_tokens") or 0) for rec in scored if rec.get("completed")
+    )
+    total_write = sum(
+        (rec.get("cache_write_tokens") or 0) for rec in scored if rec.get("completed")
+    )
+    total_input = sum(
+        (rec.get("input_tokens_actual") or 0) for rec in scored if rec.get("completed")
+    )
+    standard_input = max(0, total_input - total_read - total_write)
+    denom = total_read + standard_input
+    hit_rate = round(total_read / denom, 3) if denom > 0 else 0.0
+    return {
+        "cache_read_tokens": total_read,
+        "cache_write_tokens": total_write,
+        "cache_hit_rate": hit_rate,
+    }
+
+
 def print_summary(scored: list[dict], profile: str) -> dict:
     """Print per-profile summary and return summary dict."""
     total = len(scored)
@@ -201,6 +222,11 @@ def print_summary(scored: list[dict], profile: str) -> dict:
     )
     print(f"  Latency p50: {p50}ms  p95: {p95}ms")
     _print_cost_summary(scored)
+    cache = _cache_summary(scored)
+    print(
+        f"  Cache: {cache['cache_write_tokens']:,} writes / {cache['cache_read_tokens']:,} reads"
+        f"  |  hit rate: {cache['cache_hit_rate']:.1%}"
+    )
     if coh["coherence_avg"] is not None:
         print(
             f"  Coherence avg: {coh['coherence_avg']}  "
@@ -219,6 +245,9 @@ def print_summary(scored: list[dict], profile: str) -> dict:
         "latency_p50": p50,
         "latency_p95": p95,
         **coh,
+        "cache_read_tokens": cache["cache_read_tokens"],
+        "cache_write_tokens": cache["cache_write_tokens"],
+        "cache_hit_rate": cache["cache_hit_rate"],
     }
 
 
@@ -232,16 +261,26 @@ def write_report(  # noqa: PLR0912, PLR0915
     ts = datetime.now(tz=UTC).isoformat()
     has_coherence = any(s.get("coherence_avg") is not None for s in summaries)
 
+    has_cache = any(
+        s.get("cache_read_tokens", 0) > 0 or s.get("cache_write_tokens", 0) > 0
+        for s in summaries
+    )
     if has_coherence:
         header = (
             "| Profile | Completion | Label % (completed)"
             " | Coh avg | Coh p50 | Coh var | HV count"
-            " | Lat p50 | Lat p95 |"
+            " | Lat p50 | Lat p95"
+            + (" | Cache writes | Cache reads | Hit rate" if has_cache else "")
+            + " |"
         )
-        sep = "|---|---|---|---|---|---|---|---|---|"
+        sep = "|---|---|---|---|---|---|---|---|---|" + ("|---|---|---|" if has_cache else "")
     else:
-        header = "| Profile | Completion | Label % (completed) | Latency p50 | Latency p95 |"
-        sep = "|---|---|---|---|---|"
+        header = (
+            "| Profile | Completion | Label % (completed) | Latency p50 | Latency p95"
+            + (" | Cache writes | Cache reads | Hit rate" if has_cache else "")
+            + " |"
+        )
+        sep = "|---|---|---|---|---|" + ("|---|---|---|" if has_cache else "")
 
     lines = [
         "# Optimizer Eval Report\n",
@@ -257,14 +296,33 @@ def write_report(  # noqa: PLR0912, PLR0915
             coh_p50 = s.get("coherence_p50", "—")
             coh_var = s.get("coherence_variance", "—")
             hv = s.get("high_variance_count", 0)
+            cache_cols = (
+                f" | {s.get('cache_write_tokens', 0):,}"
+                f" | {s.get('cache_read_tokens', 0):,}"
+                f" | {s.get('cache_hit_rate', 0):.1%}"
+                if has_cache
+                else ""
+            )
             lines.append(
                 f"| {s['profile']} | {comp} | {lbl}"
                 f" | {coh_avg} | {coh_p50} | {coh_var} | {hv}"
-                f" | {s['latency_p50']}ms | {s['latency_p95']}ms |"
+                f" | {s['latency_p50']}ms | {s['latency_p95']}ms"
+                + cache_cols
+                + " |"
             )
         else:
+            cache_cols = (
+                f" | {s.get('cache_write_tokens', 0):,}"
+                f" | {s.get('cache_read_tokens', 0):,}"
+                f" | {s.get('cache_hit_rate', 0):.1%}"
+                if has_cache
+                else ""
+            )
             lines.append(
-                f"| {s['profile']} | {comp} | {lbl} | {s['latency_p50']}ms | {s['latency_p95']}ms |"
+                "| " + s["profile"] + " | " + comp + " | " + lbl
+                + f" | {s['latency_p50']}ms | {s['latency_p95']}ms"
+                + cache_cols
+                + " |"
             )
 
     # Per-profile detail sections

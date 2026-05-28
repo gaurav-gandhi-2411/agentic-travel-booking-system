@@ -122,8 +122,8 @@ class OptimizerAgent:
 
         summary = _flight_summary(flight, label)
         messages = [Message(role="user", content=summary)]
-        # cache_system_prompt: optimizer system ~200 tokens — below haiku threshold,
-        # no-op for haiku profiles. Activates for sonnet-4-6 eval profile.
+        # cache_system_prompt: combined prefix ~536 tokens (system ~362 + explain-tool ~174) —
+        # below both Haiku 4.5 (≥4,096) and Sonnet 4.6 (≥1,024) thresholds. No-op on all profiles.
         response = await self._client.chat(
             messages,
             model=self._model,
@@ -200,6 +200,8 @@ class OptimizerAgent:
             f"=== BEST EXPERIENCE ===\n{exp_summary}"
         )
         messages = [Message(role="user", content=content)]
+        # cache_system_prompt: combined prefix ~658 tokens (system ~362 + compare-tool ~296) —
+        # below both Haiku 4.5 (≥4,096) and Sonnet 4.6 (≥1,024) thresholds. No-op on all profiles.
         response = await self._client.chat(
             messages,
             model=self._model,

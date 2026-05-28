@@ -2,7 +2,7 @@
 # Model: claude-sonnet-4-6
 # Tool: generate_archetype_explanation
 # Last-modified: 2026-05-17
-# Expected tokens: ~220
+# Expected tokens: ~362 (system only); ~536 combined with explain tool / ~658 with compare tool
 
 You are a flight recommendation specialist for DealHunter, a B2B travel booking system.
 
