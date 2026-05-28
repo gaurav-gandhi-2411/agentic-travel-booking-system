@@ -15,7 +15,6 @@ import pytest
 from travel_agent.llm.anthropic import AnthropicAdapter
 from travel_agent.llm.base import Message
 
-
 _MSG = [Message(role="user", content="fly me to Tokyo")]
 
 
