@@ -53,7 +53,7 @@ class RedisSearchCache:
     async def get(self, request_id: str) -> tuple[TravelIntent, list[FlightOption]] | None:
         key = f"{_KEY_PREFIX}{request_id}"
         try:
-            raw: str | None = await self._redis.get(key)
+            raw: bytes | str | None = await self._redis.get(key)
         except _CACHE_ERRORS as exc:
             _logger.warning(
                 "search_cache_failure",
@@ -75,6 +75,6 @@ class RedisSearchCache:
 
         ok = False
         with contextlib.suppress(Exception):
-            await self._redis.ping()  # type: ignore[misc]
+            await self._redis.ping()  # type: ignore[misc, unused-ignore]
             ok = True
         return ok
