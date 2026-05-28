@@ -25,6 +25,7 @@ import sys
 import time
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
@@ -41,6 +42,51 @@ from travel_agent.agents.optimizer import OptimizerAgent
 from travel_agent.coordinator.state import FlightOption, RequestState, Window
 from travel_agent.observability.pricing import compute_cost
 from travel_agent.providers.synthetic import SyntheticProvider
+
+
+class CacheTrackingLLMClient:
+    """Wraps any LLMClient to accumulate cache token counts per scenario run.
+
+    Call reset() before each optimizer.run() to get per-scenario totals.
+    Non-Anthropic responses return 0 for cache fields; they are accumulated safely.
+    """
+
+    def __init__(self, client: Any) -> None:
+        self._client = client
+        self.cache_read_total: int = 0
+        self.cache_write_total: int = 0
+        self.input_tokens_total: int = 0
+
+    def reset(self) -> None:
+        self.cache_read_total = 0
+        self.cache_write_total = 0
+        self.input_tokens_total = 0
+
+    async def chat(  # noqa: PLR0913
+        self,
+        messages: list[Any],
+        *,
+        model: str,
+        max_tokens: int = 2048,
+        temperature: float = 0.0,
+        system: str | None = None,
+        tools: list[Any] | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        response = await self._client.chat(
+            messages,
+            model=model,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            system=system,
+            tools=tools,
+            **kwargs,
+        )
+        self.cache_read_total += getattr(response, "cache_read_input_tokens", 0) or 0
+        self.cache_write_total += getattr(response, "cache_creation_input_tokens", 0) or 0
+        self.input_tokens_total += getattr(response, "input_tokens", 0) or 0
+        return response
+
 
 _RUNS_DIR = Path(__file__).parent / "runs"
 
@@ -177,12 +223,20 @@ async def run_profile(profile: str, scenarios: list[dict], dry_run: bool) -> lis
             _logger.warning("eval_profile_skipped", profile=profile, reason=str(exc))
             return []
 
-    optimizer = OptimizerAgent(client=client, model=model, extra_params=extra_params)
+    # Wrap with CacheTrackingLLMClient to capture per-scenario cache token totals.
+    # Tracker is reset before each scenario; results captured after optimizer.run().
+    cache_tracker: CacheTrackingLLMClient | None = (
+        CacheTrackingLLMClient(client) if not dry_run and client is not None else None
+    )
+    effective_client = cache_tracker if cache_tracker is not None else client
+    optimizer = OptimizerAgent(client=effective_client, model=model, extra_params=extra_params)
     results = []
 
     for scenario in scenarios:
         flights = [FlightOption.model_validate(f) for f in scenario["flights"]]
         state = RequestState(raw_input="eval", flight_options=flights)
+        if cache_tracker is not None:
+            cache_tracker.reset()
         t0 = time.monotonic()
         try:
             state = await optimizer.run(state)
@@ -206,6 +260,15 @@ async def run_profile(profile: str, scenarios: list[dict], dry_run: bool) -> lis
                 "archetypes": archetypes,
                 "latency_ms": round(latency_ms, 1),
                 "cost_usd_estimate": cost_est,
+                "cache_read_tokens": (
+                    cache_tracker.cache_read_total if cache_tracker is not None else 0
+                ),
+                "cache_write_tokens": (
+                    cache_tracker.cache_write_total if cache_tracker is not None else 0
+                ),
+                "input_tokens_actual": (
+                    cache_tracker.input_tokens_total if cache_tracker is not None else 0
+                ),
             }
         )
 
