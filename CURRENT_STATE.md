@@ -94,16 +94,11 @@ These have hard-won design decisions baked in. Each has an ADR or a Phase docume
 
 ## Tests / lint / types — current state
 
-**As of PR #27 merge (commit 96dc59a):**
-- 453 tests passing, 86% coverage
+**As of PR #36 merge (commit 41e8e65) — Phase 2C.4.5 complete:**
+- 458 tests passing, 85.97% coverage
 - ruff check passing
-- mypy passing  
+- mypy passing (fixed pre-existing redis_cache.py type errors surfaced by stubs drift)
 - Frontend: lint clean, typecheck clean
-
-**As of current uncommitted state on the PR 3 branch (frontend chat UI):**
-- New TS files (chat-types.ts, ChatMessage.tsx, ChatLog.tsx) and changes to DemoClient.tsx + event-map.ts
-- Lint and typecheck reported clean by CC
-- Browser verification (S8) NOT yet completed — orchestrator must complete this as first step
 
 **Known-broken and accepted:**
 - pip-audit workflow's 0s failures (Issue #18)
@@ -115,10 +110,6 @@ These have hard-won design decisions baked in. Each has an ADR or a Phase docume
 - Whether the `[skip ci]` footgun has been fully fixed since I last had context on it. Issue #30 was filed but I don't know if a guardrail was added.
 - The exact state of `apps/api/docs/backlog.md` — it was created mid-session and may contain items not migrated to GitHub issues.
 - Whether all the integration tests pass against the live staging deploy currently, or only against the mocked test fixtures.
-
-**Decisions I'd push the orchestrator to make explicitly:**
-- Whether Phase 2C.4.5 prompt caching work should run the verification audit (Thread A) against the *current* prompts on main, or against the post-PR-3 state. Orchestrator's choice; flag it.
-- Whether to file a separate issue when the audit (Phase 2C.4.5 S3) finds ConversationManagerAgent's prefix below the 1024-token threshold. Was discussed in the prep prompt but the spec should pin the answer.
 
 ## Repository orientation
 
