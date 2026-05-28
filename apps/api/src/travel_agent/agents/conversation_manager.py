@@ -123,6 +123,9 @@ class ConversationManagerAgent:
         user_content = f"Current search context:\n{context}\n\nUser message: {message}"
         messages = [Message(role="user", content=user_content)]
 
+        # cache_system_prompt: combined prefix ~2,042 tokens (system ~967 + tool ~1,075) —
+        # active on Sonnet 4.6 (≥1,024 threshold), no-op on Haiku 4.5 (≥4,096 threshold).
+        # Fully static system prompt — ideal cache target. Non-Anthropic adapters ignore this kwarg.
         response = await self._client.chat(
             messages,
             model=self._model,
@@ -130,6 +133,7 @@ class ConversationManagerAgent:
             temperature=0.0,
             system=_SYSTEM_PROMPT,
             tools=[EXTRACT_CONVERSATION_ACTION],
+            cache_system_prompt=True,
             extra_params=self._extra_params or None,
         )
 
