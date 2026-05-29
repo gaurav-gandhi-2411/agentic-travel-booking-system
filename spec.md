@@ -1,116 +1,104 @@
-# Project Spec: Phase 2C.4 PR 3 completion + Phase 2C.4.5 prompt caching
+# Project Spec: Phase 2D Iteration 1 — Observability + CI Hygiene
 
 ## Goal
 
-Two sequential pieces of work in one iteration:
+Three operational fixes bundled into one iteration because they share the same shape — small CI/observability/instrumentation work, each with a clear definition of done. These are not feature work; they're the cleanup that should land before Phase 3 production hardening begins.
 
-**Part A — Phase 2C.4 PR 3 completion.** A frontend chat UI for conversational refinement is partially built (uncommitted code on branch `feat/<chat-ui-branch>` or similar — orchestrator will discover branch name via `git branch`). Code is written, lint and typecheck clean, but the 7-scenario browser verification was not completed. This iteration finishes the verification, opens the PR, and merges it.
+**Issue #31 — Cache backend observability.** The `_make_cache()` function uses `contextlib.suppress(Exception)` to fall back from Redis to in-memory cache without logging. We cannot tell from staging logs whether Redis is actually working. Add structured logging at the cache-backend selection point and on each cache operation. This unblocks all future cache debugging.
 
-**Part B — Phase 2C.4.5 prompt caching.** After Part A merges, add explicit Anthropic prompt caching to the three Haiku-running agents (Planner, Optimizer, ConversationManager) with proper measurement. This is documented in detail in the prior consulting session and the design is locked. Goal is 60-80% cost reduction on paid Haiku calls within the 5-min TTL window.
+**Issue #30 — `[skip ci]` squash-merge guardrail.** When PR branches contain `[skip ci]` in any commit message (e.g., from ruff-format commits), squash-merging inherits the tag into the merge commit, which suppresses Deploy-Staging. Bit us on PR #27. Add a workflow that strips `[skip ci]` from squash commit messages before merge, OR add a pre-merge check that rejects squashes whose composed message would contain `[skip ci]`.
 
-This iteration closes Phase 2C.4 entirely (the conversational agent feature) and ships Phase 2C.4.5 (the cost-discipline payoff on the paid path). After this iteration, the next spec covers Phase 2D backlog (issues #14, #15, #20, #21, #29, #30).
+**Issue #18 — pip-audit 0s failure noise.** The pip-audit workflow reports failures with 0s duration on every push due to path filter quirks. Cumulative dashboard noise masks real audit failures. Fix the workflow to either remove path filters or add an explicit no-op skip job for unmatched paths.
+
+Together: ~3-4 hours of orchestrator work, three small focused PRs, clean wins.
 
 ## Current state
 
-See `CURRENT_STATE.md` for non-obvious context. Orchestrator MUST read this before planning. Critical items:
+See `CURRENT_STATE.md` for non-obvious context. Critical items relevant to this iteration:
 
-- The repo is mid-flight on PR 3 (frontend chat UI). An uncommitted branch contains chat-types.ts, ChatMessage.tsx, ChatLog.tsx, DemoClient.tsx changes, and event-map.ts cleanup. Discover state via `git status` and `git branch` first.
-- The backend route at `apps/api/src/travel_agent/api/routes/refine.py` already emits the three new SSE events (PR #27 merged at 96dc59a). Don't modify backend code in Part A.
-- Phase 2C.4.5 has been pre-designed in a prior consulting session. The design is locked: Anthropic-only, 5-min TTL, single breakpoint per agent, measurement via cache_creation/cache_read tokens.
+- Phase 2C.4 and 2C.4.5 are complete. Top of main: 42a0d4a (CURRENT_STATE.md update post-PR-#36). PR #36 itself is at 41e8e65.
+- Backend route at `apps/api/src/travel_agent/api/routes/refine.py` is locked — don't touch it.
+- The `apps/api/src/travel_agent/api/cache.py` is the file to modify for Issue #31. It's load-bearing but the modification is additive (logging only).
+- The GitHub Actions workflows live at `.github/workflows/`. Deploy-Staging triggers on push to main. The `[skip ci]` inheritance trap is documented in Issue #30's body.
+- The pip-audit workflow has been flagging false failures since before Phase 2C began. Issue #18 has the root cause noted (path filter mismatch).
+- All three issues are open. Read each issue body in full via `gh issue view <N>` before planning the fix.
 
 ## Scope
 
 ### In scope (this iteration)
 
-**Part A — PR 3 completion:**
-- Run the 7-scenario browser verification against `http://localhost:3000/demo` with staging backend (`.env.local` already points there)
-- If scenarios pass: open PR, verify CI green, merge with squash, confirm staging deploy succeeds
-- If any scenario fails: diagnose, fix on the same branch, re-verify, then proceed to merge
-- Delete the dead `refine_started` event handler (CC noted this was done; verify it's still removed)
+**Part A — Issue #31 cache observability:**
 
-**Part B — Phase 2C.4.5 prompt caching:**
+- Add structured logging to `apps/api/src/travel_agent/api/cache.py`:
+  - `cache_backend_selected` event at end of `_make_cache()`: backend="redis" | "in_memory", and on fallback, error_class + error_message
+  - `cache_init_fallback` event inside the `contextlib.suppress(Exception)` before swallowing — captures why fallback fired
+  - `search_cache_put_success` event after `RedisSearchCache.put()` completes
+  - `search_cache_get_result` event after `RedisSearchCache.get()` — include `hit=True|False`
+  - Every cache log must include the Cloud Run revision identifier (`K_REVISION` env var, fallback to hostname)
 
-*Thread 1 — Verification audit (must run before Thread 2):*
-- Inventory existing `cache_control` references in `apps/api/src/travel_agent/llm/anthropic.py` and any agent code
-- Audit for cache-busters in PlannerAgent, OptimizerAgent, ConversationManagerAgent system prompts:
-  - Timestamp/date injection in system prompt
-  - Dynamic content before user message
-  - Tool schema drift between calls
-  - Temperature/thinking-mode variations
-- Count tokens on each agent's static prefix using Anthropic's `client.messages.count_tokens()` to verify ≥1024 token minimum
-- Document findings; file Phase 2D issues for problems requiring larger refactor
+- Add unit tests for each log emission. Use existing test patterns in `tests/unit/api/test_cache.py` (or create if missing).
 
-*Thread 2 — Implementation (only if Thread 1 audit is clean or fixable):*
-- Update Anthropic adapter to accept `cache_control_breakpoint: bool` parameter
-- When True, restructure `system` parameter as list with `cache_control: {"type": "ephemeral"}` block
-- Surface `cache_creation_input_tokens` and `cache_read_input_tokens` from response.usage
-- Update PlannerAgent, OptimizerAgent, ConversationManagerAgent to pass `cache_control_breakpoint=True` when routing to Anthropic profile
-- Update `pricing.py` with separate rates: cache_creation = 1.25× input, cache_read = 0.10× input
-- Update scorer to surface cache hit rate per agent per run
-- Add WARNING log if hit rate < 50% on a run that should have caching (silent breakage signal)
+- Update CURRENT_STATE.md's "Known issues" section to note that Issue #31 is now closed.
 
-*End-to-end verification (Part B):*
-- Two-call sequence: same /search request twice, confirm cache_read_input_tokens > 0 on second call
-- Same for /refine
+- Verify on staging after deploy: trigger a `/search` curl, then check Cloud Run logs for the new structured events. Cache backend selection should now be observable.
+
+**Part B — Issue #30 [skip ci] guardrail:**
+
+Two viable approaches. Orchestrator picks one based on which is simpler:
+
+- **Approach 1 (preferred):** GitHub Actions workflow that strips `[skip ci]` from squash commit messages. Requires understanding GitHub's commit message composition for squash merges and intercepting before push.
+
+- **Approach 2 (fallback):** Branch protection rule or pre-merge status check that rejects squashes whose composed message contains `[skip ci]`. Requires repo admin action (may need GG).
+
+The deliverable: a working mechanism that prevents the silent deploy suppression. Verified by either (a) merging a test PR containing `[skip ci]` in a commit and observing the merge commit either has the tag stripped or the merge was rejected, OR (b) showing the workflow change with documentation of expected behavior.
+
+**Part C — Issue #18 pip-audit noise:**
+
+- Fix `.github/workflows/pip-audit.yml` (or equivalent) so it doesn't produce 0s failures when paths don't match.
+- Options: remove path filters and let the job exit early via internal skip logic, OR add an explicit `if:` condition that gates the audit step.
+- Verified by triggering CI on a no-Python-changes commit and observing pip-audit either succeeds with skip or doesn't run at all.
 
 ### Out of scope (do not build)
 
-- Multi-breakpoint cache patterns (single breakpoint per agent)
-- 1-hour TTL (use default 5-min)
-- Groq or NIM caching modifications (Groq auto-caches transparently for supported models; NIM has no caching)
-- Modifying agent system prompts to artificially exceed 1024 tokens (file as Phase 2D issue if any agent is below)
-- Multi-turn conversation memory (Level 3 ConversationManager feature, Phase 2D+)
-- Production deploys (staging only; production requires manual approval)
-- Any Phase 2D issue fixes (#14, #15, #20, #21, #29, #30) — separate iteration
+- Phase 2D issues NOT listed above: #14, #15, #20, #21, #29, #33, #34, #35 — separate iterations
 - Phase 3 work (real hotel data, BookingAgent, multi-tenancy)
-- Frontend changes beyond Part A's already-uncommitted work
-- Rewriting or "improving" existing prompts during the audit — fix cache-busters only
+- Any modification to the cache backend itself (only logging added; behavior unchanged)
+- Any modification to deploy workflows beyond [skip ci] guardrail
+- Any code execution against the production environment
+- New features, new agents, new SSE event types
+- Changing existing log formats or removing existing logs
+- Modifying `apps/api/src/travel_agent/api/routes/refine.py` or any other HARD RULE file from CURRENT_STATE.md
 
 ## Tech stack
 
-Only what's relevant to this iteration:
+Only what's relevant:
 
 - Python 3.12 (backend)
-- Pydantic 2.x (validation)
-- anthropic SDK (latest; check `pyproject.toml` for pinned version)
-- pytest, ruff, mypy (existing test/lint/type tools)
-- Next.js 15, React 19, TypeScript (frontend, Part A only)
-- Tailwind CSS (existing pattern)
+- structlog or similar (existing logging pattern — check `apps/api/src/travel_agent/observability/` for the convention)
+- pytest (testing)
+- GitHub Actions YAML (workflow changes)
 
-No new dependencies expected. If anything needs adding, escalate.
+No new dependencies. If anything needs adding, escalate.
 
 ## Architecture
 
-Only NEW or MODIFIED files this iteration touches:
+NEW or MODIFIED files this iteration:
 
 ```
-apps/
-├── api/
-│   ├── src/travel_agent/
-│   │   ├── llm/
-│   │   │   └── anthropic.py                              # MODIFIED: cache_control_breakpoint param + usage parsing
-│   │   ├── agents/
-│   │   │   ├── planner.py                                # MODIFIED: pass cache_control_breakpoint=True
-│   │   │   ├── optimizer.py                              # MODIFIED: same
-│   │   │   └── conversation_manager.py                   # MODIFIED: same (if prefix ≥ 1024 tokens)
-│   │   └── observability/
-│   │       └── pricing.py                                # MODIFIED: cache_creation/cache_read rates
-│   ├── evals/optimizer/
-│   │   └── scorer.py                                     # MODIFIED: cache hit rate surfacing
-│   └── tests/unit/
-│       └── llm/
-│           └── test_anthropic.py                         # MODIFIED: cache tests
-└── web/                                                  # Part A only
-    ├── components/demo/
-    │   ├── ChatMessage.tsx                               # NEW (already on branch)
-    │   ├── ChatLog.tsx                                   # NEW (already on branch)
-    │   └── DemoClient.tsx                                # MODIFIED (already on branch)
-    └── lib/
-        ├── chat-types.ts                                 # NEW (already on branch)
-        └── event-map.ts                                  # MODIFIED (already on branch — refine_started removed)
+apps/api/src/travel_agent/api/
+├── cache.py                              # MODIFIED: Add 4 structured logging events + K_REVISION attribution
+└── (no other files)
+
+apps/api/tests/unit/api/
+├── test_cache.py                         # NEW or MODIFIED: Tests for new logging events
+
+.github/workflows/
+├── deploy-staging.yml                    # MODIFIED: [skip ci] strip logic (Part B Approach 1)
+│                                         # OR no change (Part B Approach 2 — branch protection)
+└── pip-audit.yml                         # MODIFIED: Path filter or skip logic (Part C)
 
 docs/architecture/adr/
-└── 0020-prompt-caching.md                                # NEW: ADR for Phase 2C.4.5 design
+└── 0021-cache-observability.md           # NEW: Brief ADR for Part A's logging schema
 ```
 
 ## Verification commands
@@ -125,114 +113,106 @@ docs/architecture/adr/
 - name: backend-types
   cmd: cd apps/api && mypy src
   required: true
-- name: frontend-lint
-  cmd: cd apps/web && npm run lint
-  required: true
-- name: frontend-typecheck
-  cmd: cd apps/web && npm run typecheck
-  required: true
 - name: coverage-gate
   cmd: cd apps/api && pytest --cov=src --cov-fail-under=80
   required: true
+- name: workflow-yaml-lint
+  cmd: yamllint .github/workflows/
+  required: false
 ```
 
 Pre-commit hooks must pass locally before any push.
 
 ## Subagent usage rules
 
-- Use `executor` for code writing, file edits, audit findings documentation
-- Use `verifier` for running tests/lint/types (via the Verification commands above)
-- For Part A's 7-scenario browser verification: this requires browser interaction. The orchestrator cannot run a browser. Either escalate this to the user for manual execution, OR delegate to executor with curl-based SSE verification against staging as a substitute.
+- Use `executor` for code writing, file edits, ADR drafting
+- Use `verifier` for tests/lint/types
+- Each Part (A, B, C) ships as its own PR — don't bundle multiple Parts into one PR
+- Each PR gets its own staging deploy verification before declaring its Part done
 
 ## Escalation rules (orchestrator MUST ask before doing)
 
-- Ask before installing any new dependency (none expected; if needed, escalate)
-- Ask if Thread 1 audit finds a cache-buster requiring larger refactor than a single-file change
-- Ask if any agent's prefix is below 1024 tokens — orchestrator decides whether to file as Phase 2D issue or proceed without caching that agent
-- Ask if Part A 7-scenario verification reveals broken UX (flicker, wrong scroll, robotic args_summary phrasing)
-- Ask if any existing test newly fails after Part A merge or Part B changes
-- Ask if any existing function signature would change (the Anthropic adapter's `chat()` method gets a new parameter — this is a signature change; document as `**kwargs` if it would break callers)
+- Ask before installing any new dependency (none expected)
+- Ask if cache.py logging additions break any existing test or change existing log output format
+- Ask if Part B Approach 1 (workflow-based [skip ci] strip) turns out to require admin permissions GG must grant — escalate to ask for the alternative Approach 2
+- Ask if Part B requires repo settings changes (branch protection) that orchestrator/CC can't make directly
+- Ask if any Part causes other workflows to fail (e.g., the [skip ci] strip somehow affects unrelated workflows)
 - Ask if verification fails 3 times in a row on the same check
-- Ask before triggering production deploys (staging is automatic; production requires explicit user approval)
+- Ask if any existing test newly fails after Part A logging changes
 - Ask if a single executor pass would touch more than 6 files
-- Ask if the audit suggests modifying agent system prompts beyond cache-buster fixes
+- Ask before triggering production deploys (staging is automatic; production requires explicit user approval)
 
 ## Hard rules (DO NOT touch)
 
-- `apps/api/src/travel_agent/api/routes/refine.py` — backend wiring locked, PR #27 merged
+- `apps/api/src/travel_agent/api/routes/refine.py` — backend wiring locked
 - `apps/api/src/travel_agent/api/routes/search.py` — production search endpoint
-- `apps/api/config/llm_routing.yaml` profile *contents* — profile YAML is load-bearing; changing model IDs, providers, or temperature requires explicit ADR
-- The 4 demo profile names: `demo-haiku`, `demo-llama`, `demo-deepseek-v4`, `demo-gpt-oss-120b` — don't rename
-- `docs/architecture/adr/0008-multi-provider-llm-abstraction.md`, `0016-llm-judge-design.md`, `0019-conversation-manager-agent.md` — read-only references, don't modify; create new ADRs for new decisions
-- `apps/api/evals/optimizer/thresholds.py` values — don't relax thresholds to make failing evals pass
-- `apps/api/src/travel_agent/coordinator/streaming.py` event types — don't add or rename SSE event types in this iteration
-- `.github/workflows/deploy-staging.yml` and `deploy-production.yml` — CI/CD is load-bearing
-- The PR #27 staging deploy commit: 96dc59a — this is the canonical "Phase 2C.4 backend complete" reference point
-- `apps/api/src/travel_agent/agents/prompts/conversation_manager_system.txt` — system prompt was iterated to produce natural args_summary text; don't regenerate
-- `apps/api/src/travel_agent/agents/optimizer.py` system prompt — has the explicit departure-time hallucination constraint; don't regenerate
+- `apps/api/config/llm_routing.yaml` — profile YAML is load-bearing
+- The 4 demo profile names — don't rename
+- All existing ADRs (0001-0020) — read-only references, create new ADR (0021) for this iteration's decisions
+- `apps/api/evals/optimizer/thresholds.py` — don't relax thresholds
+- `apps/api/src/travel_agent/coordinator/streaming.py` event types — don't add or rename SSE event types
+- `apps/api/src/travel_agent/agents/prompts/conversation_manager_system.txt` — system prompt was iterated to produce natural args_summary
+- `apps/api/src/travel_agent/agents/optimizer.py` system prompt — has departure-time hallucination constraint
+- Existing structured log event names — don't rename them in cache.py; add new ones, don't change existing
+- PR #36 merge commit: 41e8e659... — canonical "Phase 2C.4.5 complete" reference
 
 ## Budget
 
-- **Soft target:** 1 full Max plan 5-hour window for Part A + Part B combined
-- **Hard cap:** stop and escalate if executor invocations exceed 25 across the full iteration
-- **Cost check:** orchestrator runs `/cost` at end of Part A (before starting Part B) and reports
+- **Soft target:** 1 Max plan 5-hour window for all three Parts combined
+- **Hard cap:** stop and escalate if executor invocations exceed 20 across the full iteration
+- **Cost check:** orchestrator runs `/cost` after Part A merges (midpoint) and reports
 
-Part A is small (~3-5 executor invocations expected, mostly verification + merge ceremony).
-Part B is the meatier portion (~10-15 executor invocations, mostly adapter changes + tests + audit documentation).
+Expected breakdown:
+- Part A: ~5-7 executor invocations (cache.py logging + tests + ADR-0021 + staging verify)
+- Part B: ~3-4 executor invocations (workflow change + test PR + verify)
+- Part C: ~2-3 executor invocations (workflow fix + verify on next CI run)
 
 ## Success criteria (orchestrator verifies ALL before declaring done)
 
-**Part A:**
-- [ ] 7-scenario verification passes (or curl-equivalent verification if browser unavailable to subagents — explicit list of curls in PR description)
-- [ ] PR opened with title `feat(web): chat-style refinement UI (Phase 2C.4 PR 3/3)`
-- [ ] CI green on PR (API, Web, Eval quick, Detect secrets)
-- [ ] PR merged with squash, branch deleted
-- [ ] `Deploy — Staging` workflow runs on merge commit AND succeeds (not skipped due to `[skip ci]` inheritance — verify explicitly)
-- [ ] Staging health check returns OK and the new chat UI renders correctly when manually loaded at `http://localhost:3000/demo` pointing at staging backend
+**Part A — Cache observability:**
+- [ ] cache.py emits `cache_backend_selected`, `cache_init_fallback`, `search_cache_put_success`, `search_cache_get_result` events
+- [ ] Every cache log includes K_REVISION (or hostname fallback)
+- [ ] Unit tests pass for each log emission
+- [ ] ADR-0021 written documenting the logging schema
+- [ ] PR opened, CI green, squash-merged
+- [ ] Deploy — Staging succeeds on merge commit
+- [ ] Manual verification: curl /search against staging, then run `gcloud logging read` with the new event names — should see structured logs from the actual request
+- [ ] CURRENT_STATE.md's "Known issues" section updated to mark Issue #31 closed
 
-**Part B:**
-- [ ] ADR-0020 written documenting prompt caching design decisions
-- [ ] Audit findings table in ADR-0020 or PR description: per-agent token counts, per-agent cache-buster findings, per-agent disposition (cached / skipped / fixed)
-- [ ] Anthropic adapter accepts `cache_control_breakpoint` parameter
-- [ ] At least one Haiku-routed agent (PlannerAgent or OptimizerAgent) confirmed cached via 2-call sequence — first call shows cache_creation_input_tokens > 0, second call shows cache_read_input_tokens > 0
-- [ ] Scorer output displays cache hit rate (sample shown in PR)
-- [ ] pricing.py rates cover cache_creation (1.25×) and cache_read (0.10×)
-- [ ] Coverage stays ≥ 80% (currently 86%)
+**Part B — [skip ci] guardrail:**
+- [ ] Mechanism in place (workflow strip OR branch protection) that prevents [skip ci] from suppressing deploys after squash merges
+- [ ] Verification: either (a) test PR with [skip ci] in a commit message either has the tag stripped on squash OR the squash is rejected, OR (b) documented behavior with clear test plan
+- [ ] PR opened, CI green, merged
+- [ ] Deploy — Staging succeeds on merge commit
+
+**Part C — pip-audit noise:**
+- [ ] pip-audit no longer reports 0s failures on no-Python-change commits
+- [ ] Either workflow runs successfully and exits cleanly, OR doesn't run when paths don't match
+- [ ] Verified on a subsequent commit to main after merge
+- [ ] PR opened, CI green, merged
+
+**All Parts:**
+- [ ] Coverage stays ≥ 80%
 - [ ] ruff + mypy clean
-- [ ] Frontend lint + typecheck clean (Part A)
-- [ ] PR opened, merged, staging deploys green on merge commit
-- [ ] Phase 2D issues filed for any audit findings requiring larger refactor
-
-**Both parts:**
 - [ ] No production deploys triggered
-- [ ] No Anthropic API key (`ANTHROPIC_API_KEY` env var) set — Max plan billing preserved
-- [ ] All commits pass pre-commit hooks
+- [ ] No ANTHROPIC_API_KEY set
+- [ ] No [skip ci] used in any commit message in this iteration
 - [ ] No load-bearing file from Hard Rules section modified
+- [ ] Each Part shipped as its own PR (three PRs total)
+- [ ] CURRENT_STATE.md updated to reflect Issues #31, #30, #18 closed
 
 ## Build order (recommended)
 
-**Part A (PR 3 completion):**
-1. Run `git status` and `git branch` to discover the in-flight branch
-2. Run frontend lint + typecheck to confirm clean state
-3. Run 7-scenario verification (delegate to user as escalation, or curl-based equivalent if possible)
-4. Open PR with description matching PR #27's pattern
-5. Wait for CI green; merge with squash
-6. Verify staging deploy succeeds on the merge commit
-7. Report Part A complete
+1. Part A first — it's the highest-value fix (unblocks future cache debugging) and the most code-touching of the three
+2. Part B second — depends on Part A only for sequencing (clean main state)
+3. Part C third — smallest scope; quickest win to close out the iteration
 
-**Part B (Phase 2C.4.5):**
-1. Read `https://platform.claude.com/docs/en/build-with-claude/prompt-caching` documentation (delegate to executor with the URL — they can webfetch if their environment allows, otherwise summarize from working knowledge and note any gaps)
-2. Write ADR-0020 with the locked design decisions (Anthropic-only, 5-min TTL, single breakpoint, measurement strategy)
-3. Thread 1 audit: inventory + cache-busters + token counts; report findings before any code change
-4. Thread 2 implementation: adapter changes → unit tests → agent wiring → pricing.py → scorer.py
-5. End-to-end 2-call verification (cache_creation then cache_read confirmed via response.usage)
-6. Open PR, verify CI green, merge with squash
-7. Verify staging deploy succeeds; report final cache hit rate from a fresh staging trace
-8. Report Part B complete; iteration done
+Each Part is a standalone PR. Open Part A's PR, merge, deploy verify. Then start Part B. Then Part C. Don't open multiple PRs in parallel — sequential prevents merge conflicts and keeps the staging deploy chain clean.
 
 ## Notes for the orchestrator
 
-- The Max plan covers Opus 4.7 (orchestrator) and Sonnet (executor/verifier) — never set `ANTHROPIC_API_KEY` env var as this bypasses Max into pay-per-token billing
-- `[skip ci]` discipline: avoid using this in any commit message in this iteration; in PR descriptions document explicitly that the merge commit must deploy
-- This is an existing project with significant prior art. When in doubt, ask. Don't guess at conventions — they're documented in CURRENT_STATE.md or available via `git log -p` on prior similar work
-- Phase 2C.4.5's prompt-caching prior design was discussed in the prior consulting session. Treat the design as the locked default; only escalate if the audit findings suggest the design needs adjustment
+- Max plan covers Opus 4.7 (orchestrator) + Sonnet (executor/verifier) — never set `ANTHROPIC_API_KEY` env var
+- `[skip ci]` discipline: do NOT use [skip ci] in any commit message in this iteration. Part B is specifically about preventing the squash-merge inheritance trap; using it would be ironic and self-defeating.
+- Each issue (#31, #30, #18) has a filed GitHub issue with body context. Read `gh issue view <N>` for each before planning the fix.
+- Issue #29 (Groq schema case sensitivity) is OUT OF SCOPE. The two-layer fix already landed in PR #27.
+- This iteration uses smaller subagent budget than Phase 2C.4.5 — the work is more bounded.
