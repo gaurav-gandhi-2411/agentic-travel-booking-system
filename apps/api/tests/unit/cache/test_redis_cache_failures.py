@@ -106,4 +106,4 @@ async def test_healthy_put_logs_no_warning() -> None:
             await cache.put("req-ok-001", _intent(), _flights())
 
     unexpected = [e for e in logs if e.get("log_level") not in ("info", "debug")]
-    assert unexpected == [], f"Expected no warning/error log events on healthy put, got: {unexpected}"
+    assert unexpected == [], f"Unexpected warning/error log on healthy put: {unexpected}"
