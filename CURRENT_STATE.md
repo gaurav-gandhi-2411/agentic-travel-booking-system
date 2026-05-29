@@ -82,7 +82,7 @@ These have hard-won design decisions baked in. Each has an ADR or a Phase docume
 - #20 — Judge cache poisoned by failed-parse score=1 entries; recurs if evals are interrupted mid-run
 - #21 — Cross-profile coherence requires consistent judge model (current evals mix Qwen3-32B and Sonnet)
 - #29 — Groq schema enum case sensitivity differs between models
-- #30 — `[skip ci]` in squash-merge silently suppresses deploys
+- ~~#30 — `[skip ci]` in squash-merge silently suppresses deploys — Issue #30 closed 2026-05-30 — check-no-skip-ci required status check added; [skip ci] commits blocked from merging to main.~~
 - ~~#31 — Cache backend selection silent — Issue #31 closed 2026-05-30 — placeholder UPSTASH_REDIS_URL secret replaced and verified via end-to-end Redis read/write test.~~
 
 **Dead ends already explored:**
@@ -91,7 +91,7 @@ These have hard-won design decisions baked in. Each has an ADR or a Phase docume
 - **Per-second RPM throttle for NIM.** Built and tested; doesn't help because the underlying constraint is credit pool, not rate limit. Code remained for defense in depth; don't expect it to fix NIM completion issues.
 - **Qwen3-32B as runtime profile.** Same model is used as eval judge; same-family bias would invalidate eval scores. Excluded from demo profile set deliberately.
 
-**pip-audit workflow noise.** The pip-audit GitHub Actions workflow reports "0s failure" on every push due to path-filter quirks. Pre-existing, accepted, tracked as Issue #18. CI dashboard shows red ❌ next to pip-audit — this is noise, not a real failure.
+**pip-audit workflow noise.** ~~Issue #18 closed 2026-05-30 — pip-audit workflow gated on Python file changes; eliminates 0s false failures on non-Python commits. Paths filter now covers `**/*.py`, `**/requirements*.txt`, `**/pyproject.toml`, `**/uv.lock`.~~
 
 ## Tests / lint / types — current state
 
@@ -102,13 +102,13 @@ These have hard-won design decisions baked in. Each has an ADR or a Phase docume
 - Frontend: lint clean, typecheck clean
 
 **Known-broken and accepted:**
-- pip-audit workflow's 0s failures (Issue #18)
+- ~~pip-audit workflow's 0s failures (Issue #18) — closed 2026-05-30~~
 - pre-existing `find_dotenv()` inconsistency in eval scripts (docs/backlog.md)
 
 ## Open questions I'm flagging honestly
 
 **I don't know:**
-- Whether the `[skip ci]` footgun has been fully fixed since I last had context on it. Issue #30 was filed but I don't know if a guardrail was added.
+- ~~Whether the `[skip ci]` footgun has been fully fixed — resolved: Issue #30 closed 2026-05-30, check-no-skip-ci required status check is active on main.~~
 - The exact state of `apps/api/docs/backlog.md` — it was created mid-session and may contain items not migrated to GitHub issues.
 - Whether all the integration tests pass against the live staging deploy currently, or only against the mocked test fixtures.
 
