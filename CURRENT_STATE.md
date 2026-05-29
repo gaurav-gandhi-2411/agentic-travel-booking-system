@@ -83,7 +83,7 @@ These have hard-won design decisions baked in. Each has an ADR or a Phase docume
 - #21 — Cross-profile coherence requires consistent judge model (current evals mix Qwen3-32B and Sonnet)
 - #29 — Groq schema enum case sensitivity differs between models
 - #30 — `[skip ci]` in squash-merge silently suppresses deploys
-- ~~#31 — Cache backend selection silent (resolved Phase 2D.1, Part A)~~
+- ~~#31 — Cache backend selection silent — Issue #31 closed 2026-05-30 — placeholder UPSTASH_REDIS_URL secret replaced and verified via end-to-end Redis read/write test.~~
 
 **Dead ends already explored:**
 - **NIM Qwen3.5-397B as 4th profile.** Failed at 14/24 completion due to NIM's 1000-credit lifetime pool. Documented and abandoned. Don't retry the same model on NIM unless NIM changes their tier model.

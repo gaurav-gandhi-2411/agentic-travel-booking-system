@@ -59,6 +59,13 @@ that logs before allowing execution to fall through to the in-memory backend.
 - **Keep `contextlib.suppress` and wrap it:** Rejected. Wrapping suppress to log the
   suppressed exception is more complex than replacing it with an explicit try/except.
 
+## Discovery
+
+- **Date:** 2026-05-30
+- **Root cause:** Staging `UPSTASH_REDIS_URL` was set to a placeholder value that was never replaced after initial infra provisioning.
+- **How found:** The `search_cache_put_success` / `cache_init_fallback` observability added in this ADR immediately surfaced the misconfiguration on first run.
+- **Resolution:** Secret rotated, Cloud Run updated to revision `agentic-travel-booking-api-staging-00048-jx8`, verified via end-to-end Redis read/write test (search → cache put logged → refine → cache get hit=true logged, confirmed 2026-05-30).
+
 ## References
 
 - Issue #31 — Cache backend selection is silently observable
