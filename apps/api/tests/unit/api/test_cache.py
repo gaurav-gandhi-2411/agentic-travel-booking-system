@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 import structlog.testing
 
+from travel_agent.api.cache import _make_cache
 from travel_agent.cache.redis_cache import RedisSearchCache
 from travel_agent.coordinator.state import FlightOption, TravelIntent
 
@@ -36,9 +37,10 @@ def test_make_cache_logs_backend_selected_redis(monkeypatch: pytest.MonkeyPatch)
     """cache_backend_selected with backend=redis when URL is set and init succeeds."""
     monkeypatch.setenv("UPSTASH_REDIS_URL", "rediss://fake")
 
-    with patch("travel_agent.cache.redis_cache.RedisSearchCache", return_value=MagicMock()), structlog.testing.capture_logs() as logs:
-        from travel_agent.api.cache import _make_cache
-
+    with (
+        patch("travel_agent.cache.redis_cache.RedisSearchCache", return_value=MagicMock()),
+        structlog.testing.capture_logs() as logs,
+    ):
         _make_cache()
 
     selected = [e for e in logs if e["event"] == "cache_backend_selected"]
@@ -54,8 +56,6 @@ def test_make_cache_logs_backend_selected_in_memory_no_url(
     monkeypatch.delenv("UPSTASH_REDIS_URL", raising=False)
 
     with structlog.testing.capture_logs() as logs:
-        from travel_agent.api.cache import _make_cache
-
         _make_cache()
 
     selected = [e for e in logs if e["event"] == "cache_backend_selected"]
@@ -69,12 +69,13 @@ def test_make_cache_logs_fallback_on_redis_init_error(
     """cache_init_fallback is logged when RedisSearchCache.__init__ raises."""
     monkeypatch.setenv("UPSTASH_REDIS_URL", "rediss://fake")
 
-    with patch(
-        "travel_agent.cache.redis_cache.RedisSearchCache",
-        side_effect=ConnectionError("test error"),
-    ), structlog.testing.capture_logs() as logs:
-        from travel_agent.api.cache import _make_cache
-
+    with (
+        patch(
+            "travel_agent.cache.redis_cache.RedisSearchCache",
+            side_effect=ConnectionError("test error"),
+        ),
+        structlog.testing.capture_logs() as logs,
+    ):
         _make_cache()
 
     fallback = [e for e in logs if e["event"] == "cache_init_fallback"]
