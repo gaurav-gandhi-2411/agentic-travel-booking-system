@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import socket
 
 import redis.asyncio as aioredis
 import redis.exceptions
@@ -22,6 +24,7 @@ from travel_agent.coordinator.state import FlightOption, TravelIntent
 _TTL_SECONDS = 1800  # 30 min
 _KEY_PREFIX = "search_cache:"
 _logger = structlog.get_logger(__name__)
+_REVISION: str = os.environ.get("K_REVISION") or socket.gethostname()
 
 _CACHE_ERRORS = (redis.exceptions.RedisError, asyncio.TimeoutError, ConnectionError)
 
@@ -42,6 +45,7 @@ class RedisSearchCache:
         )
         try:
             await self._redis.set(key, payload, ex=_TTL_SECONDS)
+            _logger.info("search_cache_put_success", request_id=request_id, revision=_REVISION)
         except _CACHE_ERRORS as exc:
             _logger.warning(
                 "search_cache_failure",
@@ -62,6 +66,12 @@ class RedisSearchCache:
                 error_class=exc.__class__.__name__,
             )
             return None
+        _logger.info(
+            "search_cache_get_result",
+            request_id=request_id,
+            hit=raw is not None,
+            revision=_REVISION,
+        )
         if raw is None:
             return None
         data = json.loads(raw)

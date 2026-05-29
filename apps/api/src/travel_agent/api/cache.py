@@ -11,14 +11,20 @@ from __future__ import annotations
 
 import asyncio
 import os
+import socket
 import time
 from collections import OrderedDict
 from typing import Protocol
+
+import structlog
 
 from travel_agent.coordinator.state import FlightOption, TravelIntent
 
 _MAX_ENTRIES = 50
 _TTL_SECONDS = 1800
+
+_logger = structlog.get_logger(__name__)
+_REVISION: str = os.environ.get("K_REVISION") or socket.gethostname()
 
 _CacheEntry = tuple[float, TravelIntent, list[FlightOption]]
 
@@ -66,17 +72,22 @@ class _SearchCache:
 def _make_cache() -> SearchCacheProtocol:
     """Factory: return RedisSearchCache if UPSTASH_REDIS_URL is set, else in-memory."""
     url = os.environ.get("UPSTASH_REDIS_URL", "").strip()
+    result: SearchCacheProtocol | None = None
     if url:
-        import contextlib  # noqa: PLC0415
-
-        result: SearchCacheProtocol | None = None
-        with contextlib.suppress(Exception):
+        try:
             from travel_agent.cache.redis_cache import RedisSearchCache  # noqa: PLC0415
 
             result = RedisSearchCache(url)
-        if result is not None:
-            return result
-    return _SearchCache()
+        except Exception as exc:  # noqa: BLE001
+            _logger.warning(
+                "cache_init_fallback",
+                error_class=exc.__class__.__name__,
+                error_message=str(exc),
+                revision=_REVISION,
+            )
+    backend = "redis" if result is not None else "in_memory"
+    _logger.info("cache_backend_selected", backend=backend, revision=_REVISION)
+    return result if result is not None else _SearchCache()
 
 
 search_cache: SearchCacheProtocol = _make_cache()
