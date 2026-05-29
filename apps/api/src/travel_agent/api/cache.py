@@ -78,7 +78,7 @@ def _make_cache() -> SearchCacheProtocol:
             from travel_agent.cache.redis_cache import RedisSearchCache  # noqa: PLC0415
 
             result = RedisSearchCache(url)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             _logger.warning(
                 "cache_init_fallback",
                 error_class=exc.__class__.__name__,

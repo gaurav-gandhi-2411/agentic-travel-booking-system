@@ -9,25 +9,21 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 import structlog.testing
 
-from travel_agent.coordinator.state import CabinClass, FlightOption, TravelIntent, Window
+from travel_agent.cache.redis_cache import RedisSearchCache
+from travel_agent.coordinator.state import FlightOption, TravelIntent
 
-_WINDOW = Window(start_date=date(2026, 12, 10), end_date=date(2026, 12, 17))
 _INTENT = TravelIntent(
     origin_iata="DEL",
     destination_iata="DXB",
-    window=_WINDOW,
-    cabin=CabinClass.ECONOMY,
-    budget_usd=None,
-    passengers=1,
+    earliest_departure=date(2026, 12, 1),
+    latest_departure=date(2026, 12, 31),
 )
 _FLIGHTS: list[FlightOption] = []
 
 
-def _make_redis_cache() -> "RedisSearchCache":
+def _make_redis_cache() -> RedisSearchCache:
     """Construct a RedisSearchCache with a mocked redis client."""
     with patch("redis.asyncio.from_url", return_value=MagicMock()):
-        from travel_agent.cache.redis_cache import RedisSearchCache
-
         return RedisSearchCache("rediss://fake")
 
 
@@ -40,11 +36,10 @@ def test_make_cache_logs_backend_selected_redis(monkeypatch: pytest.MonkeyPatch)
     """cache_backend_selected with backend=redis when URL is set and init succeeds."""
     monkeypatch.setenv("UPSTASH_REDIS_URL", "rediss://fake")
 
-    with patch("travel_agent.api.cache.RedisSearchCache", return_value=MagicMock()):
-        with structlog.testing.capture_logs() as logs:
-            from travel_agent.api.cache import _make_cache
+    with patch("travel_agent.cache.redis_cache.RedisSearchCache", return_value=MagicMock()), structlog.testing.capture_logs() as logs:
+        from travel_agent.api.cache import _make_cache
 
-            _make_cache()
+        _make_cache()
 
     selected = [e for e in logs if e["event"] == "cache_backend_selected"]
     assert len(selected) == 1
@@ -75,13 +70,12 @@ def test_make_cache_logs_fallback_on_redis_init_error(
     monkeypatch.setenv("UPSTASH_REDIS_URL", "rediss://fake")
 
     with patch(
-        "travel_agent.api.cache.RedisSearchCache",
+        "travel_agent.cache.redis_cache.RedisSearchCache",
         side_effect=ConnectionError("test error"),
-    ):
-        with structlog.testing.capture_logs() as logs:
-            from travel_agent.api.cache import _make_cache
+    ), structlog.testing.capture_logs() as logs:
+        from travel_agent.api.cache import _make_cache
 
-            _make_cache()
+        _make_cache()
 
     fallback = [e for e in logs if e["event"] == "cache_init_fallback"]
     assert len(fallback) == 1
