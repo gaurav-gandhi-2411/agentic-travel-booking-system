@@ -10,12 +10,12 @@ on:
   workflow_dispatch:
 
 jobs:
-  pip-audit:
+  audit:
     name: pip-audit dependency scan
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      issues: write  # Required to open GitHub issues on failure
+      issues: write
 
     steps:
       - uses: actions/checkout@v4
@@ -24,8 +24,6 @@ jobs:
 
       - name: Check for Python file changes
         id: python_changes
-        # On schedule/workflow_dispatch always run. On push/PR, check whether
-        # Python-related files changed. If not, exit early — no audit needed.
         run: |
           EVENT="${{ github.event_name }}"
           if [ "$EVENT" = "schedule" ] || [ "$EVENT" = "workflow_dispatch" ]; then
@@ -34,7 +32,7 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "No Python-related files changed — skipping pip-audit."
+            echo "No Python-related files changed -- skipping pip-audit."
           fi
 
       - name: Set up Python 3.12
@@ -47,15 +45,11 @@ jobs:
         if: steps.python_changes.outputs.changed == 'true'
         run: |
           pip install pip-audit pip-tools
-          # Install project deps so pip-audit can resolve the full graph
           pip install -e "apps/api[dev]"
 
       - name: Run pip-audit
         id: audit
         if: steps.python_changes.outputs.changed == 'true'
-        # Audits all installed packages. Fails (exit 1) if any known
-        # vulnerability is found. Adjust --severity if low/medium noise
-        # becomes a problem (e.g., --severity high).
         run: pip-audit --desc
 
       - name: Open GitHub issue on failure
@@ -65,18 +59,12 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           TITLE="Security: pip-audit found vulnerabilities"
-          # Avoid duplicate issues — check for any open issue with this title.
           EXISTING=$(
             gh issue list --state open --json title \
               --jq "[.[] | select(.title == \"$TITLE\")] | length"
           )
           if [ "$EXISTING" -eq 0 ]; then
-            BODY="pip-audit detected vulnerabilities in \`apps/api/pyproject.toml\` dependencies.
-
-Action required: review the workflow run at $RUN_URL, update affected packages, and close this issue once resolved.
-
-Labels to add manually if not auto-applied: security, dependencies"
-            gh issue create --title "$TITLE" --body "$BODY"
-          else
-            echo "Open issue '$TITLE' already exists — skipping creation."
+            gh issue create \
+              --title "$TITLE" \
+              --body "pip-audit found vulnerabilities. See $RUN_URL"
           fi
