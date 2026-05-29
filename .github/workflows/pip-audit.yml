@@ -18,7 +18,7 @@ jobs:
       issues: write  # Required to open GitHub issues on failure
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 2
 
@@ -27,7 +27,8 @@ jobs:
         # On schedule/workflow_dispatch always run. On push/PR, check whether
         # Python-related files changed. If not, exit early — no audit needed.
         run: |
-          if [[ "${{ github.event_name }}" == "schedule" || "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          EVENT="${{ github.event_name }}"
+          if [ "$EVENT" = "schedule" ] || [ "$EVENT" = "workflow_dispatch" ]; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           elif git diff --name-only HEAD~1 HEAD | grep -qE '\.(py|txt|toml)$|uv\.lock'; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
@@ -61,6 +62,7 @@ jobs:
         if: failure() && steps.audit.outcome == 'failure'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           TITLE="Security: pip-audit found vulnerabilities"
           # Avoid duplicate issues — check for any open issue with this title.
@@ -69,16 +71,12 @@ jobs:
               --jq "[.[] | select(.title == \"$TITLE\")] | length"
           )
           if [ "$EXISTING" -eq 0 ]; then
-            gh issue create \
-              --title "$TITLE" \
-              --body "$(cat <<'BODY'
-pip-audit detected vulnerabilities in `apps/api/pyproject.toml` dependencies.
+            BODY="pip-audit detected vulnerabilities in \`apps/api/pyproject.toml\` dependencies.
 
-**Action required:** review the [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}), update affected packages, and close this issue once resolved.
+Action required: review the workflow run at $RUN_URL, update affected packages, and close this issue once resolved.
 
-Labels to add manually if not auto-applied: `security`, `dependencies`
-BODY
-)"
+Labels to add manually if not auto-applied: security, dependencies"
+            gh issue create --title "$TITLE" --body "$BODY"
           else
-            echo "Open issue '$TITLE' already exists (#${EXISTING}) — skipping creation."
+            echo "Open issue '$TITLE' already exists — skipping creation."
           fi
