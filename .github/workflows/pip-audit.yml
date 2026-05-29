@@ -6,7 +6,17 @@ on:
   push:
     branches: [main]
     paths:
-      - 'apps/api/pyproject.toml'
+      - '**/*.py'
+      - '**/requirements*.txt'
+      - '**/pyproject.toml'
+      - '**/uv.lock'
+  pull_request:
+    branches: [main]
+    paths:
+      - '**/*.py'
+      - '**/requirements*.txt'
+      - '**/pyproject.toml'
+      - '**/uv.lock'
   workflow_dispatch:
 
 jobs:
@@ -53,11 +63,11 @@ jobs:
             gh issue create \
               --title "$TITLE" \
               --body "$(cat <<'BODY'
-pip-audit detected vulnerabilities in \`apps/api/pyproject.toml\` dependencies.
+pip-audit detected vulnerabilities in `apps/api/pyproject.toml` dependencies.
 
 **Action required:** review the [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}), update affected packages, and close this issue once resolved.
 
-Labels to add manually if not auto-applied: \`security\`, \`dependencies\`
+Labels to add manually if not auto-applied: `security`, `dependencies`
 BODY
 )"
           else
