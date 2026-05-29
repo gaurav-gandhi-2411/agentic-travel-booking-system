@@ -1,0 +1,26 @@
+name: check-no-skip-ci
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  check-skip-ci:
+    name: Reject [skip ci] commits
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for [skip ci] in PR commits
+        run: |
+          OFFENDING=$(git log --format=%B origin/${{ github.base_ref }}..HEAD | grep -iE '\[skip ci\]|\[ci skip\]' || true)
+          if [ -n "$OFFENDING" ]; then
+            echo "::error::PR contains commit with [skip ci] tag. This causes squash-merge inheritance to suppress Deploy-Staging (Issue #30). Please reword the offending commit(s) before merging."
+            echo ""
+            echo "Offending message excerpt:"
+            echo "$OFFENDING"
+            exit 1
+          fi
+          echo "No [skip ci] tags found in PR commits."
