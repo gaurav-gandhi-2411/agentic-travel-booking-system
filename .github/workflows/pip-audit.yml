@@ -5,18 +5,8 @@ on:
     - cron: '0 6 * * 1'  # Monday 06:00 UTC
   push:
     branches: [main]
-    paths:
-      - '**/*.py'
-      - '**/requirements*.txt'
-      - '**/pyproject.toml'
-      - '**/uv.lock'
   pull_request:
     branches: [main]
-    paths:
-      - '**/*.py'
-      - '**/requirements*.txt'
-      - '**/pyproject.toml'
-      - '**/uv.lock'
   workflow_dispatch:
 
 jobs:
@@ -29,13 +19,31 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+
+      - name: Check for Python file changes
+        id: python_changes
+        # On schedule/workflow_dispatch always run. On push/PR, check whether
+        # Python-related files changed. If not, exit early — no audit needed.
+        run: |
+          if [[ "${{ github.event_name }}" == "schedule" || "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          elif git diff --name-only HEAD~1 HEAD | grep -qE '\.(py|txt|toml)$|uv\.lock'; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No Python-related files changed — skipping pip-audit."
+          fi
 
       - name: Set up Python 3.12
+        if: steps.python_changes.outputs.changed == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       - name: Install pip-audit and deps
+        if: steps.python_changes.outputs.changed == 'true'
         run: |
           pip install pip-audit pip-tools
           # Install project deps so pip-audit can resolve the full graph
@@ -43,6 +51,7 @@ jobs:
 
       - name: Run pip-audit
         id: audit
+        if: steps.python_changes.outputs.changed == 'true'
         # Audits all installed packages. Fails (exit 1) if any known
         # vulnerability is found. Adjust --severity if low/medium noise
         # becomes a problem (e.g., --severity high).
