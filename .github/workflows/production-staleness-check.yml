@@ -214,35 +214,36 @@ print(sha.strip())
 
           TEST_NOTE=""
           if [ "$TEST_STALE" = "true" ]; then
-            TEST_NOTE=$'\n\n> **⚠️ TEST MODE** — This run used hardcoded stale SHAs to verify the alert path. It does NOT reflect real production state.\n'
+            TEST_NOTE="> **TEST MODE** — This run used hardcoded stale SHAs to verify the alert path. It does NOT reflect real production state."
           fi
 
-          BODY=$(cat <<ISSUEEOF
-## Production staleness detected
-${TEST_NOTE}
-**Checked:** ${CHECK_TIME} | **main HEAD:** \`${MAIN_SHA:0:7}\`
-
-| Surface | Deployed SHA | Commits behind main (path-filtered) | Path |
-|---------|-------------|--------------------------------------|------|
-| Backend (Cloud Run) | \`${BACKEND_SHA:0:7}\` | ${B_BEHIND} | \`apps/api/\` |
-| Frontend (Vercel) | \`${FRONTEND_SHA:0:7}\` | ${F_BEHIND} | \`apps/web/\` |
-
-> **This is an alert, not an auto-deploy.** Production deploys are deliberately gated (canary stage gate + GG approval in the \`production\` GitHub environment). The guardrail's job is to surface the gap — the deploy step stays manual.
-
-### Backend diff
-[Compare \`${BACKEND_SHA:0:7}\`...main](${SERVER_URL}/${REPO}/compare/${BACKEND_SHA:0:7}...main)
-
-To deploy: \`workflow_dispatch\` on \`deploy-prod.yml\` → \`stage=canary\` (smoke test) → \`stage=full\`
-
-### Frontend diff
-[Compare \`${FRONTEND_SHA:0:7}\`...main](${SERVER_URL}/${REPO}/compare/${FRONTEND_SHA:0:7}...main)
-
-To deploy: \`vercel deploy --prod --archive=tgz\` from repo root (authenticated as \`gaurav-gandhi-2411\`)
-
----
-*Updated by [production-staleness-check.yml](${SERVER_URL}/${REPO}/actions/workflows/production-staleness-check.yml) on every scheduled run. Closes automatically when both surfaces are current.*
-ISSUEEOF
-)
+          # Build body into a temp file — avoids heredoc column-0 delimiter
+          # which would break YAML literal block scalar parsing in GitHub Actions.
+          BODY_FILE=$(mktemp /tmp/staleness-body.XXXXXX)
+          {
+            printf "## Production staleness detected\n\n"
+            [ -n "$TEST_NOTE" ] && printf "%s\n\n" "$TEST_NOTE"
+            printf "**Checked:** %s | **main HEAD:** \`%s\`\n\n" "$CHECK_TIME" "${MAIN_SHA:0:7}"
+            printf "| Surface | Deployed SHA | Commits behind main (path-filtered) | Path |\n"
+            printf "|---------|-------------|--------------------------------------|------|\n"
+            printf "| Backend (Cloud Run) | \`%s\` | %s | \`apps/api/\` |\n" "${BACKEND_SHA:0:7}" "$B_BEHIND"
+            printf "| Frontend (Vercel) | \`%s\` | %s | \`apps/web/\` |\n\n" "${FRONTEND_SHA:0:7}" "$F_BEHIND"
+            printf "> **This is an alert, not an auto-deploy.** Production deploys are deliberately gated\n"
+            printf "> (canary stage gate + GG approval in the \`production\` GitHub environment).\n"
+            printf "> The guardrail surfaces the gap; the deploy step stays manual.\n\n"
+            printf "### Backend diff\n"
+            printf "[Compare \`%s\`...main](%s/%s/compare/%s...main)\n\n" \
+              "${BACKEND_SHA:0:7}" "$SERVER_URL" "$REPO" "${BACKEND_SHA:0:7}"
+            printf "To deploy: \`workflow_dispatch\` on \`deploy-prod.yml\` — stage=canary then stage=full\n\n"
+            printf "### Frontend diff\n"
+            printf "[Compare \`%s\`...main](%s/%s/compare/%s...main)\n\n" \
+              "${FRONTEND_SHA:0:7}" "$SERVER_URL" "$REPO" "${FRONTEND_SHA:0:7}"
+            printf "To deploy: \`vercel deploy --prod --archive=tgz\` from repo root\n\n"
+            printf "---\n"
+            printf "*Updated by [production-staleness-check.yml](%s/%s/actions/workflows/production-staleness-check.yml)*\n" \
+              "$SERVER_URL" "$REPO"
+            printf "*Closes automatically when both surfaces are current.*\n"
+          } > "$BODY_FILE"
 
           EXISTING=$(gh issue list \
             --label "$ALERT_LABEL" \
@@ -251,15 +252,16 @@ ISSUEEOF
             --jq '.[0].number // empty')
 
           if [ -n "$EXISTING" ]; then
-            gh issue edit "$EXISTING" --body "$BODY"
+            gh issue edit "$EXISTING" --body-file "$BODY_FILE"
             echo "Updated staleness issue #${EXISTING}"
           else
             gh issue create \
               --title "$ALERT_TITLE" \
-              --body "$BODY" \
+              --body-file "$BODY_FILE" \
               --label "$ALERT_LABEL"
             echo "Created new staleness issue"
           fi
+          rm -f "$BODY_FILE"
 
       # ── Resolve: both surfaces current ────────────────────────────────────
       - name: Close staleness alert (drift resolved)
