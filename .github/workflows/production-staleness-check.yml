@@ -147,19 +147,11 @@ jobs:
               "https://api.vercel.com/v6/deployments?teamId=${VERCEL_TEAM_ID}&projectId=${VERCEL_PROJECT_ID}&target=production&state=READY&limit=1" \
               -H "Authorization: Bearer ${VERCEL_TOKEN}")
 
-            DEPLOYED_SHA=$(echo "$RESPONSE" | python3 -c "
-import sys, json
-data = json.load(sys.stdin)
-deps = data.get('deployments', [])
-if not deps:
-    print('unknown')
-    sys.exit(0)
-dep = deps[0]
-sha = (dep.get('meta') or {}).get('githubCommitSha') or \
-      (dep.get('gitSource') or {}).get('sha') or \
-      'unknown'
-print(sha.strip())
-")
+            # jq is available on ubuntu-latest; avoids multi-line python3 -c
+            # which would place unindented content at column 0 inside run: |
+            # and break YAML literal block scalar parsing.
+            DEPLOYED_SHA=$(echo "$RESPONSE" | \
+              jq -r '(.deployments[0].meta.githubCommitSha // .deployments[0].gitSource.sha // "unknown")')
           fi
 
           echo "Frontend deployed SHA: ${DEPLOYED_SHA:0:7}"
