@@ -58,7 +58,7 @@ These have hard-won design decisions baked in. Each has an ADR or a Phase docume
 
 **`[skip ci]` in commit messages is a footgun.** When squash-merging, `[skip ci]` in any branch commit inherits into the squash commit and suppresses all main-branch workflows including Deploy-Staging. Pattern hit us during PR #27 merge. See Issue #30.
 
-**`.env` loading via `find_dotenv()`.** Scripts that load API keys must use `dotenv.find_dotenv()` rather than relative paths. Relative paths break depending on CWD (different scripts run from different directories). Some legacy scripts use relative paths; cleanup in docs/backlog.md.
+**`.env` loading via `find_dotenv()`.** Scripts that load API keys must use `dotenv.find_dotenv()` rather than relative paths. Relative paths break depending on CWD (different scripts run from different directories). Some legacy scripts use relative paths; tracked as Issue #49.
 
 **localStorage cleanup pattern.** The frontend `ProfileToggle.tsx` defensively clears stale profile IDs from localStorage on load. When changing the active profile set, update both the union type AND the localStorage guard's allowlist.
 
@@ -183,13 +183,13 @@ See ADR-0024 for the full frontend alignment narrative.
 
 **Known-broken and accepted:**
 - ~~pip-audit workflow's 0s failures (Issue #18) — closed 2026-05-30~~
-- pre-existing `find_dotenv()` inconsistency in eval scripts (docs/backlog.md)
+- pre-existing `find_dotenv()` inconsistency in eval scripts — Issue #49 (migrated from apps/api/docs/backlog.md, Phase 2D iteration 5)
 
 ## Open questions I'm flagging honestly
 
 **I don't know:**
 - ~~Whether the `[skip ci]` footgun has been fully fixed — resolved: Issue #30 closed 2026-05-30, check-no-skip-ci required status check is active on main.~~
-- The exact state of `apps/api/docs/backlog.md` — it was created mid-session and may contain items not migrated to GitHub issues.
+- ~~The exact state of `apps/api/docs/backlog.md` — it was created mid-session and may contain items not migrated to GitHub issues.~~ Resolved: 1 item (BACK-001, find_dotenv cleanup) migrated to Issue #49; file deleted (Phase 2D iteration 5).
 - Whether all the integration tests pass against the live staging deploy currently, or only against the mocked test fixtures.
 
 ## Repository orientation
@@ -207,7 +207,7 @@ agentic-travel-booking-system/
 │   │   │   └── evals/                # Eval harness for optimizer + conversation_manager
 │   │   ├── tests/                    # 453 tests
 │   │   ├── config/                   # llm_routing.yaml (LLM profiles)
-│   │   └── docs/                     # backlog.md, design notes
+│   │   └── docs/                     # design notes
 │   └── web/                          # Next.js frontend (React 19)
 │       ├── components/demo/          # DemoClient, ProfileToggle, ChatMessage, ChatLog
 │       ├── hooks/                    # useSearchStream
