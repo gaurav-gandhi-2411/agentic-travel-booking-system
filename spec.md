@@ -1,156 +1,134 @@
-# Project Spec: Phase 2D Iteration 2 — Production Audit + Eval Rigor
+# Project Spec: Phase 2D Iteration 3 — Production Deploy (v0.5.0 → current main)
 
 ## Goal
 
-Two related-but-distinct workstreams in one iteration, bundled with explicit escalation rules so the iteration can split cleanly if production audit surfaces unexpected scope.
+Production has been frozen at `v0.5.0` (commit 78c57db, 2026-05-15) since before Phase 2B. It is missing the entire Redis cache layer, Langfuse observability, structured logging, all of Phase 2C (ConversationManagerAgent, /refine rewiring, SSE event changes, 4-profile demo), and all of Phase 2D. Staging is current; production is ~three phases behind.
 
-**Part A — Production secret audit (Issue #37).** Phase 2D iteration 1 Part A discovered that staging's `UPSTASH_REDIS_URL` had been a placeholder value silently breaking caching for weeks. Production is currently live with real traffic. Audit all production secrets in GCP Secret Manager for similar placeholder values or misconfigurations. Rotate as needed. Verify production cache backend selection via the observability we just shipped.
+This iteration brings production to current main — but deliberately, in two phases:
 
-**Part B — Eval rigor (Issues #21 + #20).** Cross-profile coherence numbers in current evals are not strictly comparable because the judge model varies (Qwen3-32B primary, Sonnet fallback when TPD exhausted). And the judge cache gets poisoned by failed-parse score=1 entries that compound over interrupted eval runs. Both issues affect the credibility of our cross-profile baseline numbers. Fix both so evals produce comparable, repeatable numbers.
+**Phase 1 — De-risk (investigate + canary).** Verify staging/production config parity, confirm the canary → promotion mechanism in `deploy-prod.yml` actually works (it has not been exercised since May 15), deploy a canary revision serving 0% traffic, and smoke-test it before any real traffic touches it.
 
-Together: ~4-5 hours of orchestrator work. Two PRs (one per Part). Part A is risk reduction; Part B is story strengthening.
+**Phase 2 — Promote.** Only after the canary smoke test passes, promote to 100% traffic with an explicit rollback plan ready.
+
+The reason for two phases: this arc has surfaced four consecutive "assumed-working-but-wasn't" findings. A blind 100% production promotion after two weeks of drift is exactly the failure mode to avoid. Verify the path before trusting it.
 
 ## Current state
 
-See `CURRENT_STATE.md` for non-obvious context. Critical items relevant to this iteration:
+See `CURRENT_STATE.md`, especially the "Production audit summary" subsection added in iteration 2. Critical facts:
 
-- Phase 2D iteration 1 closed. Top of main commits: 375e764 (Part C — pip-audit fix), b872164 (Part B — `[skip ci]` guardrail), 16d3b53 (Part A — cache observability).
-- Issues closed in iteration 1: #18, #30, #31. Filed new: #37 (production audit), #41 (setup-node v5 upgrade), #42 (backlog.md migration).
-- Production secret audit (this iteration's Part A) was triggered by the staging placeholder URL finding in iteration 1. Production currently runs with real traffic per GG's confirmation — caution warranted.
-- Cache observability (ADR-0021 from iteration 1 Part A) is the diagnostic surface we'll use to verify production cache backend selection.
-- Eight secrets used by the system: `upstash-redis-url`, `upstash-redis-token`, `anthropic-api-key`, `groq-api-key`, `nvidia-nim-api-key`, `aviasales-api-token`, `langfuse-public-key`, `langfuse-secret-key`, `demo-api-key`. Plus any iteration may surface additional secrets we don't know about.
-- Eval framework lives at `apps/api/src/travel_agent/evals/`. The judge model selection logic is in `evals/optimizer/runner.py` or `evals/optimizer/scorer.py` — orchestrator discovers via grep.
+- Production service: `agentic-travel-booking-api-prod`, region asia-south1, currently running v0.5.0 image. Service URL: https://agentic-travel-booking-api-prod-646079085526.asia-south1.run.app
+- Env bindings on the prod service were corrected in iteration 2 (APP_ENV=production, UPSTASH_REDIS_URL, LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY) — they are correct but inert against the v0.5.0 image.
+- `deploy-prod.yml` was corrected in PR #43 (merge 42f1683). The workflow fires only on `push: tags: v*` or `workflow_dispatch` — NOT on merge to main.
+- The workflow does a canary → 100% promotion pattern. This path has not run since 2026-05-15.
+- Staging auto-deploys on every push to main and is current. Staging is the reference for "what a working current deployment looks like."
+- Issue #44 (this iteration) has the pre-flight checklist context. Issue #45 tracks the staleness process gap (separate, lower priority).
+- `UPSTASH_REDIS_TOKEN` is vestigial — no code references it. Do not bind it.
+- Production runs `APP_MODE=demo` and `LLM_ROUTING_PROFILE=demo` (Haiku/Anthropic path). OpenRouter is bound for on-demand `free` profile activation but not used by default.
 
 ## Scope
 
 ### In scope (this iteration)
 
-**Part A — Production secret audit (Issue #37):**
+**Phase 0 — Discovery (read-only, report before proceeding):**
 
-1. Inventory all production-bound GCP Secret Manager secrets in the `agentic-travel-booking-system` project. Use:
+1. Confirm the exact delta between v0.5.0 and current main:
+   - `git log --oneline v0.5.0..main | wc -l` (commit count)
+   - `git log --oneline v0.5.0..main` (the actual commits, summarized by phase)
+   - Confirm the current main HEAD SHA and whether it's the intended deploy target
 
-```bash
-gcloud secrets list --project agentic-travel-booking-system --format="table(name, createTime, replication.policy)"
-```
+2. Staging/production config parity audit:
+   - Full env var + secret binding comparison between `agentic-travel-booking-api-staging` and `agentic-travel-booking-api-prod`
+   - Document every difference. Classify each as: intended (e.g., APP_ENV value differs), or accidental (e.g., a secret bound in staging but missing in prod)
+   - Specifically verify: does prod have every secret binding that staging has, accounting for the iteration-2 fixes?
 
-2. For each secret, check the latest version value. Subagents read via:
+3. Inspect the `deploy-prod.yml` workflow mechanics:
+   - How does it build the image? (Cloud Build, Docker, Artifact Registry path)
+   - How does the canary step work? (traffic split percentage, tag-based revision, `--no-traffic` flag)
+   - How does promotion to 100% work? (manual gate, automatic after canary, separate workflow_dispatch)
+   - Is there a rollback mechanism, or is rollback manual (`gcloud run services update-traffic --to-revisions`)?
+   - What triggers it: tag push (`v*`) or workflow_dispatch or both?
 
-```bash
-gcloud secrets versions access latest --secret=<secret-name> --project=agentic-travel-booking-system
-```
+4. Confirm image build will succeed:
+   - Check the Dockerfile and build context are current
+   - Confirm Artifact Registry repo (`travel-agent`, asia-south1) is accessible
+   - Check whether the WIF service account has the permissions the deploy needs
 
-Don't log the full value. Capture only:
-- Prefix pattern (first 10 chars + length) for diagnostic
-- Whether it appears to be a placeholder (e.g., contains `PLACEHOLDER`, `TODO`, `your-`, `xxx`, or is suspiciously short)
-- Whether the format matches expected pattern for the secret type (e.g., `rediss://` for Redis URL, `sk-ant-` prefix for Anthropic key, `gsk_` for Groq, etc.)
+**PAUSE after Phase 0.** Report all findings. GG + external engineer review the parity audit and the workflow mechanics before any deploy action. The discovery may reveal that the canary path needs a fix before it can be used, or that there's a config difference that must be reconciled first.
 
-3. For each production Cloud Run service (`agentic-travel-booking-api-prod` confirmed; check for others), confirm which secrets are bound and at what version:
+**Phase 1 — Canary deploy (after Phase 0 review):**
 
-```bash
-gcloud run services describe agentic-travel-booking-api-prod \
-  --region asia-south1 \
-  --format="value(spec.template.spec.containers[0].env)"
-```
+5. Decide the version tag (recommend `v0.6.0` given the multi-phase delta — confirm with GG).
 
-4. Verify production cache backend via the observability shipped in iteration 1:
+6. Trigger the production deploy to a CANARY revision serving 0% traffic:
+   - Either via tag push or workflow_dispatch (per Phase 0 findings on what the workflow supports)
+   - The canary revision should be deployed but NOT serving traffic (`--no-traffic` or equivalent)
+   - If the workflow auto-promotes to 100% without a canary gate, STOP — we need to modify the workflow to add a manual gate before using it (escalate)
 
-```bash
-gcloud logging read 'resource.labels.service_name="agentic-travel-booking-api-prod" AND jsonPayload.event="cache_backend_selected"' \
-  --limit 3 --freshness=7d --project agentic-travel-booking-system
-```
+7. Smoke-test the canary revision directly (canary revisions get a unique URL):
+   - GET /health → expect {"status":"ok","phase":"C","cache":"ok"} (the cache field that v0.5.0 lacked)
+   - cache_backend_selected logs → backend=redis
+   - POST /search → full SSE pipeline, capture request_id
+   - search_cache_put_success log appears
+   - POST /refine with request_id → REFINE classification, archetypes, cache hit, NOT "Session expired"
+   - search_cache_get_result hit=true
+   - Structured JSON logs appearing
+   - Confirm the 4 demo profiles are selectable (demo-llama, demo-gpt-oss-120b, demo-deepseek-v4, demo-haiku)
 
-Expected outcome: `backend=redis` on recent logs. If `backend=in_memory`, production has the same silent-fallback issue staging had.
+**PAUSE after Phase 1.** Report canary smoke-test results. GG decides go/no-go on promotion. Do NOT promote without explicit GG approval.
 
-5. If any production secret is a placeholder or any production service is on in-memory fallback:
-   - **STOP** and surface to GG via escalation
-   - GG rotates the secret(s) using the same pattern as iteration 1 Part A
-   - Orchestrator verifies the fix via the observability logs
-   - Document the finding in `CURRENT_STATE.md` and ADR-0021 (amend, don't replace)
+**Phase 2 — Promote (after Phase 1 review + GG go-ahead):**
 
-6. If all production secrets check out:
-   - Update CURRENT_STATE.md to note the audit was completed and what was found (or what was clean)
-   - Close Issue #37 with the audit summary
+8. Promote the canary to 100% traffic:
+   - Via the workflow's promotion mechanism, or `gcloud run services update-traffic --to-latest` / `--to-revisions=<canary>=100`
 
-**Part B — Eval rigor (Issues #21 + #20):**
+9. Post-promotion verification (against the main service URL now serving the new revision):
+   - Repeat the smoke test (health, cache, /search, /refine) against the production URL
+   - Confirm 100% traffic on the new revision via `gcloud run services describe ... --format="value(status.traffic)"`
 
-*Issue #21 — Cross-profile judge consistency:*
+10. Rollback readiness: document the exact rollback command before promoting, so it's ready if post-promotion verification fails:
+    - `gcloud run services update-traffic agentic-travel-booking-api-prod --region asia-south1 --to-revisions=<v0.5.0-revision>=100`
+    - Identify the v0.5.0 revision name during Phase 0 so the rollback target is known
 
-1. Read the current judge selection logic in `apps/api/src/travel_agent/evals/optimizer/runner.py` and `scorer.py`. Understand:
-   - When primary judge (Qwen3-32B on Groq) is used
-   - When fallback judge (Sonnet on Anthropic) kicks in
-   - Whether the same eval batch can mix judges across scenarios
+**Phase 3 — Close-out:**
 
-2. Implement one of three fixes (orchestrator picks based on what the code allows most cleanly):
-   - **Approach 1:** Pin a single judge model per eval run. If primary fails TPD, fail the run cleanly rather than silently falling back. Document the TPD constraint as a known operational limit.
-   - **Approach 2:** Always use the same judge across all scenarios in a single run, even if it means waiting for TPD reset. Add a `--judge` CLI flag for explicit override.
-   - **Approach 3:** Mark judge model in every scored record and surface it in the scorer output. Cross-profile comparisons gated on "same judge across both runs being compared." Doesn't fix the eval but makes comparability explicit.
-
-   Lean Approach 1 if the eval framework supports it cleanly; Approach 3 if Approach 1 requires too much refactor.
-
-3. Update eval output to surface judge model used per scenario.
-
-4. Re-run nightly cron's golden set with the fix to confirm baseline numbers are still in expected range.
-
-*Issue #20 — Judge cache poisoning:*
-
-1. Identify the judge cache location and structure. Likely in `apps/api/src/travel_agent/evals/` somewhere — orchestrator discovers via grep.
-
-2. Implement validation on cache read: if cached entry has `score=1` AND `parse_status=failed_parse` (or similar marker), treat as cache miss and re-run the judge call. Optionally surface a warning log.
-
-3. Provide a one-time cache cleanup utility:
-   - Script or eval CLI flag `--purge-failed-parse-cache` that scans the judge cache, removes entries with the poisoned shape, and reports counts.
-   - GG runs this manually post-deploy to clean the existing poisoned entries.
-
-4. Unit tests for both:
-   - Cache validation rejects poisoned entries
-   - Cleanup utility removes correct entries without false positives
+11. Update CURRENT_STATE.md: production now on current main (tag), v0.5.0 freeze resolved, the iteration-2 env bindings are now active.
+12. Close Issue #44 with the deploy summary (version deployed, smoke-test results, traffic confirmation).
+13. Reference Issue #45 (staleness guardrail) as the remaining follow-up — do NOT implement it this iteration unless trivial.
 
 ### Out of scope (do not build)
 
-- Phase 2D issues NOT listed above: #14, #15, #29, #33, #34, #35, #41, #42 — separate iterations
-- Phase 3 work (real hotel data, BookingAgent, multi-tenancy)
-- Changing the judge model itself (Qwen3-32B stays primary, Sonnet stays fallback unless Issue #21's chosen approach removes the fallback)
-- Adding new judge models
-- Modifying production secrets that are working correctly (audit-only unless placeholder found)
-- New eval scenarios or threshold changes
-- Modifying `apps/api/src/travel_agent/api/routes/refine.py` or any other HARD RULE file from CURRENT_STATE.md
-- Phase 3 production hardening (real load testing, multi-region, etc.)
+- Issue #45 staleness guardrail implementation (separate iteration; just reference it)
+- Part B eval rigor (Issues #20, #21 — deferred to a later iteration)
+- Phase 3 features (real hotel data, BookingAgent, multi-tenancy)
+- Any code changes beyond what's strictly needed to make the deploy succeed (this is a deploy iteration, not a feature iteration)
+- Modifying agent prompts, eval thresholds, or any HARD RULE file
+- Changing the canary/promotion mechanism unless Phase 0 reveals it's broken and must be fixed to proceed (escalate first)
+- Frontend deploy (production Vercel frontend — separate concern; flag if it needs a corresponding update but don't do it here)
 
 ## Tech stack
 
-Only what's relevant to this iteration:
+- Cloud Run, Artifact Registry (asia-south1), Cloud Build
+- GitHub Actions (deploy-prod.yml), WIF auth
+- gcloud CLI
+- Docker (for image build, handled by the workflow)
 
-- Python 3.12 (backend)
-- pytest (testing)
-- google-cloud-sdk (already installed for prior iterations) — `gcloud` commands
-- structlog (existing logging convention)
-- The eval framework's existing libraries (no new deps expected)
-
-No new dependencies. If anything needs adding, escalate.
+No application code changes expected. If the deploy requires a code or Dockerfile fix, escalate before making it.
 
 ## Architecture
 
-NEW or MODIFIED files this iteration:
+This iteration primarily touches deployment infrastructure, not application code. Files potentially modified:
 
 ```
-apps/api/src/travel_agent/evals/optimizer/
-├── runner.py                              # MODIFIED: judge selection logic per Issue #21 chosen approach
-├── scorer.py                              # MODIFIED: surface judge model per scenario in output
-└── judge_cache.py (if exists, else inline)  # MODIFIED: cache read validation per Issue #20
-
-apps/api/scripts/ or apps/api/src/travel_agent/evals/
-└── purge_failed_parse_cache.py             # NEW: one-time cleanup utility for Issue #20
-
-apps/api/tests/unit/evals/
-└── test_judge_cache.py                     # NEW or MODIFIED: tests for cache validation + cleanup
+.github/workflows/
+└── deploy-prod.yml        # ONLY if Phase 0 reveals the canary/promotion path is broken (escalate first)
 
 docs/architecture/adr/
-└── 0023-eval-rigor.md                      # NEW: ADR for judge consistency + cache poisoning decisions
+└── 0023-production-deploy.md   # NEW: ADR documenting the v0.5.0→current deploy, canary verification, rollback plan
 
-CURRENT_STATE.md                            # MODIFIED: mark Issues #37, #21, #20 closed; add Part A audit summary
+CURRENT_STATE.md           # MODIFIED: production now current, freeze resolved
 ```
 
-If Part A surfaces a production secret fix, the secret rotation itself happens out-of-band via `gcloud` (no code change). The doc updates land in CURRENT_STATE.md and possibly ADR-0021.
+If Phase 0 reveals a code/Dockerfile issue blocking the build, that's a surface expansion — escalate and re-plan.
 
 ## Verification commands
 
@@ -164,126 +142,100 @@ If Part A surfaces a production secret fix, the secret rotation itself happens o
 - name: backend-types
   cmd: cd apps/api && mypy src
   required: true
-- name: coverage-gate
-  cmd: cd apps/api && pytest --cov=src --cov-fail-under=80
-  required: true
-- name: judge-cache-tests
-  cmd: cd apps/api && pytest tests/unit/evals/test_judge_cache.py -v
-  required: true
 ```
 
-Pre-commit hooks must pass locally before any push.
+These verify current main is healthy before deploying it. The real verification for this iteration is the canary smoke test (Phase 1), not unit tests.
 
 ## Subagent usage rules
 
-- Use `executor` for code writing, file edits, ADR drafting, gcloud commands for audit
-- Use `verifier` for tests/lint/types
-- Each Part (A, B) ships as its own PR
-- Part A audit work may be entirely operational (no code changes if all secrets check out) — in that case, only doc commits ship via PR
+- Use `executor` for gcloud commands, workflow inspection, ADR drafting, doc updates
+- Use `verifier` for the pre-deploy test/lint/type run on current main
+- The deploy trigger itself (tag push / workflow_dispatch) and traffic promotion are PRODUCTION ACTIONS — see escalation rules; GG approves each phase gate
 
 ## Escalation rules (orchestrator MUST ask before doing)
 
-**Standard rules:**
-- Ask before installing any new dependency (none expected)
-- Ask before triggering production deploys (staging is automatic; production requires explicit user approval)
-- Ask if verification fails 3 times in a row on the same check
-- Ask if any existing test newly fails after changes
+**Production-action gates (the core escalations):**
+- STOP after Phase 0. Report parity audit + workflow mechanics. Do NOT trigger any deploy until GG + external engineer review.
+- STOP after Phase 1 canary. Report smoke-test results. Do NOT promote to 100% without explicit GG go-ahead.
+- STOP before any action that would put a new revision in front of production traffic. Canary at 0% is fine to deploy after Phase 0 review; promotion to 100% needs the Phase 1 gate.
+
+**Discovery-driven escalations:**
+- STOP if Phase 0 reveals the canary path auto-promotes to 100% with no gate — we'd need to modify the workflow first.
+- STOP if the staging/prod parity audit reveals a config difference that would make the deploy behave differently than staging (e.g., a missing secret, a different APP_MODE).
+- STOP if the image build fails for any reason — diagnose, surface, don't retry blindly.
+- STOP if Phase 0 reveals the WIF service account lacks deploy permissions.
+- STOP if current main HEAD has any failing CI or uncommitted-looking state.
+
+**Standard:**
+- Never set ANTHROPIC_API_KEY
+- No [skip ci] in any commit (required check blocks it)
+- Ask before installing dependencies
+- Ask if verification fails 3 times on the same check
 - Ask if a single executor pass would touch more than 6 files
-
-**Production audit-specific rules (Part A):**
-
-- **STOP and escalate if ANY production secret value appears to be a placeholder.** GG performs the rotation manually (same pattern as iteration 1 Part A staging rotation). Subagents do not write to production secrets.
-- **STOP and escalate if production cache backend logs show `in_memory` instead of `redis`.** This means production has the same silent fallback issue staging had.
-- **STOP and escalate if any production Cloud Run service appears unreachable or in a degraded state.** Don't attempt to remediate; surface the finding.
-- **STOP and escalate if the audit reveals secrets bound to services we didn't expect.** New finding — needs scope decision.
-
-**Iteration scope expansion rule (the core Option A escalation):**
-
-- **STOP and escalate if Part A audit reveals MORE THAN 2 production fixes are needed beyond the initial scope.** Two fixes is the tolerance; three or more means the iteration's scope has materially expanded and we need to decide whether to:
-  - Defer Part B (eval rigor) to iteration 3
-  - Defer some Part A fixes to a follow-up iteration
-  - Continue with full scope if budget allows
-
-The orchestrator should NOT silently absorb expanded scope. Surface and let GG decide.
-
-**Eval rigor-specific rules (Part B):**
-
-- Ask before changing nightly cron behavior (the cron is load-bearing — see Issue #15 for context on Llama TPD constraints)
-- Ask if Issue #21 Approach 1 (pin judge, fail on TPD) would cause baseline runs to fail nightly cron — Approach 3 may be safer if so
-- Ask if Issue #20 cleanup utility's purge logic could match legitimate entries (false-positive risk)
-- Don't modify existing baseline thresholds or scoring algorithms — only add observability and validation
 
 ## Hard rules (DO NOT touch)
 
-- `apps/api/src/travel_agent/api/routes/refine.py` — backend wiring locked
-- `apps/api/src/travel_agent/api/routes/search.py` — production search endpoint
-- `apps/api/config/llm_routing.yaml` — profile YAML is load-bearing
-- The 4 demo profile names — don't rename
-- All existing ADRs (0001-0022) — read-only references, create new ADR 0023 for this iteration's eval decisions
-- `apps/api/evals/optimizer/thresholds.py` values — don't relax thresholds
-- `apps/api/src/travel_agent/coordinator/streaming.py` event types — don't add or rename SSE event types
-- `apps/api/src/travel_agent/agents/prompts/conversation_manager_system.txt` — system prompt was iterated to produce natural args_summary
-- `apps/api/src/travel_agent/agents/optimizer.py` system prompt — has departure-time hallucination constraint
-- `apps/api/src/travel_agent/api/cache.py` structured log event names — don't rename, only add new ones if needed
-- PR #36 merge commit (41e8e659) — canonical Phase 2C.4.5 reference
-- PR #38 merge commit (b872164) — canonical `[skip ci]` guardrail reference
-- PRODUCTION SECRET VALUES — orchestrator may READ via `gcloud secrets versions access` (audit purpose), but NEVER WRITE/ROTATE. GG performs all production secret rotations manually.
+- All application code in `apps/api/src/travel_agent/` — this is a deploy iteration, no app code changes
+- All HARD RULE files from prior specs (refine.py, search.py, llm_routing.yaml, prompts, thresholds, streaming event types)
+- The 4 demo profile names
+- All existing ADRs (0001-0022) — create new ADR 0023
+- Production secrets — GG handles any rotation; subagents read-only
+- Do NOT promote canary to 100% without the Phase 1 gate passing and GG approving
+- Do NOT trigger the prod deploy during Phase 0 (discovery is read-only)
 
 ## Budget
 
-- **Soft target:** 1 Max plan 5-hour window for both Parts combined
-- **Hard cap:** stop and escalate if executor invocations exceed 25 across the full iteration
-- **Cost check:** orchestrator runs `/cost` after Part A completes (before Part B starts) and reports
-
-Expected breakdown:
-- Part A: ~3-5 executor invocations if audit is clean; ~8-12 if fixes needed
-- Part B: ~10-12 executor invocations (Issue #21 + #20 + ADR + tests)
-
-If Part A surfaces unexpected scope and Iteration Scope Expansion Rule fires, Part B may be deferred to iteration 3.
+- Soft target: 1 Max plan window for Phase 0 + Phase 1; Phase 2 promotion is fast once approved
+- Hard cap: escalate if executor invocations exceed 20
+- Cost check: /cost after Phase 0 (before any deploy action) and again at close-out
 
 ## Success criteria (orchestrator verifies ALL before declaring done)
 
-**Part A — Production secret audit:**
-- [ ] All production-bound GCP Secret Manager secrets audited (inventory + value pattern check)
-- [ ] Production Cloud Run service bindings documented
-- [ ] Production cache backend confirmed via `cache_backend_selected` logs (expecting `backend=redis`)
-- [ ] Any placeholder/misconfigured secrets identified, escalated to GG, rotated, and verified
-- [ ] CURRENT_STATE.md updated with audit summary
-- [ ] Issue #37 closed with audit findings comment
+**Phase 0:**
+- [ ] v0.5.0→main commit delta documented
+- [ ] Staging/prod config parity audit complete, all differences classified
+- [ ] deploy-prod.yml mechanics documented (build, canary, promotion, rollback, trigger)
+- [ ] Image build feasibility confirmed (Dockerfile current, Artifact Registry accessible, WIF permissions sufficient)
+- [ ] v0.5.0 revision name identified (for rollback target)
+- [ ] Reported and reviewed before any deploy
 
-**Part B — Eval rigor:**
-- [ ] Issue #21 fix landed: judge selection logic per chosen Approach (1, 2, or 3)
-- [ ] Issue #20 fix landed: cache validation rejects poisoned entries; cleanup utility exists
-- [ ] ADR-0023 written documenting both decisions
-- [ ] Unit tests pass for cache validation and cleanup
-- [ ] One eval run executed post-fix to confirm baseline numbers stay in expected range
-- [ ] Issues #21 and #20 closed
-- [ ] PR opened, CI green, squash-merged
-- [ ] Deploy — Staging succeeds on merge commit
+**Phase 1:**
+- [ ] Version tag chosen (recommend v0.6.0, GG confirms)
+- [ ] Canary revision deployed at 0% traffic
+- [ ] Canary smoke test: health shows cache:ok, cache_backend_selected=redis, /search works, /refine works with cache hit, structured logs appear, 4 profiles selectable
+- [ ] Reported and reviewed; GG go-ahead obtained before promotion
 
-**Both Parts:**
-- [ ] Coverage stays ≥ 80%
-- [ ] ruff + mypy clean
-- [ ] No production deploys triggered
-- [ ] No ANTHROPIC_API_KEY env var set
-- [ ] No [skip ci] used in any commit message (would now be enforced by branch protection from iteration 1 Part B)
-- [ ] No load-bearing file from Hard Rules section modified
-- [ ] Production secrets never written by subagents — only GG via manual `gcloud secrets versions add`
-- [ ] CURRENT_STATE.md updated to reflect Issues #37, #21, #20 closed
+**Phase 2:**
+- [ ] Canary promoted to 100% traffic
+- [ ] Post-promotion smoke test passes against production URL
+- [ ] 100% traffic confirmed on new revision
+- [ ] Rollback command documented and ready (not needed if verification passes)
 
-## Build order (recommended)
+**Phase 3:**
+- [ ] CURRENT_STATE.md updated — production current, freeze resolved
+- [ ] Issue #44 closed with deploy summary
+- [ ] ADR-0023 written (deploy narrative, canary verification, rollback plan)
+- [ ] Issue #45 referenced as remaining follow-up
 
-1. **Part A first.** Audit production secrets and verify cache backend. This is risk reduction — most important to complete even if Part B gets deferred.
-2. **Pause and run `/cost` after Part A.** Report budget status. If Part A surfaced unexpected scope and triggered the Iteration Scope Expansion Rule, this is the decision point.
-3. **Part B second.** Eval rigor work. Two issues (#21 and #20) in one PR (they're related).
-4. **Each Part is a standalone PR.** Part A may be doc-only PR if no code changes needed. Part B is one PR covering both eval issues.
+**All phases:**
+- [ ] No app code changed (deploy-only iteration)
+- [ ] No ANTHROPIC_API_KEY set
+- [ ] No [skip ci] used
+- [ ] Each production-action gate respected (Phase 0 review, Phase 1 go-ahead)
+- [ ] Rollback target known before promotion
+
+## Build order
+
+1. Phase 0 discovery (read-only) → PAUSE, report, review
+2. Phase 1 canary deploy at 0% → smoke test → PAUSE, report, GG go-ahead
+3. Phase 2 promote to 100% → post-promotion verify
+4. Phase 3 docs + close-out
 
 ## Notes for the orchestrator
 
-- Max plan covers Opus 4.7 (orchestrator) + Sonnet (executor/verifier) — never set `ANTHROPIC_API_KEY` env var
-- `[skip ci]` discipline: do NOT use [skip ci] in any commit message. As of iteration 1 Part B, the workflow check is required and will block merges containing this tag.
-- Production audit is fundamentally a READ-ONLY operation from the subagent perspective. Any WRITE to production secrets goes through GG.
-- The eval rigor work touches the `evals/optimizer/` codebase which has been stable across Phase 2C. Don't rewrite or "improve" existing logic; only add the specific validations and selections described.
-- Issue #37's body has context from iteration 1 Part A — read it via `gh issue view 37` before starting.
-- Issues #21 and #20 are older (filed during Phase 2C arc) — read via `gh issue view 21` and `gh issue view 20` for original context.
-- This iteration has higher risk than iteration 1 because Part A touches production. The escalation rules are stricter on purpose. When in doubt, escalate.
+- Max plan covers Opus 4.7 + Sonnet — never set ANTHROPIC_API_KEY
+- This is the highest-risk iteration so far: it puts ~3 phases of unreleased work in front of production traffic. The two-gate structure (Phase 0 review, Phase 1 go-ahead) is deliberate. When in doubt, pause and ask.
+- The canary-first approach exists because this arc has had four consecutive "assumed-working-but-wasn't" findings. Verify the deploy path on a 0%-traffic canary before trusting it with real traffic.
+- Read Issue #44 via `gh issue view 44` — it has the pre-flight checklist context from iteration 2.
+- The production Vercel frontend points at the production backend. After the backend deploy, the frontend may need to be checked for compatibility (new SSE event types, etc.) — flag this as a follow-up if relevant but the frontend deploy is out of scope here.
+- If anything about the deploy path looks broken or ambiguous during Phase 0, surfacing it is the right move — a broken canary path discovered during Phase 0 is a much better outcome than a failed 100% promotion.
