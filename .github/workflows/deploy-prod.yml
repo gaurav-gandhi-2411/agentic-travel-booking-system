@@ -68,6 +68,7 @@ jobs:
           no_traffic: true  # Deploy revision without sending traffic
           env_vars: |
             APP_MODE=demo
+            APP_ENV=production
             LLM_ROUTING_PROFILE=demo
           secrets: |
             ANTHROPIC_API_KEY=anthropic-api-key:latest
