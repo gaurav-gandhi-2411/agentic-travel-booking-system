@@ -98,9 +98,13 @@ jobs:
               --format='value(status.latestReadyRevisionName)')
             echo "Running revision: $REVISION"
 
-            DIGEST=$(gcloud run revisions describe "$REVISION" \
+            # status.imageDigest returns the full URI, e.g.:
+            #   asia-south1-docker.pkg.dev/PROJECT/REPO/api@sha256:HASH
+            # Strip everything up to and including '@' to get just sha256:HASH.
+            DIGEST_FULL=$(gcloud run revisions describe "$REVISION" \
               --region="$REGION" \
               --format='value(status.imageDigest)')
+            DIGEST=$(echo "$DIGEST_FULL" | sed 's/.*@//')
             echo "Image digest: $DIGEST"
 
             IMAGE_BASE="${REGION}-docker.pkg.dev/${PROJECT}/${REPO}/api"
@@ -143,9 +147,12 @@ jobs:
             DEPLOYED_SHA=$(git rev-parse "034bc03" 2>/dev/null || echo "034bc03")
             echo "test_stale=true — using hardcoded stale frontend SHA: $DEPLOYED_SHA"
           else
+            # Fallback to empty deployments if curl fails (e.g. missing/invalid VERCEL_TOKEN).
+            # This surfaces a ::warning:: rather than hard-failing the step.
             RESPONSE=$(curl -sf \
               "https://api.vercel.com/v6/deployments?teamId=${VERCEL_TEAM_ID}&projectId=${VERCEL_PROJECT_ID}&target=production&state=READY&limit=1" \
-              -H "Authorization: Bearer ${VERCEL_TOKEN}")
+              -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+              2>/dev/null || echo '{"deployments":[]}')
 
             # jq is available on ubuntu-latest; avoids multi-line python3 -c
             # which would place unindented content at column 0 inside run: |
