@@ -62,6 +62,10 @@ These have hard-won design decisions baked in. Each has an ADR or a Phase docume
 
 **localStorage cleanup pattern.** The frontend `ProfileToggle.tsx` defensively clears stale profile IDs from localStorage on load. When changing the active profile set, update both the union type AND the localStorage guard's allowlist.
 
+**Vercel deploy mechanism (confirmed Phase 2D iteration 4).** The Vercel GitHub integration IS linked (`.vercel/project.json` present) but does NOT auto-deploy to production. Production branch is `main`, but pushes to `main` do not trigger production deploys — all 14 production deploys occurred during the initial project setup burst (May 14-16). Use `vercel deploy --prod --archive=tgz` from the repo root to trigger production deploys via CLI (authenticated as `gaurav-gandhi-2411`). The `--archive=tgz` flag is required to stay under Vercel's 15,000-file limit (node_modules are on disk). Vercel project "Root Directory" is set to `apps/web/` in the dashboard — do NOT run `vercel` from `apps/web/` (it doubles the path and fails).
+
+**Vercel CLI v54.0.0 preview env var bug.** `vercel env add NAME preview --value X --yes` returns `git_branch_required` even with the flags the CLI itself suggests. Preview-scoped env vars cannot be set non-interactively via CLI. Set them in the Vercel dashboard under Settings → Environment Variables → Preview → All Preview Branches. Production-scoped vars do NOT propagate to preview. Vercel env vars are baked at deploy time even for `force-dynamic` routes — a redeploy is required after any env var change.
+
 ## Important decisions and the "why"
 
 **Groq + NIM, not just one provider.** Groq has fast inference and daily-reset quotas; NIM has model variety and lifetime credit pool. Operationally different. We use Groq for nightly evals (resettable), NIM for opt-in demos (credit-pool aware). Phase 2C.2 substrate work documented this asymmetry in ADR-0008.
@@ -76,9 +80,11 @@ These have hard-won design decisions baked in. Each has an ADR or a Phase docume
 
 **OpenRouter as free-routing primary.** `config/llm_routing.yaml` uses OpenRouter as the primary provider for the `free` routing profile (not just experimental scaffolding). `OPENROUTER_API_KEY` is bound to the prod service for on-demand activation via `LLM_ROUTING_PROFILE=free` header override. Currently prod runs `LLM_ROUTING_PROFILE=demo` so OpenRouter isn't invoked in normal traffic. Groq is the fallback.
 
-## Production state (Phase 2D iteration 3 — 2026-05-30)
+## Production state (Phase 2D iteration 4 — 2026-05-31)
 
-Production is **current**. v0.5.0 freeze resolved.
+Both backend AND frontend production are **current** and end-to-end verified.
+
+### Backend (Cloud Run)
 
 - **Running revision:** `agentic-travel-booking-api-prod-00016-rab` at 100% traffic
 - **Image:** built from `main` HEAD at commit `3d30839` (PR #46 merge — deploy workflow canary gate fix)
@@ -86,9 +92,22 @@ Production is **current**. v0.5.0 freeze resolved.
 - **Service URL:** `https://agentic-travel-booking-api-prod-rqyyasfwaa-el.a.run.app`
 - **Env bindings active:** `APP_ENV=production`, `UPSTASH_REDIS_URL`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` — all bound and connected to running code
 - **Deploy method:** `workflow_dispatch stage=canary` (Gate 1) → human smoke test → `workflow_dispatch stage=full` (Gate 2 after GG approval)
-- **Post-promotion verified:** `/health` → `{"status":"ok","phase":"C","cache":"ok"}`, `/search` + `/refine` cache hit=true, all 4 profiles confirmed
+- **Post-promotion verified (iteration 3):** `/health` → `{"status":"ok","phase":"C","cache":"ok"}`, `/search` + `/refine` cache hit=true, all 4 profiles confirmed
 
-See ADR-0023 for the full deploy narrative.
+See ADR-0023 for the full backend deploy narrative.
+
+### Frontend (Vercel)
+
+- **Production URL:** `https://agentic-travel-booking-system.vercel.app`
+- **Deployment ID:** `dpl_F3DMy1YysATzBgWKBpd6RzoCvR85`
+- **Git commit:** `1cf0a07` (current `main` HEAD, includes PRs #22 and #32)
+- **Deployed:** 2026-05-31 via `vercel deploy --prod --archive=tgz` (Vercel CLI, authenticated as `gaurav-gandhi-2411`)
+- **Env vars (Production scope):** `API_BASE_URL=https://agentic-travel-booking-api-prod-rqyyasfwaa-el.a.run.app`, `DEMO_API_KEY` — both set correctly; prior deployment had both as empty strings (root cause of broken searches)
+- **Post-deploy verified (orchestrator + GG browser visual):**
+  - Bundle: `conversation_thinking`, `conversation_action_classified`, `args_summary`, all 4 chat kinds, all 4 profiles present; `demo-qwen` gone
+  - `/api/search` → full SSE pipeline reaching prod Cloud Run (confirmed via `search_cache_put_success` in Cloud Run logs)
+  - `/api/refine` → `conversation_thinking` → `conversation_action_classified` (action=refine, args_summary LLM-generated) → Redis cache hit → archetypes
+  - GG browser: 4-profile selector, progress feed, archetype cards, chat bubbles (user/thinking/action/message), NO_OP conversation_message, zero console errors
 
 ## Production audit summary (Phase 2D iteration 2)
 
@@ -110,7 +129,7 @@ The `UPSTASH_REDIS_URL` secret was already present in the deploy workflow but pr
 - `deploy-prod.yml` updated to add `APP_ENV=production` to `env_vars:` block (PR for Phase 2D iteration 2). `UPSTASH_REDIS_URL`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` were already present in the workflow. `UPSTASH_REDIS_TOKEN` intentionally not added (vestigial).
 - Production deploy deferred to dedicated iteration — first prod deploy since May 15 is a ~3-phase delta requiring its own pre-flight checklist.
 
-Production is **stale, not broken** — APP_MODE=demo, no active dependencies, minimal traffic. Issue #37 closed.
+~~Production is **stale, not broken** — APP_MODE=demo, no active dependencies, minimal traffic. Issue #37 closed.~~ Resolved in iteration 3 (backend) and iteration 4 (frontend). Both now current.
 
 ## Known issues and explored dead ends
 
