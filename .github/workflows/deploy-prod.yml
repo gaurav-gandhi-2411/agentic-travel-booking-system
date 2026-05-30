@@ -18,6 +18,14 @@ on:
         description: "Reason for manual deploy"
         required: true
         type: string
+      stage:
+        description: "Deploy stage: 'canary' builds the image and deploys at 0% traffic, then stops for manual smoke test; 'full' runs the promotion path (traffic shift → soak → 100%). Ignored on tag push (always runs the full pipeline)."
+        required: false
+        default: canary
+        type: choice
+        options:
+          - canary
+          - full
 
 jobs:
   deploy-prod:
@@ -42,11 +50,13 @@ jobs:
         uses: google-github-actions/setup-gcloud@v3
 
       - name: Configure Docker for Artifact Registry
+        if: ${{ github.event_name == 'push' || inputs.stage == 'canary' }}
         run: |
           gcloud auth configure-docker \
             ${{ vars.CLOUD_RUN_REGION }}-docker.pkg.dev --quiet
 
       - name: Build and push image
+        if: ${{ github.event_name == 'push' || inputs.stage == 'canary' }}
         env:
           IMAGE: ${{ vars.CLOUD_RUN_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.ARTIFACT_REGISTRY_REPO }}/api
           TAG: ${{ github.ref_name }}
@@ -58,7 +68,8 @@ jobs:
           docker push "$IMAGE:$TAG"
           docker push "$IMAGE:${{ github.sha }}"
 
-      - name: Deploy to Cloud Run (production) — 5% canary
+      - name: Deploy to Cloud Run (production) — canary at 0% traffic
+        if: ${{ github.event_name == 'push' || inputs.stage == 'canary' }}
         uses: google-github-actions/deploy-cloudrun@v3
         with:
           service: agentic-travel-booking-api-prod
@@ -89,12 +100,18 @@ jobs:
             --concurrency=80
 
       - name: Shift 5% traffic to canary
+        if: ${{ github.event_name == 'push' || inputs.stage == 'full' }}
         run: |
           gcloud run services update-traffic agentic-travel-booking-api-prod \
             --region="${{ vars.CLOUD_RUN_REGION }}" \
             --to-tags=canary=5
 
+      # Automated soak: liveness check only (/health = 200 + status:ok).
+      # Correctness — /search, /refine, cache hit, structured logs — is
+      # verified manually on the canary revision before triggering stage=full.
+      # This soak confirms the revision is alive under real traffic, not correct.
       - name: Soak canary at 5% for 5 minutes
+        if: ${{ github.event_name == 'push' || inputs.stage == 'full' }}
         run: |
           echo "Soaking canary revision at 5% traffic for 5 minutes..."
           sleep 300
@@ -108,12 +125,14 @@ jobs:
           echo "Canary soak passed."
 
       - name: Promote canary to 100%
+        if: ${{ github.event_name == 'push' || inputs.stage == 'full' }}
         run: |
           gcloud run services update-traffic agentic-travel-booking-api-prod \
             --region="${{ vars.CLOUD_RUN_REGION }}" \
             --to-latest
 
       - name: Production health check
+        if: ${{ github.event_name == 'push' || inputs.stage == 'full' }}
         run: |
           URL="https://agentic-travel-booking-api-prod-rqyyasfwaa-el.a.run.app/health"
           for i in 1 2 3 4 5; do

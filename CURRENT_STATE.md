@@ -78,6 +78,10 @@ These have hard-won design decisions baked in. Each has an ADR or a Phase docume
 
 ## Production audit summary (Phase 2D iteration 2)
 
+**Service URL (confirmed Phase 2D iteration 3):** `https://agentic-travel-booking-api-prod-rqyyasfwaa-el.a.run.app` — this is the canonical URL per `gcloud run services describe`. The `646079085526.asia-south1.run.app` URL cited in `spec.md` is stale.
+
+**Pre-existing canary revision (Phase 2D iteration 3):** Revision `agentic-travel-booking-api-prod-00012-mab` carries the `canary` tag at 0% traffic. Created 2026-05-16 by the WIF SA (a prior deploy attempt). Running a pre-Phase-2B image (`sha256:ae4c359f`). Harmless — the new deploy will reassign the `canary` tag to the new revision.
+
 **Finding (2026-05-30):** Production is frozen at `v0.5.0` (tagged 2026-05-15, commit `78c57db`), deployed before Phase 2B merged. The running image predates:
 - `cache.py` / `redis_cache.py` — Redis cache doesn't exist in the image
 - Langfuse observability bootstrap
