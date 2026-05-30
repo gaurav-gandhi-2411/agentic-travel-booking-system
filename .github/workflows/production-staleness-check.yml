@@ -1,0 +1,304 @@
+name: Production Staleness Check
+
+# Detects when either production surface drifts behind main and opens a GitHub
+# issue. NEVER auto-deploys — production deploys stay deliberate (canary gate +
+# GG approval). This workflow's job is to make sure nobody forgets the manual
+# deploy step, not to remove it.
+#
+# Required secrets/vars:
+#   secrets.WIF_PROVIDER           — reused from deploy-prod.yml (read-only gcloud)
+#   secrets.WIF_SERVICE_ACCOUNT    — reused from deploy-prod.yml
+#   secrets.VERCEL_TOKEN           — GG creates: Vercel account settings → Tokens
+#   vars.GCP_PROJECT_ID
+#   vars.CLOUD_RUN_REGION
+#   vars.ARTIFACT_REGISTRY_REPO
+
+on:
+  schedule:
+    - cron: '0 4 * * *'  # daily 04:00 UTC (offset from eval-optimizer at 03:00)
+  workflow_dispatch:
+    inputs:
+      test_stale:
+        description: "Use known-stale SHAs to verify alert path fires (does not reflect real production state)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: production-staleness-check
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  id-token: write   # WIF auth for gcloud
+  issues: write     # open / update / close alert issue
+
+env:
+  SERVICE: agentic-travel-booking-api-prod
+  ALERT_LABEL: production-staleness-alert
+  ALERT_TITLE: "⚠️ Production staleness detected"
+  VERCEL_PROJECT_ID: prj_t4WA8OGPAIAxZIuAidmd6Rm4AZPX
+  VERCEL_TEAM_ID: team_Z8Yyf4ryKX0PjaVyUU5ub1AY
+  # Known-stale SHAs used only when test_stale=true (verifies alert path without touching prod)
+  TEST_BACKEND_SHA: "78c57db3f24d5a2a8b1c7e9f0d3e4a6b8c2f1e5d"   # placeholder — unused unless test_stale=true
+  TEST_FRONTEND_SHA: "034bc03"                                       # old frozen frontend commit (pre-PR #22)
+
+jobs:
+  check:
+    name: Check production drift (backend + frontend)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repo (full history for git rev-list)
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      # ── GCP auth (read-only, reuses WIF SA from deploy-prod.yml) ───────────
+      - name: Authenticate to GCP via WIF
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v3
+
+      # ── Backend drift check ────────────────────────────────────────────────
+      - name: Get backend deployed commit (Cloud Run → Artifact Registry)
+        id: backend
+        env:
+          REGION: ${{ vars.CLOUD_RUN_REGION }}
+          PROJECT: ${{ vars.GCP_PROJECT_ID }}
+          REPO: ${{ vars.ARTIFACT_REGISTRY_REPO }}
+          TEST_STALE: ${{ inputs.test_stale }}
+        run: |
+          set -euo pipefail
+
+          MAIN_SHA=$(git rev-parse HEAD)
+          echo "main HEAD: $MAIN_SHA"
+
+          if [ "$TEST_STALE" = "true" ]; then
+            # Test mode: use a known-old SHA to verify the alert path fires.
+            # The SHA below predates Phase 2B (no Redis, no ConversationManager).
+            DEPLOYED_SHA="78c57db3f24d5a2a8b1c7e9f0d3e4a6b8c2f1e5d"
+            echo "test_stale=true — using hardcoded stale backend SHA: $DEPLOYED_SHA"
+            # Resolve to a real commit that is actually in history so rev-list works
+            # Use the v0.5.0 tag (commit 78c57db) if present; fall back to the oldest reachable
+            if git rev-parse --verify "78c57db" >/dev/null 2>&1; then
+              DEPLOYED_SHA=$(git rev-parse 78c57db)
+            else
+              DEPLOYED_SHA=$(git log --oneline | tail -5 | awk 'END{print $1}')
+              DEPLOYED_SHA=$(git rev-parse "$DEPLOYED_SHA")
+            fi
+            echo "Resolved test SHA: $DEPLOYED_SHA"
+          else
+            # Real check: Cloud Run → Artifact Registry lookup
+            REVISION=$(gcloud run services describe "$SERVICE" \
+              --region="$REGION" \
+              --format='value(status.latestReadyRevisionName)')
+            echo "Running revision: $REVISION"
+
+            DIGEST=$(gcloud run revisions describe "$REVISION" \
+              --region="$REGION" \
+              --format='value(status.imageDigest)')
+            echo "Image digest: $DIGEST"
+
+            IMAGE_BASE="${REGION}-docker.pkg.dev/${PROJECT}/${REPO}/api"
+
+            # The deploy workflow tags each image with both $ref_name AND $github.sha.
+            # Filter by digest → scan tags → find the 40-char git SHA tag.
+            DEPLOYED_SHA=$(gcloud artifacts docker images list "$IMAGE_BASE" \
+              --include-tags \
+              --filter="DIGEST='${DIGEST}'" \
+              --format='value(TAGS)' \
+              2>/dev/null | tr ',' '\n' | grep -E '^[0-9a-f]{40}$' | head -1 || true)
+          fi
+
+          if [ -z "$DEPLOYED_SHA" ]; then
+            echo "::warning::Could not determine backend deployed SHA from Artifact Registry"
+            echo "deployed_sha=unknown" >> "$GITHUB_OUTPUT"
+            echo "commits_behind=-1" >> "$GITHUB_OUTPUT"
+          else
+            echo "Backend deployed SHA: ${DEPLOYED_SHA:0:7}"
+            echo "deployed_sha=$DEPLOYED_SHA" >> "$GITHUB_OUTPUT"
+            BEHIND=$(git rev-list "${DEPLOYED_SHA}..${MAIN_SHA}" -- apps/api/ | wc -l | tr -d ' ')
+            echo "Backend commits behind main (apps/api/): $BEHIND"
+            echo "commits_behind=$BEHIND" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ── Frontend drift check ───────────────────────────────────────────────
+      - name: Get frontend deployed commit (Vercel REST API)
+        id: frontend
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          TEST_STALE: ${{ inputs.test_stale }}
+        run: |
+          set -euo pipefail
+
+          MAIN_SHA=$(git rev-parse HEAD)
+
+          if [ "$TEST_STALE" = "true" ]; then
+            # Test mode: 034bc03 is the old frozen frontend commit (pre-PR #22/#32).
+            # It predates the 4-profile selector and ConversationManager UI.
+            DEPLOYED_SHA=$(git rev-parse "034bc03" 2>/dev/null || echo "034bc03")
+            echo "test_stale=true — using hardcoded stale frontend SHA: $DEPLOYED_SHA"
+          else
+            RESPONSE=$(curl -sf \
+              "https://api.vercel.com/v6/deployments?teamId=${VERCEL_TEAM_ID}&projectId=${VERCEL_PROJECT_ID}&target=production&state=READY&limit=1" \
+              -H "Authorization: Bearer ${VERCEL_TOKEN}")
+
+            DEPLOYED_SHA=$(echo "$RESPONSE" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+deps = data.get('deployments', [])
+if not deps:
+    print('unknown')
+    sys.exit(0)
+dep = deps[0]
+sha = (dep.get('meta') or {}).get('githubCommitSha') or \
+      (dep.get('gitSource') or {}).get('sha') or \
+      'unknown'
+print(sha.strip())
+")
+          fi
+
+          echo "Frontend deployed SHA: ${DEPLOYED_SHA:0:7}"
+          echo "deployed_sha=$DEPLOYED_SHA" >> "$GITHUB_OUTPUT"
+
+          if [ "$DEPLOYED_SHA" = "unknown" ] || [ -z "$DEPLOYED_SHA" ]; then
+            echo "::warning::Could not determine frontend deployed SHA from Vercel API"
+            echo "commits_behind=-1" >> "$GITHUB_OUTPUT"
+          else
+            BEHIND=$(git rev-list "${DEPLOYED_SHA}..${MAIN_SHA}" -- apps/web/ | wc -l | tr -d ' ')
+            echo "Frontend commits behind main (apps/web/): $BEHIND"
+            echo "commits_behind=$BEHIND" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ── Ensure alert label exists ──────────────────────────────────────────
+      - name: Ensure staleness alert label exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create "$ALERT_LABEL" \
+            --color "d93f0b" \
+            --description "Automated: production surface is behind main" \
+            2>/dev/null || true
+
+      # ── Alert: drift detected ──────────────────────────────────────────────
+      - name: Open or update staleness alert issue
+        if: >
+          steps.backend.outputs.commits_behind != '0' ||
+          steps.frontend.outputs.commits_behind != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BACKEND_BEHIND: ${{ steps.backend.outputs.commits_behind }}
+          BACKEND_SHA: ${{ steps.backend.outputs.deployed_sha }}
+          FRONTEND_BEHIND: ${{ steps.frontend.outputs.commits_behind }}
+          FRONTEND_SHA: ${{ steps.frontend.outputs.deployed_sha }}
+          REPO: ${{ github.repository }}
+          SERVER_URL: ${{ github.server_url }}
+          TEST_STALE: ${{ inputs.test_stale }}
+        run: |
+          set -euo pipefail
+
+          MAIN_SHA=$(git rev-parse HEAD)
+          CHECK_TIME=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+
+          # Render commits-behind as human-readable (handle -1 = unknown)
+          fmt_behind() {
+            local v="$1"
+            if [ "$v" = "-1" ]; then echo "unknown (SHA lookup failed)"; else echo "$v"; fi
+          }
+          B_BEHIND=$(fmt_behind "$BACKEND_BEHIND")
+          F_BEHIND=$(fmt_behind "$FRONTEND_BEHIND")
+
+          TEST_NOTE=""
+          if [ "$TEST_STALE" = "true" ]; then
+            TEST_NOTE=$'\n\n> **⚠️ TEST MODE** — This run used hardcoded stale SHAs to verify the alert path. It does NOT reflect real production state.\n'
+          fi
+
+          BODY=$(cat <<ISSUEEOF
+## Production staleness detected
+${TEST_NOTE}
+**Checked:** ${CHECK_TIME} | **main HEAD:** \`${MAIN_SHA:0:7}\`
+
+| Surface | Deployed SHA | Commits behind main (path-filtered) | Path |
+|---------|-------------|--------------------------------------|------|
+| Backend (Cloud Run) | \`${BACKEND_SHA:0:7}\` | ${B_BEHIND} | \`apps/api/\` |
+| Frontend (Vercel) | \`${FRONTEND_SHA:0:7}\` | ${F_BEHIND} | \`apps/web/\` |
+
+> **This is an alert, not an auto-deploy.** Production deploys are deliberately gated (canary stage gate + GG approval in the \`production\` GitHub environment). The guardrail's job is to surface the gap — the deploy step stays manual.
+
+### Backend diff
+[Compare \`${BACKEND_SHA:0:7}\`...main](${SERVER_URL}/${REPO}/compare/${BACKEND_SHA:0:7}...main)
+
+To deploy: \`workflow_dispatch\` on \`deploy-prod.yml\` → \`stage=canary\` (smoke test) → \`stage=full\`
+
+### Frontend diff
+[Compare \`${FRONTEND_SHA:0:7}\`...main](${SERVER_URL}/${REPO}/compare/${FRONTEND_SHA:0:7}...main)
+
+To deploy: \`vercel deploy --prod --archive=tgz\` from repo root (authenticated as \`gaurav-gandhi-2411\`)
+
+---
+*Updated by [production-staleness-check.yml](${SERVER_URL}/${REPO}/actions/workflows/production-staleness-check.yml) on every scheduled run. Closes automatically when both surfaces are current.*
+ISSUEEOF
+)
+
+          EXISTING=$(gh issue list \
+            --label "$ALERT_LABEL" \
+            --state open \
+            --json number \
+            --jq '.[0].number // empty')
+
+          if [ -n "$EXISTING" ]; then
+            gh issue edit "$EXISTING" --body "$BODY"
+            echo "Updated staleness issue #${EXISTING}"
+          else
+            gh issue create \
+              --title "$ALERT_TITLE" \
+              --body "$BODY" \
+              --label "$ALERT_LABEL"
+            echo "Created new staleness issue"
+          fi
+
+      # ── Resolve: both surfaces current ────────────────────────────────────
+      - name: Close staleness alert (drift resolved)
+        if: >
+          steps.backend.outputs.commits_behind == '0' &&
+          steps.frontend.outputs.commits_behind == '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          EXISTING=$(gh issue list \
+            --label "$ALERT_LABEL" \
+            --state open \
+            --json number \
+            --jq '.[0].number // empty')
+
+          if [ -n "$EXISTING" ]; then
+            gh issue close "$EXISTING" \
+              --comment "Production is current as of $(date -u '+%Y-%m-%dT%H:%M:%SZ'). Both Cloud Run backend and Vercel frontend are up to date with main. Closing automatically."
+            echo "Closed staleness issue #${EXISTING} — production is current"
+          else
+            echo "Production is current — no open staleness issue to close"
+          fi
+
+      # ── Summary ────────────────────────────────────────────────────────────
+      - name: Print drift summary
+        if: always()
+        env:
+          BACKEND_BEHIND: ${{ steps.backend.outputs.commits_behind }}
+          BACKEND_SHA: ${{ steps.backend.outputs.deployed_sha }}
+          FRONTEND_BEHIND: ${{ steps.frontend.outputs.commits_behind }}
+          FRONTEND_SHA: ${{ steps.frontend.outputs.deployed_sha }}
+        run: |
+          echo "=== Production Staleness Summary ==="
+          echo "Backend  deployed: ${BACKEND_SHA:0:7}  |  commits behind (apps/api/): ${BACKEND_BEHIND}"
+          echo "Frontend deployed: ${FRONTEND_SHA:0:7}  |  commits behind (apps/web/): ${FRONTEND_BEHIND}"
+          if [ "${BACKEND_BEHIND}" = "0" ] && [ "${FRONTEND_BEHIND}" = "0" ]; then
+            echo "Result: GREEN — both surfaces current"
+          else
+            echo "Result: DRIFT DETECTED — staleness issue opened/updated"
+          fi
