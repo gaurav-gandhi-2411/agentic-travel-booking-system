@@ -131,6 +131,27 @@ The `UPSTASH_REDIS_URL` secret was already present in the deploy workflow but pr
 
 ~~Production is **stale, not broken** — APP_MODE=demo, no active dependencies, minimal traffic. Issue #37 closed.~~ Resolved in iteration 3 (backend) and iteration 4 (frontend). Both now current.
 
+## Production audit summary (Phase 2D iteration 4)
+
+**Frontend freeze finding (2026-05-31):** The Vercel production deployment was frozen at commit `034bc03` ("chore: refresh contributor stats", 2026-05-16) — the same two-week freeze window as the backend's v0.5.0 freeze. The deployed code predated:
+
+- **PR #22** (`eea11d3`) — 4-profile demo selector: replaced the old `demo-qwen` profile with `demo-gpt-oss-120b` and `demo-deepseek-v4`. The bundle showed only `demo-haiku`, `demo-llama`, `demo-qwen`.
+- **PR #32** (`02f3345`) — Chat-style refinement UI: `ChatMessage.tsx`, `ChatLog.tsx`, `chat-types.ts`, and all `conversation_*` SSE event handling. The bundle had no trace of `ChatLog`, `conversation_thinking`, `conversation_action_classified`, or `args_summary`.
+
+Confirmed via JS bundle inspection of the deployed chunks on the production domain.
+
+**Empty env var finding (2026-05-31):** Both `API_BASE_URL` and `DEMO_API_KEY` had been set to **empty strings** (not null/undefined) in Vercel's production env since May 15. The Next.js API routes use `process.env.API_BASE_URL ?? 'http://localhost:8000'`. The `??` (nullish coalescing) operator only catches `null` and `undefined` — not empty string. So `apiBase = ""` and every `fetch("" + "/search")` call threw a URL parse error (`fetch failed`) at the Vercel serverless function layer, before any request reached the backend.
+
+**Conclusion:** The production frontend had **never functioned for searches** since initial setup on May 15. The backend freeze (v0.5.0) and frontend freeze (034bc03 + empty env vars) together mean the production demo was fully non-functional from day one. Any demos would have been against local dev or staging environments.
+
+**Actions taken (2026-05-31):**
+- `API_BASE_URL` and `DEMO_API_KEY` set for Production scope via `vercel env add` (CLI). Previous empty-string entries removed first.
+- `vercel deploy --prod --archive=tgz` triggered from repo root (current `main` HEAD, commit `1cf0a07`).
+- New deployment `dpl_F3DMy1YysATzBgWKBpd6RzoCvR85` aliased to `agentic-travel-booking-system.vercel.app`.
+- End-to-end verified: full SSE pipeline, ConversationManager REFINE path, Redis cache hit confirmed in Cloud Run logs for request_id `8bc9239d-...`, GG browser visual passed all 5 checks.
+
+See ADR-0024 for the full frontend alignment narrative.
+
 ## Known issues and explored dead ends
 
 **Phase 2D backlog (filed as GitHub issues):**
@@ -139,6 +160,7 @@ The `UPSTASH_REDIS_URL` secret was already present in the deploy workflow but pr
 - #20 — Judge cache poisoned by failed-parse score=1 entries; recurs if evals are interrupted mid-run — **deferred to iteration 3** (Part B)
 - #21 — Cross-profile coherence requires consistent judge model (current evals mix Qwen3-32B and Sonnet) — **deferred to iteration 3** (Part B)
 - #29 — Groq schema enum case sensitivity differs between models
+- #45 — Staleness guardrail: **must cover BOTH production surfaces** (Cloud Run backend + Vercel frontend). Iteration 3 found the backend frozen at v0.5.0; iteration 4 found the frontend frozen at 034bc03 with broken env vars. The same asymmetry — staging auto-deploys, production does not — affects both surfaces. Any guardrail detecting drift must probe the Vercel production deployment date/SHA (via Vercel CLI or API) in addition to the Cloud Run revision. Filed post-iteration 3; scope update required.
 - ~~#30 — `[skip ci]` in squash-merge silently suppresses deploys — Issue #30 closed 2026-05-30 — check-no-skip-ci required status check added; [skip ci] commits blocked from merging to main.~~
 - ~~#31 — Cache backend selection silent — Issue #31 closed 2026-05-30 — placeholder UPSTASH_REDIS_URL secret replaced and verified via end-to-end Redis read/write test.~~
 - ~~#37 — Production secret audit — Issue #37 closed 2026-05-30 — root cause: production frozen at v0.5.0 (pre-Phase-2B image); env bindings applied manually; prod deploy deferred to dedicated iteration.~~
