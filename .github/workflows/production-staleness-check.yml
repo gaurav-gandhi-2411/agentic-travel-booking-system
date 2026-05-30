@@ -238,7 +238,7 @@ jobs:
             printf "[Compare \`%s\`...main](%s/%s/compare/%s...main)\n\n" \
               "${FRONTEND_SHA:0:7}" "$SERVER_URL" "$REPO" "${FRONTEND_SHA:0:7}"
             printf "To deploy: \`vercel deploy --prod --archive=tgz\` from repo root\n\n"
-            printf "---\n"
+            printf '%s\n' '---'
             printf "*Updated by [production-staleness-check.yml](%s/%s/actions/workflows/production-staleness-check.yml)*\n" \
               "$SERVER_URL" "$REPO"
             printf "*Closes automatically when both surfaces are current.*\n"
