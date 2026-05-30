@@ -74,16 +74,37 @@ These have hard-won design decisions baked in. Each has an ADR or a Phase docume
 
 **Cache breakpoint placement (Phase 2C.4.5 prep).** Anthropic prompt caching is the next iteration's focus. The audit step is critical because Phase 2A noted "caching wired but no-op until prompts >1024 tokens." Don't assume existing caching is working — verify with the API's `cache_creation_input_tokens` and `cache_read_input_tokens` usage fields.
 
+**OpenRouter as free-routing primary.** `config/llm_routing.yaml` uses OpenRouter as the primary provider for the `free` routing profile (not just experimental scaffolding). `OPENROUTER_API_KEY` is bound to the prod service for on-demand activation via `LLM_ROUTING_PROFILE=free` header override. Currently prod runs `LLM_ROUTING_PROFILE=demo` so OpenRouter isn't invoked in normal traffic. Groq is the fallback.
+
+## Production audit summary (Phase 2D iteration 2)
+
+**Finding (2026-05-30):** Production is frozen at `v0.5.0` (tagged 2026-05-15, commit `78c57db`), deployed before Phase 2B merged. The running image predates:
+- `cache.py` / `redis_cache.py` — Redis cache doesn't exist in the image
+- Langfuse observability bootstrap
+- Structured JSON logging via structlog JSONRenderer
+- All ConversationManagerAgent code (Phase 2C.4)
+- All Phase 2D.1 cache observability log events
+
+The `UPSTASH_REDIS_URL` secret was already present in the deploy workflow but production was never re-deployed after Phase 2B. The `UPSTASH_REDIS_TOKEN` GCP secret is vestigial — no code in any version reads it.
+
+**Actions taken (2026-05-30):**
+- GG applied env bindings manually to the prod Cloud Run service (revision `00011-2k8`): `APP_ENV=production`, `UPSTASH_REDIS_URL`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`. Bindings are correct but **inert** against the v0.5.0 image.
+- `deploy-prod.yml` updated to add `APP_ENV=production` to `env_vars:` block (PR for Phase 2D iteration 2). `UPSTASH_REDIS_URL`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` were already present in the workflow. `UPSTASH_REDIS_TOKEN` intentionally not added (vestigial).
+- Production deploy deferred to dedicated iteration — first prod deploy since May 15 is a ~3-phase delta requiring its own pre-flight checklist.
+
+Production is **stale, not broken** — APP_MODE=demo, no active dependencies, minimal traffic. Issue #37 closed.
+
 ## Known issues and explored dead ends
 
 **Phase 2D backlog (filed as GitHub issues):**
 - #14 — Haiku departure-time hallucination (resolved in Phase 2C.2 prompt fix; left open for tracking)
 - #15 — Llama eval bounded by Groq TPD; workarounds documented, not yet implemented
-- #20 — Judge cache poisoned by failed-parse score=1 entries; recurs if evals are interrupted mid-run
-- #21 — Cross-profile coherence requires consistent judge model (current evals mix Qwen3-32B and Sonnet)
+- #20 — Judge cache poisoned by failed-parse score=1 entries; recurs if evals are interrupted mid-run — **deferred to iteration 3** (Part B)
+- #21 — Cross-profile coherence requires consistent judge model (current evals mix Qwen3-32B and Sonnet) — **deferred to iteration 3** (Part B)
 - #29 — Groq schema enum case sensitivity differs between models
 - ~~#30 — `[skip ci]` in squash-merge silently suppresses deploys — Issue #30 closed 2026-05-30 — check-no-skip-ci required status check added; [skip ci] commits blocked from merging to main.~~
 - ~~#31 — Cache backend selection silent — Issue #31 closed 2026-05-30 — placeholder UPSTASH_REDIS_URL secret replaced and verified via end-to-end Redis read/write test.~~
+- ~~#37 — Production secret audit — Issue #37 closed 2026-05-30 — root cause: production frozen at v0.5.0 (pre-Phase-2B image); env bindings applied manually; prod deploy deferred to dedicated iteration.~~
 
 **Dead ends already explored:**
 - **NIM Qwen3.5-397B as 4th profile.** Failed at 14/24 completion due to NIM's 1000-credit lifetime pool. Documented and abandoned. Don't retry the same model on NIM unless NIM changes their tier model.
