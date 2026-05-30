@@ -76,6 +76,20 @@ These have hard-won design decisions baked in. Each has an ADR or a Phase docume
 
 **OpenRouter as free-routing primary.** `config/llm_routing.yaml` uses OpenRouter as the primary provider for the `free` routing profile (not just experimental scaffolding). `OPENROUTER_API_KEY` is bound to the prod service for on-demand activation via `LLM_ROUTING_PROFILE=free` header override. Currently prod runs `LLM_ROUTING_PROFILE=demo` so OpenRouter isn't invoked in normal traffic. Groq is the fallback.
 
+## Production state (Phase 2D iteration 3 — 2026-05-30)
+
+Production is **current**. v0.5.0 freeze resolved.
+
+- **Running revision:** `agentic-travel-booking-api-prod-00016-rab` at 100% traffic
+- **Image:** built from `main` HEAD at commit `3d30839` (PR #46 merge — deploy workflow canary gate fix)
+- **Git equivalent:** 69 commits ahead of v0.5.0; deploy corresponds to v0.6.0 milestone
+- **Service URL:** `https://agentic-travel-booking-api-prod-rqyyasfwaa-el.a.run.app`
+- **Env bindings active:** `APP_ENV=production`, `UPSTASH_REDIS_URL`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` — all bound and connected to running code
+- **Deploy method:** `workflow_dispatch stage=canary` (Gate 1) → human smoke test → `workflow_dispatch stage=full` (Gate 2 after GG approval)
+- **Post-promotion verified:** `/health` → `{"status":"ok","phase":"C","cache":"ok"}`, `/search` + `/refine` cache hit=true, all 4 profiles confirmed
+
+See ADR-0023 for the full deploy narrative.
+
 ## Production audit summary (Phase 2D iteration 2)
 
 **Service URL (confirmed Phase 2D iteration 3):** `https://agentic-travel-booking-api-prod-rqyyasfwaa-el.a.run.app` — this is the canonical URL per `gcloud run services describe`. The `646079085526.asia-south1.run.app` URL cited in `spec.md` is stale.
