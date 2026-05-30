@@ -80,15 +80,16 @@ These have hard-won design decisions baked in. Each has an ADR or a Phase docume
 
 **OpenRouter as free-routing primary.** `config/llm_routing.yaml` uses OpenRouter as the primary provider for the `free` routing profile (not just experimental scaffolding). `OPENROUTER_API_KEY` is bound to the prod service for on-demand activation via `LLM_ROUTING_PROFILE=free` header override. Currently prod runs `LLM_ROUTING_PROFILE=demo` so OpenRouter isn't invoked in normal traffic. Groq is the fallback.
 
-## Production state (Phase 2D iteration 4 — 2026-05-31)
+## Production state (Phase 2D iteration 5 — 2026-05-31)
 
-Both backend AND frontend production are **current** and end-to-end verified.
+Both surfaces are functional. Backend is **1 non-critical commit behind** (see staleness note below); frontend is fully current. No application logic changed this iteration — this was CI/monitoring-only work.
 
 ### Backend (Cloud Run)
 
 - **Running revision:** `agentic-travel-booking-api-prod-00016-rab` at 100% traffic
 - **Image:** built from `main` HEAD at commit `3d30839` (PR #46 merge — deploy workflow canary gate fix)
 - **Git equivalent:** 69 commits ahead of v0.5.0; deploy corresponds to v0.6.0 milestone
+- **Staleness note (iteration 5):** Production is 1 commit behind main in `apps/api/` — the Part C housekeeping squash-merge deleted `apps/api/docs/backlog.md`. Non-functional change; no redeploy required before the next feature iteration. GitHub issue #51 (production-staleness-alert) will close automatically on next backend deploy.
 - **Service URL:** `https://agentic-travel-booking-api-prod-rqyyasfwaa-el.a.run.app`
 - **Env bindings active:** `APP_ENV=production`, `UPSTASH_REDIS_URL`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` — all bound and connected to running code
 - **Deploy method:** `workflow_dispatch stage=canary` (Gate 1) → human smoke test → `workflow_dispatch stage=full` (Gate 2 after GG approval)
@@ -152,6 +153,24 @@ Confirmed via JS bundle inspection of the deployed chunks on the production doma
 
 See ADR-0024 for the full frontend alignment narrative.
 
+## CI/housekeeping summary (Phase 2D iteration 5 — 2026-05-31)
+
+No application logic changed. Four CI/process-hygiene items:
+
+**Part A — Production staleness guardrail (#45, closed):**
+- `.github/workflows/production-staleness-check.yml` added: daily cron (04:00 UTC) + `workflow_dispatch` with `test_stale` input
+- Backend check: WIF auth → `gcloud run revisions describe` → image digest (stripped to `sha256:HASH`) → Artifact Registry tag scan for 40-char SHA → `git rev-list --apps/api/` path-filter
+- Frontend check: Vercel REST API (`VERCEL_TOKEN` repo secret) → `meta.githubCommitSha` → `git rev-list --apps/web/` path-filter
+- Alert: single stable issue (`production-staleness-alert` label), updated in-place, auto-closes when both surfaces are current
+- Live verified: backend correctly identified `3d30839`, frontend correctly identified `1cf0a07`; forced-stale test (`test_stale=true`) showed backend 45 behind + frontend 2 behind, issue #51 updated in-place
+- See ADR-0025
+
+**Part B — setup-node v4→v5 (#41, closed):** `actions/setup-node@v4 → @v5` in `ci.yml`. Web CI green on v5.
+
+**Part C — backlog.md migration (#42, closed):** `apps/api/docs/backlog.md` had 1 item (BACK-001: find_dotenv cleanup) → migrated to Issue #49 → file deleted.
+
+**Part D — startup-log renderer quirk (#47, closed):** `cache_backend_selected` logs as textPayload at worker startup because `_make_cache()` runs at import time (cache.py line 93) before `structlog.configure(JSONRenderer)` in main.py (line 33). Closed as low-priority-accepted — 3+ file restructuring for one cosmetic startup log; impact is benign.
+
 ## Known issues and explored dead ends
 
 **Phase 2D backlog (filed as GitHub issues):**
@@ -160,7 +179,7 @@ See ADR-0024 for the full frontend alignment narrative.
 - #20 — Judge cache poisoned by failed-parse score=1 entries; recurs if evals are interrupted mid-run — **deferred to iteration 3** (Part B)
 - #21 — Cross-profile coherence requires consistent judge model (current evals mix Qwen3-32B and Sonnet) — **deferred to iteration 3** (Part B)
 - #29 — Groq schema enum case sensitivity differs between models
-- #45 — Staleness guardrail: **must cover BOTH production surfaces** (Cloud Run backend + Vercel frontend). Iteration 3 found the backend frozen at v0.5.0; iteration 4 found the frontend frozen at 034bc03 with broken env vars. The same asymmetry — staging auto-deploys, production does not — affects both surfaces. Any guardrail detecting drift must probe the Vercel production deployment date/SHA (via Vercel CLI or API) in addition to the Cloud Run revision. Filed post-iteration 3; scope update required.
+- ~~#45 — Staleness guardrail — closed 2026-05-31 (Phase 2D iteration 5). Implemented as `.github/workflows/production-staleness-check.yml`: daily cron + workflow_dispatch, checks both Cloud Run (via WIF + Artifact Registry SHA tag) and Vercel (REST API + VERCEL_TOKEN secret) drift vs main, opens/updates/closes a single stable GitHub issue (`production-staleness-alert` label). Alert-only — never triggers a deploy. See ADR-0025.~~
 - ~~#30 — `[skip ci]` in squash-merge silently suppresses deploys — Issue #30 closed 2026-05-30 — check-no-skip-ci required status check added; [skip ci] commits blocked from merging to main.~~
 - ~~#31 — Cache backend selection silent — Issue #31 closed 2026-05-30 — placeholder UPSTASH_REDIS_URL secret replaced and verified via end-to-end Redis read/write test.~~
 - ~~#37 — Production secret audit — Issue #37 closed 2026-05-30 — root cause: production frozen at v0.5.0 (pre-Phase-2B image); env bindings applied manually; prod deploy deferred to dedicated iteration.~~
