@@ -82,18 +82,17 @@ These have hard-won design decisions baked in. Each has an ADR or a Phase docume
 
 ## Production state (Phase 2D iteration 5 — 2026-05-31)
 
-Both surfaces are functional. Backend is **1 non-critical commit behind** (see staleness note below); frontend is fully current. No application logic changed this iteration — this was CI/monitoring-only work.
+Both surfaces are **fully current**. No application logic changed this iteration — CI/monitoring-only work plus the docs-only backlog.md deletion that necessitated a follow-up deploy.
 
 ### Backend (Cloud Run)
 
-- **Running revision:** `agentic-travel-booking-api-prod-00016-rab` at 100% traffic
-- **Image:** built from `main` HEAD at commit `3d30839` (PR #46 merge — deploy workflow canary gate fix)
-- **Git equivalent:** 69 commits ahead of v0.5.0; deploy corresponds to v0.6.0 milestone
-- **Staleness note (iteration 5):** Production is 1 commit behind main in `apps/api/` — the Part C housekeeping squash-merge (`f13f66e`) deleted `apps/api/docs/backlog.md`. Non-functional change; no redeploy required before the next feature iteration. Issue #51 was manually closed after confirming real-drift evidence. The daily cron will re-open a new alert on the next 04:00 UTC run; it will auto-close once GG triggers a backend deploy.
+- **Running revision:** `agentic-travel-booking-api-prod-00019-liy` at 100% traffic
+- **Image:** built from `main` HEAD at commit `9dbdb75` (CURRENT_STATE.md update — latest main)
+- **Git equivalent:** fully current with main; 0 commits behind in `apps/api/`
+- **Deploy (iteration 5 follow-up, 2026-05-31):** stage=canary (`00019-liy` at 0% + tag) → canary smoke test (health, /search demo-llama, /refine cache-hit + empty-pool) → stage=full (`00019-liy` at 100%). Triggered to clear docs-only drift and prove staleness guardrail resolve-on-clean path.
 - **Service URL:** `https://agentic-travel-booking-api-prod-rqyyasfwaa-el.a.run.app`
 - **Env bindings active:** `APP_ENV=production`, `UPSTASH_REDIS_URL`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` — all bound and connected to running code
 - **Deploy method:** `workflow_dispatch stage=canary` (Gate 1) → human smoke test → `workflow_dispatch stage=full` (Gate 2 after GG approval)
-- **Post-promotion verified (iteration 3):** `/health` → `{"status":"ok","phase":"C","cache":"ok"}`, `/search` + `/refine` cache hit=true, all 4 profiles confirmed
 
 See ADR-0023 for the full backend deploy narrative.
 
@@ -165,7 +164,9 @@ No application logic changed. Four CI/process-hygiene items:
 - Live verified (2026-05-31):
   - **Alert path (real drift):** Runs at 23:42–23:50 UTC (all `test_stale=false`) found backend=1 (backlog.md deletion), frontend=0 once VERCEL_TOKEN was added at 23:49. Issue #51 opened correctly with stable label + populated body. Confirms alarm is not a dud.
   - **Forced-stale path:** `test_stale=true` dispatched at 00:13 UTC. Backend used SHA `78c57db` (45 commits behind); frontend used SHA `034bc03` (2 commits behind). Issue #52 opened with **TEST MODE** disclaimer — alert path with synthetic SHAs confirmed. Issue #52 closed (test cleanup).
-  - **No-drift green path:** Not yet live-tested — backend drift exists (1 commit). Will auto-verify on the scheduled run after GG deploys backend. The resolve-on-clean code path is implemented (`Close staleness alert` step in the workflow) and will exercise when drift clears.
+  - **No-drift green path + resolve-on-clean:** Fully verified. After the iteration-5 backend deploy (`00019-liy` at 100%), staleness check confirmed backend=0, frontend=0, Result=GREEN. Sentinel issue #53 (opened with `production-staleness-alert` label) was **auto-closed by `github-actions`** with comment "Production is current as of 2026-05-31T00:45:13Z. Closing automatically." — resolve-on-clean path proven live end-to-end.
+  - **Full guardrail loop verified:** detect (Issue #51, real drift) → alert (correct body, stable label) → deploy (canary gate → smoke → full) → auto-resolve (Issue #53 closed by workflow). Every step exercised live.
+  - **Follow-up filed:** Issue #54 — staleness guardrail flags docs-only apps/api/ changes (e.g. backlog.md deletion) as backend drift. Low priority, conservative behavior acceptable.
 - See ADR-0025
 
 **Part B — setup-node v4→v5 (#41, closed):** `actions/setup-node@v4 → @v5` in `ci.yml`. Web CI green on v5.
