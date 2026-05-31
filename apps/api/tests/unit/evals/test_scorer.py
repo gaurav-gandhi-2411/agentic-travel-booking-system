@@ -247,10 +247,18 @@ def test_cross_profile_gate_all_unknown_fails() -> None:
 def test_cross_profile_gate_unknown_mixed_with_known_warns() -> None:
     """One known judge + some legacy unknowns → gate passes with a warning."""
     summaries = [
-        _make_summary("demo-llama", coherence_avg=3.5,
-                      judge_models=["eval-judge-qwen3-32b"], judge_unknown_count=2),
-        _make_summary("demo-gpt-oss-120b", coherence_avg=3.8,
-                      judge_models=["eval-judge-qwen3-32b"], judge_unknown_count=1),
+        _make_summary(
+            "demo-llama",
+            coherence_avg=3.5,
+            judge_models=["eval-judge-qwen3-32b"],
+            judge_unknown_count=2,
+        ),
+        _make_summary(
+            "demo-gpt-oss-120b",
+            coherence_avg=3.8,
+            judge_models=["eval-judge-qwen3-32b"],
+            judge_unknown_count=1,
+        ),
     ]
     ok, msg = check_cross_profile_judge_consistency(summaries)
     assert ok is True
@@ -260,11 +268,13 @@ def test_cross_profile_gate_unknown_mixed_with_known_warns() -> None:
 def test_cross_profile_gate_within_run_mix_fails() -> None:
     """A single profile with mixed judges within its run → gate refuses."""
     summaries = [
-        _make_summary("demo-llama", coherence_avg=3.5,
-                      judge_models=["eval-judge-qwen3-32b", "eval-judge-sonnet"],
-                      judge_mixed=True),
-        _make_summary("demo-gpt-oss-120b", coherence_avg=3.8,
-                      judge_models=["eval-judge-sonnet"]),
+        _make_summary(
+            "demo-llama",
+            coherence_avg=3.5,
+            judge_models=["eval-judge-qwen3-32b", "eval-judge-sonnet"],
+            judge_mixed=True,
+        ),
+        _make_summary("demo-gpt-oss-120b", coherence_avg=3.8, judge_models=["eval-judge-sonnet"]),
     ]
     ok, msg = check_cross_profile_judge_consistency(summaries)
     assert ok is False
