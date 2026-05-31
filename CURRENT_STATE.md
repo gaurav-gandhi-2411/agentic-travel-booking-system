@@ -89,7 +89,7 @@ Both surfaces are functional. Backend is **1 non-critical commit behind** (see s
 - **Running revision:** `agentic-travel-booking-api-prod-00016-rab` at 100% traffic
 - **Image:** built from `main` HEAD at commit `3d30839` (PR #46 merge — deploy workflow canary gate fix)
 - **Git equivalent:** 69 commits ahead of v0.5.0; deploy corresponds to v0.6.0 milestone
-- **Staleness note (iteration 5):** Production is 1 commit behind main in `apps/api/` — the Part C housekeeping squash-merge deleted `apps/api/docs/backlog.md`. Non-functional change; no redeploy required before the next feature iteration. GitHub issue #51 (production-staleness-alert) will close automatically on next backend deploy.
+- **Staleness note (iteration 5):** Production is 1 commit behind main in `apps/api/` — the Part C housekeeping squash-merge (`f13f66e`) deleted `apps/api/docs/backlog.md`. Non-functional change; no redeploy required before the next feature iteration. Issue #51 was manually closed after confirming real-drift evidence. The daily cron will re-open a new alert on the next 04:00 UTC run; it will auto-close once GG triggers a backend deploy.
 - **Service URL:** `https://agentic-travel-booking-api-prod-rqyyasfwaa-el.a.run.app`
 - **Env bindings active:** `APP_ENV=production`, `UPSTASH_REDIS_URL`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` — all bound and connected to running code
 - **Deploy method:** `workflow_dispatch stage=canary` (Gate 1) → human smoke test → `workflow_dispatch stage=full` (Gate 2 after GG approval)
@@ -162,7 +162,10 @@ No application logic changed. Four CI/process-hygiene items:
 - Backend check: WIF auth → `gcloud run revisions describe` → image digest (stripped to `sha256:HASH`) → Artifact Registry tag scan for 40-char SHA → `git rev-list --apps/api/` path-filter
 - Frontend check: Vercel REST API (`VERCEL_TOKEN` repo secret) → `meta.githubCommitSha` → `git rev-list --apps/web/` path-filter
 - Alert: single stable issue (`production-staleness-alert` label), updated in-place, auto-closes when both surfaces are current
-- Live verified: backend correctly identified `3d30839`, frontend correctly identified `1cf0a07`; forced-stale test (`test_stale=true`) showed backend 45 behind + frontend 2 behind, issue #51 updated in-place
+- Live verified (2026-05-31):
+  - **Alert path (real drift):** Runs at 23:42–23:50 UTC (all `test_stale=false`) found backend=1 (backlog.md deletion), frontend=0 once VERCEL_TOKEN was added at 23:49. Issue #51 opened correctly with stable label + populated body. Confirms alarm is not a dud.
+  - **Forced-stale path:** `test_stale=true` dispatched at 00:13 UTC. Backend used SHA `78c57db` (45 commits behind); frontend used SHA `034bc03` (2 commits behind). Issue #52 opened with **TEST MODE** disclaimer — alert path with synthetic SHAs confirmed. Issue #52 closed (test cleanup).
+  - **No-drift green path:** Not yet live-tested — backend drift exists (1 commit). Will auto-verify on the scheduled run after GG deploys backend. The resolve-on-clean code path is implemented (`Close staleness alert` step in the workflow) and will exercise when drift clears.
 - See ADR-0025
 
 **Part B — setup-node v4→v5 (#41, closed):** `actions/setup-node@v4 → @v5` in `ci.yml`. Web CI green on v5.
@@ -194,11 +197,11 @@ No application logic changed. Four CI/process-hygiene items:
 
 ## Tests / lint / types — current state
 
-**As of PR #36 merge (commit 41e8e65) — Phase 2C.4.5 complete:**
-- 458 tests passing, 85.97% coverage
+**As of Phase 2D iteration 5 — code baseline verified (ruff, mypy, pytest, frontend build):**
+- 464 tests passing, 86.46% coverage
 - ruff check passing
-- mypy passing (fixed pre-existing redis_cache.py type errors surfaced by stubs drift)
-- Frontend: lint clean, typecheck clean
+- mypy passing
+- Frontend: lint clean, typecheck clean, build green
 
 **Known-broken and accepted:**
 - ~~pip-audit workflow's 0s failures (Issue #18) — closed 2026-05-30~~
