@@ -297,7 +297,8 @@ async def test_genuine_low_score_not_treated_as_poisoned(tmp_path: Path) -> None
 
 @pytest.mark.asyncio
 async def test_cache_rejects_poisoned_entry_reruns_judge(tmp_path: Path) -> None:
-    """A poisoned cache entry (parse_failed=True) is bypassed; judge re-runs and returns fresh score."""
+    """A poisoned cache entry (parse_failed=True) is bypassed; judge re-runs and returns fresh
+    score."""
     cache_path = tmp_path / "cache.json"
     cache_dir = tmp_path
 
@@ -343,7 +344,8 @@ async def test_cache_rejects_poisoned_entry_reruns_judge(tmp_path: Path) -> None
 
 @pytest.mark.asyncio
 async def test_cache_rejects_legacy_poisoned_entry(tmp_path: Path) -> None:
-    """Legacy poisoned entry (all_scores=[], no parse_failed field) is also treated as cache miss."""
+    """Legacy poisoned entry (all_scores=[], no parse_failed field) is also treated as a cache
+    miss."""
     cache_path = tmp_path / "cache.json"
 
     key = _cache_key(_SCENARIO["id"], _ARCHETYPE["label"], _ARCHETYPE["explanation"])
@@ -384,7 +386,8 @@ async def test_cache_rejects_legacy_poisoned_entry(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_cache_preserves_genuine_low_score(tmp_path: Path) -> None:
-    """A genuine score of 1 (all_scores=[1,1,1], parse_failed=False) IS served from cache — no re-run."""
+    """A genuine score of 1 (all_scores=[1,1,1], parse_failed=False) is served from cache — no
+    re-run."""
     cache_path = tmp_path / "cache.json"
 
     key = _cache_key(_SCENARIO["id"], _ARCHETYPE["label"], _ARCHETYPE["explanation"])
@@ -432,10 +435,13 @@ def test_purge_removes_poisoned_entries(tmp_path: Path) -> None:
     """Cleanup utility removes parse_failed=True entries."""
     import json as _json
     cache_path = tmp_path / "judge_cache.json"
+    _entry = {"coherence_score": 1, "structural_valid": False, "coherence_reason": "failed",
+               "raw_judge_output": "", "high_variance": False}
     cache = {
-        "aaa": {"coherence_score": 1, "all_scores": [], "parse_failed": True, "structural_valid": False, "coherence_reason": "failed", "raw_judge_output": "", "high_variance": False},
-        "bbb": {"coherence_score": 4, "all_scores": [4, 4, 3], "parse_failed": False, "structural_valid": True, "coherence_reason": "good", "raw_judge_output": "", "high_variance": False},
-        "ccc": {"coherence_score": 1, "all_scores": [], "parse_failed": True, "structural_valid": False, "coherence_reason": "failed", "raw_judge_output": "", "high_variance": False},
+        "aaa": {**_entry, "all_scores": [], "parse_failed": True},
+        "bbb": {**_entry, "coherence_score": 4, "all_scores": [4, 4, 3], "parse_failed": False,
+                "structural_valid": True, "coherence_reason": "good"},
+        "ccc": {**_entry, "all_scores": [], "parse_failed": True},
     }
     cache_path.write_text(_json.dumps(cache), encoding="utf-8")
 
@@ -456,8 +462,15 @@ def test_purge_removes_legacy_all_scores_empty(tmp_path: Path) -> None:
     import json as _json
     cache_path = tmp_path / "judge_cache.json"
     cache = {
-        "legacy": {"coherence_score": 1, "all_scores": [], "structural_valid": False, "coherence_reason": "failed", "raw_judge_output": "", "high_variance": False},
-        "good": {"coherence_score": 3, "all_scores": [3, 3, 4], "parse_failed": False, "structural_valid": True, "coherence_reason": "ok", "raw_judge_output": "", "high_variance": False},
+        "legacy": {
+            "coherence_score": 1, "all_scores": [], "structural_valid": False,
+            "coherence_reason": "failed", "raw_judge_output": "", "high_variance": False,
+        },
+        "good": {
+            "coherence_score": 3, "all_scores": [3, 3, 4], "parse_failed": False,
+            "structural_valid": True, "coherence_reason": "ok",
+            "raw_judge_output": "", "high_variance": False,
+        },
     }
     cache_path.write_text(_json.dumps(cache), encoding="utf-8")
 
@@ -471,7 +484,11 @@ def test_purge_idempotent(tmp_path: Path) -> None:
     import json as _json
     cache_path = tmp_path / "judge_cache.json"
     cache = {
-        "p": {"coherence_score": 1, "all_scores": [], "parse_failed": True, "structural_valid": False, "coherence_reason": "x", "raw_judge_output": "", "high_variance": False},
+        "p": {
+            "coherence_score": 1, "all_scores": [], "parse_failed": True,
+            "structural_valid": False, "coherence_reason": "x",
+            "raw_judge_output": "", "high_variance": False,
+        },
     }
     cache_path.write_text(_json.dumps(cache), encoding="utf-8")
 

@@ -180,8 +180,8 @@ No application logic changed. Four CI/process-hygiene items:
 **Phase 2D backlog (filed as GitHub issues):**
 - #14 — Haiku departure-time hallucination (resolved in Phase 2C.2 prompt fix; left open for tracking)
 - #15 — Llama eval bounded by Groq TPD; workarounds documented, not yet implemented
-- #20 — Judge cache poisoned by failed-parse score=1 entries; recurs if evals are interrupted mid-run — **deferred to iteration 3** (Part B)
-- #21 — Cross-profile coherence requires consistent judge model (current evals mix Qwen3-32B and Sonnet) — **deferred to iteration 3** (Part B)
+- ~~#20 — Judge cache poisoned by failed-parse score=1 entries — closed 2026-05-31 (Phase 2D iteration 6). `parse_failed: bool` + `judge_model: str` added to `JudgeScore`; validate-on-read bypasses poisoned entries; `purge_poisoned_cache.py` cleanup utility. See ADR-0026.~~
+- ~~#21 — Cross-profile coherence requires consistent judge model — closed 2026-05-31 (Phase 2D iteration 6). Approach 3: `judge_model` recorded per cache entry; scorer surfaces judge(s) per run and flags mixed-judge runs; `check_cross_profile_judge_consistency` gates comparisons on same-judge, refuses/warns on mismatch or unknown. Fallback behavior unchanged. Re-baseline with consistent judge is on-demand (paid spend). See ADR-0026.~~
 - #29 — Groq schema enum case sensitivity differs between models
 - ~~#45 — Staleness guardrail — closed 2026-05-31 (Phase 2D iteration 5). Implemented as `.github/workflows/production-staleness-check.yml`: daily cron + workflow_dispatch, checks both Cloud Run (via WIF + Artifact Registry SHA tag) and Vercel (REST API + VERCEL_TOKEN secret) drift vs main, opens/updates/closes a single stable GitHub issue (`production-staleness-alert` label). Alert-only — never triggers a deploy. See ADR-0025.~~
 - ~~#30 — `[skip ci]` in squash-merge silently suppresses deploys — Issue #30 closed 2026-05-30 — check-no-skip-ci required status check added; [skip ci] commits blocked from merging to main.~~
@@ -198,11 +198,11 @@ No application logic changed. Four CI/process-hygiene items:
 
 ## Tests / lint / types — current state
 
-**As of Phase 2D iteration 5 — code baseline verified (ruff, mypy, pytest, frontend build):**
-- 464 tests passing, 86.46% coverage
+**As of Phase 2D iteration 6 — code baseline verified (ruff, mypy, pytest):**
+- 485 tests passing, 86.46% coverage (21 new eval tests added this iteration)
 - ruff check passing
-- mypy passing
-- Frontend: lint clean, typecheck clean, build green
+- mypy passing (54 source files, no issues)
+- Frontend: unchanged from iteration 5 (lint clean, typecheck clean, build green)
 
 **Known-broken and accepted:**
 - ~~pip-audit workflow's 0s failures (Issue #18) — closed 2026-05-30~~

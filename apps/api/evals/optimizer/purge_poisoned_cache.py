@@ -23,9 +23,7 @@ def _is_poisoned(entry: dict[str, Any]) -> bool:
     if entry.get("parse_failed") is True:
         return True
     # Legacy entries written before parse_failed existed: empty all_scores means parse failed.
-    if entry.get("all_scores") == []:
-        return True
-    return False
+    return entry.get("all_scores") == []
 
 
 def purge_poisoned_entries(cache_path: Path) -> dict[str, int]:

@@ -398,7 +398,7 @@ def write_report(  # noqa: PLR0912, PLR0915
             f"⚠  **Cross-profile coherence comparison INVALID**: {cross_msg}\n"
         )
     elif cross_msg:
-        lines.append(f"ℹ  *Cross-profile note*: {cross_msg}\n")
+        lines.append(f"[i] *Cross-profile note*: {cross_msg}\n")
     lines += [
         header,
         sep,

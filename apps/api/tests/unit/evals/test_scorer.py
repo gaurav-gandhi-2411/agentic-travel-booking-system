@@ -13,8 +13,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "evals"))
 from optimizer.scorer import (
     _cache_summary,
     _format_provider_spend,
-    _provider_from_model,
     _judge_model_summary,
+    _provider_from_model,
     check_cross_profile_judge_consistency,
 )
 
@@ -213,7 +213,9 @@ def test_cross_profile_gate_same_judge_passes() -> None:
     """All profiles used the same known judge — comparison valid."""
     summaries = [
         _make_summary("demo-llama", coherence_avg=3.5, judge_models=["eval-judge-qwen3-32b"]),
-        _make_summary("demo-gpt-oss-120b", coherence_avg=3.8, judge_models=["eval-judge-qwen3-32b"]),
+        _make_summary(
+            "demo-gpt-oss-120b", coherence_avg=3.8, judge_models=["eval-judge-qwen3-32b"]
+        ),
     ]
     ok, msg = check_cross_profile_judge_consistency(summaries)
     assert ok is True
