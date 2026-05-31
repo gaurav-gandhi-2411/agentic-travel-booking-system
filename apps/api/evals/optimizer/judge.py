@@ -58,6 +58,8 @@ class JudgeScore(BaseModel):
     raw_judge_output: str  # post-strip output of first call, for debugging
     high_variance: bool = False  # True when max(scores) - min(scores) > 2
     all_scores: list[int] = Field(default_factory=list)  # all 3 sample scores
+    judge_model: str = ""  # judge profile name that produced this score; "" = legacy/unknown
+    parse_failed: bool = False  # True when all 3 judge calls failed to parse
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -135,6 +137,7 @@ class CoherenceJudge:
 
         profile = profiles[judge_profile]
         self._model: str = profile["model"]
+        self._judge_profile: str = judge_profile
         self._max_tokens: int = int(profile.get("max_tokens", 1024))
 
         provider = profile["provider"]
@@ -173,7 +176,12 @@ class CoherenceJudge:
         cache_key = _cache_key(scenario_id, label, explanation)
         cache = _load_cache()
         if cache_key in cache:
-            return JudgeScore.model_validate(cache[cache_key])
+            cached = JudgeScore.model_validate(cache[cache_key])
+            if cached.parse_failed or not cached.all_scores:
+                _logger.warning("judge_cache_poisoned_entry_bypassed", cache_key=cache_key)
+                # fall through to re-run the judge
+            else:
+                return cached
 
         user_prompt = _build_user_prompt(scenario, archetype)
 
@@ -195,6 +203,8 @@ class CoherenceJudge:
                 raw_judge_output=raw_outputs[0] if raw_outputs else "",
                 high_variance=False,
                 all_scores=[],
+                parse_failed=True,
+                judge_model=self._judge_profile,
             )
             cache[cache_key] = result.model_dump()
             _save_cache(cache)
@@ -212,6 +222,7 @@ class CoherenceJudge:
             raw_judge_output=raw_outputs[0] if raw_outputs else "",
             high_variance=score_range > _HIGH_VARIANCE_THRESHOLD,
             all_scores=scores,
+            judge_model=self._judge_profile,
         )
         cache[cache_key] = result.model_dump()
         _save_cache(cache)

@@ -10,7 +10,13 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "src"))
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "evals"))
 
-from optimizer.scorer import _cache_summary, _format_provider_spend, _provider_from_model
+from optimizer.scorer import (
+    _cache_summary,
+    _format_provider_spend,
+    _judge_model_summary,
+    _provider_from_model,
+    check_cross_profile_judge_consistency,
+)
 
 
 def test_paid_provider_no_calls() -> None:
@@ -129,3 +135,147 @@ def test_cache_summary_zero_hit_rate_when_only_writes() -> None:
     ]
     result = _cache_summary(records)
     assert result["cache_hit_rate"] == 0.0
+
+
+# ── _judge_model_summary ──────────────────────────────────────────────────────
+
+
+def test_judge_model_summary_empty_records() -> None:
+    assert _judge_model_summary([]) == {"judge_models": [], "unknown_count": 0, "mixed": False}
+
+
+def test_judge_model_summary_single_judge() -> None:
+    scored = [
+        {"judge_scores": [{"judge_model": "eval-judge-qwen3-32b"}]},
+        {"judge_scores": [{"judge_model": "eval-judge-qwen3-32b"}]},
+    ]
+    result = _judge_model_summary(scored)
+    assert result["judge_models"] == ["eval-judge-qwen3-32b"]
+    assert result["unknown_count"] == 0
+    assert result["mixed"] is False
+
+
+def test_judge_model_summary_mixed_judges() -> None:
+    scored = [
+        {"judge_scores": [{"judge_model": "eval-judge-qwen3-32b"}]},
+        {"judge_scores": [{"judge_model": "eval-judge-sonnet"}]},
+    ]
+    result = _judge_model_summary(scored)
+    assert set(result["judge_models"]) == {"eval-judge-qwen3-32b", "eval-judge-sonnet"}
+    assert result["mixed"] is True
+
+
+def test_judge_model_summary_unknown_entries() -> None:
+    """Legacy entries with judge_model="" count as unknown, not as a model name."""
+    scored = [{"judge_scores": [{"judge_model": ""}, {"judge_model": "eval-judge-qwen3-32b"}]}]
+    result = _judge_model_summary(scored)
+    assert result["judge_models"] == ["eval-judge-qwen3-32b"]
+    assert result["unknown_count"] == 1
+    assert result["mixed"] is False  # only one known model, unknown doesn't count as a second
+
+
+def test_judge_model_summary_all_unknown() -> None:
+    scored = [{"judge_scores": [{"judge_model": ""}, {"judge_model": ""}]}]
+    result = _judge_model_summary(scored)
+    assert result["judge_models"] == []
+    assert result["unknown_count"] == 2
+    assert result["mixed"] is False
+
+
+# ── check_cross_profile_judge_consistency ─────────────────────────────────────
+
+
+def _make_summary(
+    profile: str,
+    coherence_avg: float | None = None,
+    judge_models: list[str] | None = None,
+    judge_unknown_count: int = 0,
+    judge_mixed: bool = False,
+) -> dict:
+    return {
+        "profile": profile,
+        "coherence_avg": coherence_avg,
+        "judge_models": judge_models or [],
+        "judge_unknown_count": judge_unknown_count,
+        "judge_mixed": judge_mixed,
+    }
+
+
+def test_cross_profile_gate_no_coherence_data() -> None:
+    """If no summaries have coherence data, gate passes vacuously."""
+    summaries = [_make_summary("demo-llama"), _make_summary("demo-gpt-oss-120b")]
+    ok, msg = check_cross_profile_judge_consistency(summaries)
+    assert ok is True
+    assert msg == ""
+
+
+def test_cross_profile_gate_same_judge_passes() -> None:
+    """All profiles used the same known judge — comparison valid."""
+    summaries = [
+        _make_summary("demo-llama", coherence_avg=3.5, judge_models=["eval-judge-qwen3-32b"]),
+        _make_summary(
+            "demo-gpt-oss-120b", coherence_avg=3.8, judge_models=["eval-judge-qwen3-32b"]
+        ),
+    ]
+    ok, msg = check_cross_profile_judge_consistency(summaries)
+    assert ok is True
+    assert msg == ""
+
+
+def test_cross_profile_gate_different_judges_fails() -> None:
+    """Profiles used different judges — gate refuses."""
+    summaries = [
+        _make_summary("demo-llama", coherence_avg=3.5, judge_models=["eval-judge-qwen3-32b"]),
+        _make_summary("demo-gpt-oss-120b", coherence_avg=3.8, judge_models=["eval-judge-sonnet"]),
+    ]
+    ok, msg = check_cross_profile_judge_consistency(summaries)
+    assert ok is False
+    assert "mismatch" in msg.lower() or "different" in msg.lower()
+
+
+def test_cross_profile_gate_all_unknown_fails() -> None:
+    """All entries have unknown judge (legacy cache) — gate refuses."""
+    summaries = [
+        _make_summary("demo-llama", coherence_avg=3.5, judge_unknown_count=6),
+        _make_summary("demo-gpt-oss-120b", coherence_avg=3.8, judge_unknown_count=6),
+    ]
+    ok, msg = check_cross_profile_judge_consistency(summaries)
+    assert ok is False
+    assert "unknown" in msg.lower() or "legacy" in msg.lower()
+
+
+def test_cross_profile_gate_unknown_mixed_with_known_warns() -> None:
+    """One known judge + some legacy unknowns → gate passes with a warning."""
+    summaries = [
+        _make_summary(
+            "demo-llama",
+            coherence_avg=3.5,
+            judge_models=["eval-judge-qwen3-32b"],
+            judge_unknown_count=2,
+        ),
+        _make_summary(
+            "demo-gpt-oss-120b",
+            coherence_avg=3.8,
+            judge_models=["eval-judge-qwen3-32b"],
+            judge_unknown_count=1,
+        ),
+    ]
+    ok, msg = check_cross_profile_judge_consistency(summaries)
+    assert ok is True
+    assert "legacy" in msg.lower() or "unknown" in msg.lower()
+
+
+def test_cross_profile_gate_within_run_mix_fails() -> None:
+    """A single profile with mixed judges within its run → gate refuses."""
+    summaries = [
+        _make_summary(
+            "demo-llama",
+            coherence_avg=3.5,
+            judge_models=["eval-judge-qwen3-32b", "eval-judge-sonnet"],
+            judge_mixed=True,
+        ),
+        _make_summary("demo-gpt-oss-120b", coherence_avg=3.8, judge_models=["eval-judge-sonnet"]),
+    ]
+    ok, msg = check_cross_profile_judge_consistency(summaries)
+    assert ok is False
+    assert "mixed" in msg.lower()
