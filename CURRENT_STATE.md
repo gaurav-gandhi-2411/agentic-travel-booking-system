@@ -80,9 +80,9 @@ These have hard-won design decisions baked in. Each has an ADR or a Phase docume
 
 **OpenRouter as free-routing primary.** `config/llm_routing.yaml` uses OpenRouter as the primary provider for the `free` routing profile (not just experimental scaffolding). `OPENROUTER_API_KEY` is bound to the prod service for on-demand activation via `LLM_ROUTING_PROFILE=free` header override. Currently prod runs `LLM_ROUTING_PROFILE=demo` so OpenRouter isn't invoked in normal traffic. Groq is the fallback.
 
-## Production state (Phase 2D iteration 5 — 2026-05-31)
+## Production state (Phase 2D complete — 2026-05-31)
 
-Both surfaces are **fully current**. No application logic changed this iteration — CI/monitoring-only work plus the docs-only backlog.md deletion that necessitated a follow-up deploy.
+Both surfaces are **fully current**. No application logic changed in iterations 5-6 — CI/monitoring-only work (iteration 5) and eval subsystem only (iteration 6).
 
 ### Backend (Cloud Run)
 
@@ -152,6 +152,30 @@ Confirmed via JS bundle inspection of the deployed chunks on the production doma
 
 See ADR-0024 for the full frontend alignment narrative.
 
+## Eval rigor summary (Phase 2D iteration 6 — 2026-05-31)
+
+Eval-subsystem-only. No production touch, zero paid Anthropic spend. PR #55, commit `b1320ca`.
+
+**Issue #20 (closed) — judge cache poison fix:**
+- `parse_failed: bool = False` and `judge_model: str = ""` added to `JudgeScore`
+- Validate-on-read: `parse_failed=True` or `all_scores==[]` → cache miss → re-run judge
+- `apps/api/evals/optimizer/purge_poisoned_cache.py`: one-time cleanup utility; idempotent
+- Dev cache result: 306 entries scanned, 0 purged (no pre-existing poisoned entries)
+
+**Issue #21 (closed) — cross-profile judge consistency (Approach 3):**
+- `judge_model` recorded in every cache entry by `CoherenceJudge` at write time
+- `print_summary()` surfaces judge(s) per profile run; flags mixed-judge runs
+- `check_cross_profile_judge_consistency()` gates multi-profile coherence comparisons:
+  - Different judges across profiles → refuse (not comparable)
+  - All-unknown/legacy attribution → refuse
+  - Known+legacy mix → allow with warning
+  - Same known judge, no unknowns → clean pass
+- Gate is non-fatal (prints warning/error; does not change exit code; cron never crashes)
+- 306 existing cache entries have `judge_model=""` (legacy unknown); they age out as the cache refreshes on re-score. Unknown does NOT match unknown — the gate refuses all-unknown comparisons.
+- Re-baseline with a consistent judge is on-demand only (paid Anthropic spend). Command: `python -m evals.optimizer.scorer --all --judge-profile eval-judge-sonnet` after purging old entries.
+
+See ADR-0026.
+
 ## CI/housekeeping summary (Phase 2D iteration 5 — 2026-05-31)
 
 No application logic changed. Four CI/process-hygiene items:
@@ -177,16 +201,40 @@ No application logic changed. Four CI/process-hygiene items:
 
 ## Known issues and explored dead ends
 
-**Phase 2D backlog (filed as GitHub issues):**
+**Open as of Phase 2D complete (2026-05-31) — by priority:**
+
+*Phase 2D follow-ups (low priority):*
+- #54 — Staleness guardrail flags docs-only `apps/api/` changes as backend drift. Known sharp edge; conservative behavior is acceptable. Low priority.
+- #49 — `find_dotenv()` cleanup in eval scripts (BACK-001). Low priority.
+
+*Phase 3 / prompt caching work:*
+- #33 — Planner cache active on Sonnet 4.6, needs +2,645 tokens to cross Haiku 4.5 threshold
+- #34 — Optimizer below all cache thresholds (536/658 tokens vs 1,024 Sonnet minimum)
+- #35 — ConversationManager cache active on Sonnet 4.6, needs +2,054 tokens for Haiku 4.5 threshold
+
+*Eval issues:*
 - #14 — Haiku departure-time hallucination (resolved in Phase 2C.2 prompt fix; left open for tracking)
-- #15 — Llama eval bounded by Groq TPD; workarounds documented, not yet implemented
-- ~~#20 — Judge cache poisoned by failed-parse score=1 entries — closed 2026-05-31 (Phase 2D iteration 6). `parse_failed: bool` + `judge_model: str` added to `JudgeScore`; validate-on-read bypasses poisoned entries; `purge_poisoned_cache.py` cleanup utility. See ADR-0026.~~
-- ~~#21 — Cross-profile coherence requires consistent judge model — closed 2026-05-31 (Phase 2D iteration 6). Approach 3: `judge_model` recorded per cache entry; scorer surfaces judge(s) per run and flags mixed-judge runs; `check_cross_profile_judge_consistency` gates comparisons on same-judge, refuses/warns on mismatch or unknown. Fallback behavior unchanged. Re-baseline with consistent judge is on-demand (paid spend). See ADR-0026.~~
-- #29 — Groq schema enum case sensitivity differs between models
-- ~~#45 — Staleness guardrail — closed 2026-05-31 (Phase 2D iteration 5). Implemented as `.github/workflows/production-staleness-check.yml`: daily cron + workflow_dispatch, checks both Cloud Run (via WIF + Artifact Registry SHA tag) and Vercel (REST API + VERCEL_TOKEN secret) drift vs main, opens/updates/closes a single stable GitHub issue (`production-staleness-alert` label). Alert-only — never triggers a deploy. See ADR-0025.~~
-- ~~#30 — `[skip ci]` in squash-merge silently suppresses deploys — Issue #30 closed 2026-05-30 — check-no-skip-ci required status check added; [skip ci] commits blocked from merging to main.~~
-- ~~#31 — Cache backend selection silent — Issue #31 closed 2026-05-30 — placeholder UPSTASH_REDIS_URL secret replaced and verified via end-to-end Redis read/write test.~~
-- ~~#37 — Production secret audit — Issue #37 closed 2026-05-30 — root cause: production frozen at v0.5.0 (pre-Phase-2B image); env bindings applied manually; prod deploy deferred to dedicated iteration.~~
+- #15/#16 — Llama eval bounded by Groq TPD on 24-scenario runs; workarounds documented
+
+*Production hardening (deferred):*
+- #8 — Promote optimizer eval to blocking CI gate
+- #10 — Wire Sentry for error aggregation
+- #12 — Enable "Require branches to be up to date" branch protection
+
+*Phase 2C follow-ups (low priority):*
+- #23 — Re-measure Llama ConversationManager latency post-TPD-reset
+- #24 — Track conv-010 borderline behavior (budget-as-refine vs budget-as-replan)
+- #26 — Remove dead `refine_started` case from event-map.ts
+- #28/#29 — Groq schema enum case sensitivity differs between models (duplicates)
+
+*Stale (implemented but not closed):*
+- #6 — ConversationManagerAgent LLM-driven /refine — implemented Phase 2C.4
+- #9 — Replace demo-qwen — done, replaced by demo-gpt-oss-120b in Phase 2C.2
+
+*Previously closed (for reference):*
+- ~~#20/#21 — Eval rigor (judge cache poison + cross-profile gate) — closed 2026-05-31 (PR #55, ADR-0026)~~
+- ~~#45 — Staleness guardrail — closed 2026-05-31 (ADR-0025)~~
+- ~~#30/#31/#37 — CI/secret/deploy hygiene — closed 2026-05-30~~
 
 **Dead ends already explored:**
 - **NIM Qwen3.5-397B as 4th profile.** Failed at 14/24 completion due to NIM's 1000-credit lifetime pool. Documented and abandoned. Don't retry the same model on NIM unless NIM changes their tier model.
@@ -215,6 +263,62 @@ No application logic changed. Four CI/process-hygiene items:
 - ~~The exact state of `apps/api/docs/backlog.md` — it was created mid-session and may contain items not migrated to GitHub issues.~~ Resolved: 1 item (BACK-001, find_dotenv cleanup) migrated to Issue #49; file deleted (Phase 2D iteration 5).
 - Whether all the integration tests pass against the live staging deploy currently, or only against the mocked test fixtures.
 
+## Key identifiers and deploy commands
+
+### Production backend (Cloud Run)
+- **Service name:** `agentic-travel-booking-api-prod`
+- **Service URL:** `https://agentic-travel-booking-api-prod-rqyyasfwaa-el.a.run.app`
+- **Running revision:** `agentic-travel-booking-api-prod-00019-liy` at 100% traffic
+- **GCP project:** `agentic-travel-booking-system`
+- **Region:** `asia-south1`
+- **Artifact Registry:** `asia-south1-docker.pkg.dev/agentic-travel-booking-system/travel-agent/api`
+
+Deploy process (two-phase gate via `deploy-prod.yml`):
+```bash
+# Gate 1 — canary (workflow_dispatch from GitHub Actions UI)
+# inputs: stage=canary
+# → builds image, pushes to AR, deploys at 0% + canary tag
+
+# Gate 2 — GG manual smoke test (health, /search demo-llama, /refine cache-hit)
+
+# Gate 3 — full (workflow_dispatch from GitHub Actions UI)
+# inputs: stage=full
+# → shifts 100% traffic to new revision
+```
+
+### Production frontend (Vercel)
+- **URL:** `https://agentic-travel-booking-system.vercel.app`
+- **Vercel projectId:** `prj_t4WA8OGPAIAxZIuAidmd6Rm4AZPX`
+- **Vercel orgId:** `team_Z8Yyf4ryKX0PjaVyUU5ub1AY`
+- **Root Directory in Vercel dashboard:** `apps/web/` (do NOT run vercel from `apps/web/` — it doubles the path and fails)
+
+Deploy command (from repo root):
+```bash
+vercel deploy --prod --archive=tgz
+# --archive=tgz required to stay under Vercel's 15,000-file limit
+```
+
+Env var rotation: update in Vercel dashboard → redeploy (`vercel deploy --prod --archive=tgz`). Env vars are baked at deploy time even for `force-dynamic` routes.
+
+### GitHub secrets and variables
+Secrets (values in GitHub → Settings → Secrets):
+- `WIF_PROVIDER`, `WIF_SERVICE_ACCOUNT` — Workload Identity Federation for GCP auth
+- `ANTHROPIC_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY` — LLM providers
+- `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` — observability
+- `UPSTASH_REDIS_URL` — Redis cache connection string (bound to Cloud Run at deploy)
+- `VERCEL_TOKEN` — used by staleness check workflow only (NOT for deploys)
+
+Variables (public, in GitHub → Settings → Variables):
+- `GCP_PROJECT_ID=agentic-travel-booking-system`
+- `CLOUD_RUN_REGION=asia-south1`
+- `ARTIFACT_REGISTRY_REPO=travel-agent`
+
+Vercel Production env vars (set in Vercel dashboard — CLI v54.0.0 preview-scope bug; use dashboard):
+- `API_BASE_URL=https://agentic-travel-booking-api-prod-rqyyasfwaa-el.a.run.app`
+- `DEMO_API_KEY=<secret>` — shared demo API key for frontend→backend auth
+
+Secret rotation: update GitHub secret → trigger `stage=canary` deploy (Cloud Run picks up new binding) → smoke test → `stage=full`.
+
 ## Repository orientation
 
 ```
@@ -228,7 +332,7 @@ agentic-travel-booking-system/
 │   │   │   ├── llm/                  # Provider adapters (anthropic, groq, nvidia)
 │   │   │   ├── observability/        # Langfuse, pricing
 │   │   │   └── evals/                # Eval harness for optimizer + conversation_manager
-│   │   ├── tests/                    # 453 tests
+│   │   ├── tests/                    # 485 tests
 │   │   ├── config/                   # llm_routing.yaml (LLM profiles)
 │   │   └── docs/                     # design notes
 │   └── web/                          # Next.js frontend (React 19)
