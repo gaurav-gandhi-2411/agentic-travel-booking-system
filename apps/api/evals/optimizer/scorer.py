@@ -198,6 +198,89 @@ def _cache_summary(scored: list[dict]) -> dict:
     }
 
 
+def _judge_model_summary(scored: list[dict]) -> dict:
+    """Return judge model stats for a set of scored records.
+
+    Returns: {
+        "judge_models": sorted list of distinct non-empty judge_model values seen,
+        "unknown_count": number of judge_score entries with judge_model == "",
+        "mixed": True if more than one distinct non-empty judge_model is present,
+    }
+    """
+    models: set[str] = set()
+    unknown_count = 0
+    for rec in scored:
+        for js in rec.get("judge_scores", []):
+            jm = js.get("judge_model", "")
+            if jm:
+                models.add(jm)
+            else:
+                unknown_count += 1
+    return {
+        "judge_models": sorted(models),
+        "unknown_count": unknown_count,
+        "mixed": len(models) > 1,
+    }
+
+
+def check_cross_profile_judge_consistency(summaries: list[dict]) -> tuple[bool, str]:
+    """Check whether cross-profile coherence comparison is valid.
+
+    Returns (ok, message).
+    ok=True means all profiles used the same single known judge — comparison is valid.
+    ok=False means judges differ or are unknown — cross-profile comparison is not valid.
+
+    Rules:
+    - If no summary has coherence data, return True (no comparison to gate).
+    - If any summary has judge_mixed=True, refuse (mixed judges within a single run).
+    - Collect the set of distinct known judge_models across all summaries.
+      - If the set is empty (all legacy/unknown), refuse.
+      - If the set has more than 1 entry, refuse.
+      - If any summary has unknown_count > 0 and the set has 1 entry, warn but allow.
+      - If the set has exactly 1 entry and unknown_count == 0 everywhere, allow.
+    """
+    coherence_summaries = [s for s in summaries if s.get("coherence_avg") is not None]
+    if not coherence_summaries:
+        return True, ""
+
+    # Any within-run mix is an immediate fail
+    if any(s.get("judge_mixed") for s in coherence_summaries):
+        mixed_profiles = [s["profile"] for s in coherence_summaries if s.get("judge_mixed")]
+        return False, (
+            f"Mixed judges detected within run(s): {mixed_profiles}. "
+            "Coherence scores within these profiles are not internally comparable."
+        )
+
+    # Collect distinct known judge models across all profiles
+    all_models: set[str] = set()
+    total_unknown = sum(s.get("judge_unknown_count", 0) for s in coherence_summaries)
+    for s in coherence_summaries:
+        all_models.update(s.get("judge_models", []))
+
+    if len(all_models) == 0:
+        return False, (
+            "All coherence entries have unknown/legacy judge attribution. "
+            "Re-run scoring to populate judge_model and enable cross-profile comparison."
+        )
+
+    if len(all_models) > 1:
+        return False, (
+            f"Cross-profile judge mismatch: profiles used different judges "
+            f"({', '.join(sorted(all_models))}). "
+            "Coherence deltas between profiles are not comparable."
+        )
+
+    # Exactly one known judge model
+    if total_unknown > 0:
+        judge = next(iter(all_models))
+        return True, (
+            f"Warning: {total_unknown} legacy/unknown judge entries mixed with {judge} entries. "
+            "Cross-profile comparison is provisionally valid but legacy entries may differ."
+        )
+
+    return True, ""
+
+
 def print_summary(scored: list[dict], profile: str) -> dict:
     """Print per-profile summary and return summary dict."""
     total = len(scored)
@@ -235,6 +318,21 @@ def print_summary(scored: list[dict], profile: str) -> dict:
             f"high-variance archetypes: {coh['high_variance_count']}"
         )
 
+    jm = _judge_model_summary(scored)
+    if jm["judge_models"] or jm["unknown_count"] > 0:
+        if jm["mixed"]:
+            print(
+                f"  ⚠  Mixed judges in this run: {', '.join(jm['judge_models'])} "
+                f"— coherence scores are not internally comparable"
+            )
+        elif jm["judge_models"]:
+            print(f"  Judge: {jm['judge_models'][0]}", end="")
+            if jm["unknown_count"] > 0:
+                print(f" (+{jm['unknown_count']} legacy/unknown entries)", end="")
+            print()
+        else:
+            print(f"  Judge: unknown/legacy ({jm['unknown_count']} entries)")
+
     return {
         "profile": profile,
         "total": total,
@@ -248,6 +346,9 @@ def print_summary(scored: list[dict], profile: str) -> dict:
         "cache_read_tokens": cache["cache_read_tokens"],
         "cache_write_tokens": cache["cache_write_tokens"],
         "cache_hit_rate": cache["cache_hit_rate"],
+        "judge_models": jm["judge_models"],
+        "judge_unknown_count": jm["unknown_count"],
+        "judge_mixed": jm["mixed"],
     }
 
 
@@ -260,6 +361,12 @@ def write_report(  # noqa: PLR0912, PLR0915
     _REPORTS_DIR.mkdir(exist_ok=True)
     ts = datetime.now(tz=UTC).isoformat()
     has_coherence = any(s.get("coherence_avg") is not None for s in summaries)
+
+    cross_ok, cross_msg = check_cross_profile_judge_consistency(summaries)
+    if not cross_ok:
+        print(f"\n!! CROSS-PROFILE JUDGE GATE: {cross_msg}")
+    elif cross_msg:
+        print(f"\n  Cross-profile note: {cross_msg}")
 
     has_cache = any(
         s.get("cache_read_tokens", 0) > 0 or s.get("cache_write_tokens", 0) > 0
@@ -282,9 +389,17 @@ def write_report(  # noqa: PLR0912, PLR0915
         )
         sep = "|---|---|---|---|---|" + ("|---|---|---|" if has_cache else "")
 
-    lines = [
+    lines: list[str] = [
         "# Optimizer Eval Report\n",
         f"Generated: {ts}\n",
+    ]
+    if not cross_ok:
+        lines.append(
+            f"⚠  **Cross-profile coherence comparison INVALID**: {cross_msg}\n"
+        )
+    elif cross_msg:
+        lines.append(f"ℹ  *Cross-profile note*: {cross_msg}\n")
+    lines += [
         header,
         sep,
     ]
@@ -479,6 +594,9 @@ def main() -> int:
 
     report_path = _REPORTS_DIR / f"{ts}_report.md"
     write_report(summaries, report_path, scored_by_profile=scored_by_profile)
+    cross_ok, cross_msg = check_cross_profile_judge_consistency(summaries)
+    if not cross_ok:
+        print(f"\n!! CROSS-PROFILE JUDGE GATE FAILED: {cross_msg}")
     return 0 if _check_gates(summaries) else 1
 
 
