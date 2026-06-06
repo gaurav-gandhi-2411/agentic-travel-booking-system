@@ -62,4 +62,8 @@ def build_deeplink(
             "utm_campaign": utm_campaign,
         }
     )
-    return f"{_AVIASALES_BASE}{path}?{params}"
+    # Use & when path already carries query params (Aviasales raw_link includes ?t=...);
+    # urllib.parse.urlencode / urlsplit would handle fragments/pre-encoded params more
+    # robustly — good follow-up if raw_link shape changes.
+    separator = "&" if "?" in path else "?"
+    return f"{_AVIASALES_BASE}{path}{separator}{params}"

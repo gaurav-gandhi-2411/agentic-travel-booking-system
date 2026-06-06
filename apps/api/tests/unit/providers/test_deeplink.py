@@ -168,3 +168,42 @@ def test_no_archetype_label_no_dot_in_marker() -> None:
     )
     _, qs = _parse(url)
     assert "." not in qs["marker"][0]
+
+
+# ---------------------------------------------------------------------------
+# Separator branch: raw_link with vs without pre-existing query params
+# ---------------------------------------------------------------------------
+
+
+def test_raw_link_with_existing_query_string_has_single_question_mark() -> None:
+    """Aviasales API raw_link carries ?t=... query params — must join with &, not ?.
+
+    Regression: build_deeplink previously emitted two ? chars, making the marker
+    unparseable by Travelpayouts and breaking affiliate attribution.
+    """
+    raw_link_with_qs = "/search/BOM1507CDG29071?t=EY178411440&expected_price=58816"
+    url = build_deeplink(
+        raw_link=raw_link_with_qs,
+        origin_iata="BOM",
+        destination_iata="CDG",
+        departure_date="2026-07-15",
+        partner_marker=_MARKER,
+        archetype_label="best-value",
+    )
+    assert url.count("?") == 1
+    _, qs = _parse(url)
+    assert qs["marker"] == [f"{_MARKER}.best-value"]
+
+
+def test_raw_link_without_query_string_uses_question_mark_separator() -> None:
+    """raw_link with no existing query params still gets the correct ? separator."""
+    url = build_deeplink(
+        raw_link="/search/BOM0106CDG",
+        origin_iata="BOM",
+        destination_iata="CDG",
+        departure_date="2026-06-01",
+        partner_marker=_MARKER,
+    )
+    assert url.count("?") == 1
+    _, qs = _parse(url)
+    assert qs["marker"] == [_MARKER]
