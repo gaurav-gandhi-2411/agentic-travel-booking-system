@@ -100,3 +100,7 @@ docs/debug-search*.txt
 docs/groq-test.*
 docs/prod-test.*
 apps/web/Usersgaura*.json
+
+# Eval run artifacts (output files — not source)
+apps/api/evals/**/runs/*.jsonl
+apps/api/evals/**/reports/*.md
