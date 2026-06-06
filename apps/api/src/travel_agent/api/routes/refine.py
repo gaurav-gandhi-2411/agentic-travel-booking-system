@@ -244,10 +244,14 @@ async def _refine_generator(  # noqa: PLR0911, PLR0912, PLR0915
 
         try:
             optimizer_client, optimizer_model = get_llm_client_and_model("optimizer", profile)
+            _affiliate_on = os.environ.get("AFFILIATE_DEEPLINKS", "true").lower() not in (
+                "false",
+                "0",
+            )
             optimizer = OptimizerAgent(
                 client=optimizer_client,
                 model=optimizer_model,
-                partner_marker=os.environ.get("AVIASALES_PARTNER_ID", ""),
+                partner_marker=os.environ.get("AVIASALES_PARTNER_ID", "") if _affiliate_on else "",
             )
         except Exception as exc:
             yield _event({"type": StreamEventType.ERROR, "message": str(exc)})
@@ -293,10 +297,14 @@ async def _refine_generator(  # noqa: PLR0911, PLR0912, PLR0915
 
         try:
             optimizer_client, optimizer_model = get_llm_client_and_model("optimizer", profile)
+            _affiliate_on = os.environ.get("AFFILIATE_DEEPLINKS", "true").lower() not in (
+                "false",
+                "0",
+            )
             optimizer = OptimizerAgent(
                 client=optimizer_client,
                 model=optimizer_model,
-                partner_marker=os.environ.get("AVIASALES_PARTNER_ID", ""),
+                partner_marker=os.environ.get("AVIASALES_PARTNER_ID", "") if _affiliate_on else "",
             )
         except Exception as exc:
             yield _event({"type": StreamEventType.ERROR, "message": str(exc)})

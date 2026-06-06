@@ -347,8 +347,8 @@ async def stream_replan(  # noqa: PLR0912
 
 
 def _get_adapter() -> AviasalesAdapter | None:
-    """Return AviasalesAdapter if APP_MODE=demo and key is set, else None."""
-    if os.environ.get("APP_MODE") != "demo":
+    """Return AviasalesAdapter if AVIASALES_LIVE=true and key is set, else None."""
+    if os.environ.get("AVIASALES_LIVE", "").lower() not in ("true", "1"):
         return None
     try:
         return AviasalesAdapter()

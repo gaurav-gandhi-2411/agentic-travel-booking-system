@@ -51,10 +51,11 @@ def _build_agents(profile: str) -> tuple[PlannerAgent, OptimizerAgent]:
     planner_client, planner_model = get_llm_client_and_model("planner", profile)
     optimizer_client, optimizer_model = get_llm_client_and_model("optimizer", profile)
     planner = PlannerAgent(planner_client, planner_model)
+    _affiliate_on = os.environ.get("AFFILIATE_DEEPLINKS", "true").lower() not in ("false", "0")
     optimizer = OptimizerAgent(
         client=optimizer_client,
         model=optimizer_model,
-        partner_marker=os.environ.get("AVIASALES_PARTNER_ID", ""),
+        partner_marker=os.environ.get("AVIASALES_PARTNER_ID", "") if _affiliate_on else "",
     )
     return planner, optimizer
 
