@@ -17,9 +17,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from travel_agent.coordinator.streaming import _get_adapter
 from travel_agent.api.routes.search import _build_agents
-
+from travel_agent.coordinator.streaming import _get_adapter
 
 # ---------------------------------------------------------------------------
 # _get_adapter() — AVIASALES_LIVE flag
