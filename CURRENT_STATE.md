@@ -152,6 +152,59 @@ Confirmed via JS bundle inspection of the deployed chunks on the production doma
 
 See ADR-0024 for the full frontend alignment narrative.
 
+## Phase 3.1 — Live Inventory Activation (2026-06-06)
+
+Backend-only. No frontend touch. Prod canary: GG-gated, not yet started.
+
+### What shipped (staging, commit `81ffbaf`)
+
+**Feature flags (env-driven):**
+- `AVIASALES_LIVE` (default `false`): `"true"` or `"1"` + `AVIASALES_API_KEY` present → injects `AviasalesAdapter` into `FlightHunterAgent`; falls back to `SyntheticProvider` otherwise. Gate lives in `coordinator/streaming.py:_get_adapter()`.
+- `AFFILIATE_DEEPLINKS` (default `true`): `"false"` or `"0"` → suppresses `partner_marker` at all three `OptimizerAgent` construction sites (`api/routes/search.py:_build_agents()`, `api/routes/refine.py` REFINE path, `api/routes/refine.py` REPLAN path).
+
+**Staging env:** `AVIASALES_LIVE=true` in `deploy-staging.yml`; `AFFILIATE_DEEPLINKS` unset (takes `true` default, exercises live affiliate path). `deploy-prod.yml` untouched — prod stays synthetic.
+
+**Aviasales adapter contract (confirmed live against staging):**
+- Endpoint: `GET /aviasales/v3/prices_for_dates`, auth via `x-access-token` header
+- Response includes a `link` field per result — already carries query params, e.g. `/search/BOM1507CDG29071?t=EY...&expected_price=58816`. This contradicts the pre-build assumption that `raw_link` would be absent.
+- `build_deeplink()` uses `raw_link` when present; constructs `/search/AAADDMMYYYY` fallback otherwise.
+- GCP secrets: `travelpayouts-api-token` → `AVIASALES_API_KEY`; `travelpayouts-aviasales-marker` → `AVIASALES_PARTNER_ID` (partner marker `727160`).
+
+**Deeplink URL bug fixed (`deeplink.py`, commit `81ffbaf`):**
+Pre-fix: `build_deeplink()` always appended `?marker=...`, producing `...expected_price=58816?marker=727160...` — two `?` chars, breaking Travelpayouts attribution. Fix: `separator = "&" if "?" in path else "?"`. Note for future: `urllib.parse.urlsplit` would handle fragments and pre-encoded params more robustly; follow-up if `raw_link` shape changes.
+
+**Repo hygiene (same session, prior commits):**
+- `uv.lock` committed
+- `apps/api/evals/**/runs/*.jsonl` and `apps/api/evals/**/reports/*.md` added to `.gitignore`
+- Root `tests/` directory removed (was never in `testpaths`; stale subset of `apps/api/tests/integration/`)
+
+### Step 5 status: code-verified; live deeplink re-run pending Groq TPD reset
+
+Staging smoke partially confirmed:
+- Planner: ran clean (Groq Llama 3.3 70B via `X-LLM-Profile: demo-llama`)
+- Aviasales adapter: 1 live Etihad flight found (BOM→CDG, Jul 15 2026, INR 58,816 — confirmed in pre-fix run; adapter path unchanged)
+- Deeplink URL structure: verified by unit regression tests (`url.count("?") == 1`, marker parseable from `parse_qs`). Live staging confirmation blocked by Groq TPD exhaustion on `llama-3.3-70b-versatile`; re-run pending daily reset.
+
+Re-run command (after Groq TPD reset, from PowerShell):
+
+```powershell
+$key = (gcloud secrets versions access latest --secret=demo-api-key --project=agentic-travel-booking-system)
+Invoke-WebRequest `
+    -Uri "https://agentic-travel-booking-api-staging-rqyyasfwaa-el.a.run.app/search" `
+    -Method POST -TimeoutSec 120 `
+    -Headers @{"Content-Type"="application/json";"X-API-Key"=$key;"Accept"="text/event-stream";"X-LLM-Profile"="demo-llama"} `
+    -Body '{"query":"Cheapest flight from BOM to CDG in July 2026, 7 nights"}' |
+  Select-Object -ExpandProperty Content
+```
+
+Confirm: both archetype card `deeplink` fields have exactly one `?`, `marker=727160` visible, `utm_source=dealhunter`.
+
+### Step 6: prod canary — GG-gated, not started
+
+When GG approves: `workflow_dispatch stage=canary` on `deploy-prod.yml` (do NOT add `AVIASALES_LIVE=true` to prod env until this gate). Same canary → smoke → full process as Phase 2D iteration 3.
+
+---
+
 ## Eval rigor summary (Phase 2D iteration 6 — 2026-05-31)
 
 Eval-subsystem-only. No production touch, zero paid Anthropic spend. PR #55, commit `b1320ca`.
@@ -227,14 +280,15 @@ No application logic changed. Four CI/process-hygiene items:
 - #26 — Remove dead `refine_started` case from event-map.ts
 - #28/#29 — Groq schema enum case sensitivity differs between models (duplicates)
 
-*Stale (implemented but not closed):*
-- #6 — ConversationManagerAgent LLM-driven /refine — implemented Phase 2C.4
-- #9 — Replace demo-qwen — done, replaced by demo-gpt-oss-120b in Phase 2C.2
-
 *Previously closed (for reference):*
+- ~~#6 — ConversationManagerAgent LLM-driven /refine — implemented Phase 2C.4, closed Phase 3.1 (2026-06-06)~~
+- ~~#9 — Replace demo-qwen — done Phase 2C.2 (demo-gpt-oss-120b), closed Phase 3.1 (2026-06-06)~~
 - ~~#20/#21 — Eval rigor (judge cache poison + cross-profile gate) — closed 2026-05-31 (PR #55, ADR-0026)~~
 - ~~#45 — Staleness guardrail — closed 2026-05-31 (ADR-0025)~~
 - ~~#30/#31/#37 — CI/secret/deploy hygiene — closed 2026-05-30~~
+
+*Phase 3.1 follow-up (low priority):*
+- #56 — Same docs-only drift pattern as #54 (staleness guardrail flags docs-only `apps/api/` changes as backend drift). Conservative behaviour; no code change needed.
 
 **Dead ends already explored:**
 - **NIM Qwen3.5-397B as 4th profile.** Failed at 14/24 completion due to NIM's 1000-credit lifetime pool. Documented and abandoned. Don't retry the same model on NIM unless NIM changes their tier model.
@@ -246,11 +300,13 @@ No application logic changed. Four CI/process-hygiene items:
 
 ## Tests / lint / types — current state
 
-**As of Phase 2D iteration 6 — code baseline verified (ruff, mypy, pytest):**
-- 485 tests passing, 86.46% coverage (21 new eval tests added this iteration)
+**As of Phase 3.1 (2026-06-06) — code baseline verified:**
+- 498 tests passing, 87.01% coverage (was 485 / 86.46% at Phase 2D close)
+  - +11 unit tests: `AVIASALES_LIVE` and `AFFILIATE_DEEPLINKS` flag behaviour (`tests/unit/api/test_feature_flags.py`)
+  - +2 deeplink regression tests: raw_link with/without pre-existing query params (`tests/unit/providers/test_deeplink.py`)
 - ruff check passing
-- mypy passing (54 source files, no issues)
-- Frontend: unchanged from iteration 5 (lint clean, typecheck clean, build green)
+- mypy: source layer clean; 125 pre-existing errors in test files (`[attr-defined]` on mock objects, `[arg-type]` on protocol stubs, `[unused-ignore]`) — all in test layer, none introduced by Phase 3.1
+- Frontend: unchanged from Phase 2D (lint clean, typecheck clean, build green)
 
 **Known-broken and accepted:**
 - ~~pip-audit workflow's 0s failures (Issue #18) — closed 2026-05-30~~
@@ -332,7 +388,7 @@ agentic-travel-booking-system/
 │   │   │   ├── llm/                  # Provider adapters (anthropic, groq, nvidia)
 │   │   │   ├── observability/        # Langfuse, pricing
 │   │   │   └── evals/                # Eval harness for optimizer + conversation_manager
-│   │   ├── tests/                    # 485 tests
+│   │   ├── tests/                    # 498 tests
 │   │   ├── config/                   # llm_routing.yaml (LLM profiles)
 │   │   └── docs/                     # design notes
 │   └── web/                          # Next.js frontend (React 19)
