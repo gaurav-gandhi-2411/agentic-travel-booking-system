@@ -80,6 +80,40 @@ These have hard-won design decisions baked in. Each has an ADR or a Phase docume
 
 **OpenRouter as free-routing primary.** `config/llm_routing.yaml` uses OpenRouter as the primary provider for the `free` routing profile (not just experimental scaffolding). `OPENROUTER_API_KEY` is bound to the prod service for on-demand activation via `LLM_ROUTING_PROFILE=free` header override. Currently prod runs `LLM_ROUTING_PROFILE=demo` so OpenRouter isn't invoked in normal traffic. Groq is the fallback.
 
+## Phase 3.2-A — Tenancy Foundation — COMPLETE (2026-06-08, local/test only)
+
+Code-complete, locally tested. **Not deployed — prod still on `00025-gaw` with no Postgres.**
+
+### What shipped
+
+- `tenancy/` module: `Tenant` + `ApiKey` SQLAlchemy 2.0 models, `service.py` (key generation / SHA-256 hashing / key→tenant resolution / demo-seed), `config.py` (per-tenant config accessors).
+- `persistence/` layer: async SQLAlchemy engine with lazy init, `rls.py` (RLS session-var helper), `engine.py` (`set_rls_tenant`). All SET LOCAL calls inline a `uuid.UUID()`-validated value — asyncpg rejects parameterized SET LOCAL.
+- Alembic initialized: `alembic.ini` at `apps/api/`, `persistence/migrations/env.py` (async), first migration `a1b2c3d4e5f6` creates `tenants` + `api_keys` tables with `ENABLE ROW LEVEL SECURITY` + `CREATE POLICY` isolation policies.
+- `TenantAuthMiddleware` replaces `DemoAuthMiddleware`. Extracts key from `Authorization: Bearer` or `X-API-Key`. Resolves to Tenant, sets `request.state.tenant_id/user_id/inventory_adapter/affiliate_enabled`. Local/synthetic mode injects synthetic context without hitting DB.
+- `DEMO_API_KEY` backward compat: `seed_demo_tenant()` idempotently seeds a `demo` tenant keyed to the existing env var. `test_demo_key_authenticates` proves compat.
+- Per-tenant config flows through the pipeline: `inventory_adapter` routes adapter selection, `affiliate_enabled` gates deeplinks. Old `AFFILIATE_DEEPLINKS` env var retired.
+- Sentry wired: `observability/sentry.py`, `init_sentry()` called at FastAPI lifespan startup. Graceful no-op when `SENTRY_DSN` unset. DSN to be injected when GG creates the Sentry project.
+- Branch protection applied to `main`: PR required, 0 approvals (solo), `CI / API (Python 3.12)` + `CI / Web (Node 20)` required, strict (branch up-to-date), force-push off, deletions off.
+- 573 tests (was 498), 87.49% coverage (was 87.01%). ruff + mypy clean (135 source files).
+
+### RLS hardening debt (carried to Phase 3.2-A.1)
+
+Current migration uses `ENABLE ROW LEVEL SECURITY` (not `FORCE`). Superusers / table owners bypass RLS by default. The auth bootstrap query (key→tenant resolution) currently relies on this bypass — it runs before any tenant context exists on the connection. Consequence: in production with a non-superuser app role, a superuser DBA connection could still read across tenants. Phase 3.2-A.1 closes this with `FORCE ROW LEVEL SECURITY` + a `SECURITY DEFINER` function.
+
+### Cloud SQL — DEFERRED (on-demand, no instance provisioned)
+
+**Decision (2026-06-08):** Do not provision Cloud SQL until there is a concrete trigger — a pilot tenant, a persistence-needing demo, or a paying prospect. A standing Cloud SQL bill for infra serving zero tenants is premature, and deploying while RLS hardening debt exists would bring an incomplete security posture to prod.
+
+**When the trigger fires, the provisioning steps are:**
+1. Cloud SQL Postgres 16 instance — region `asia-south1` (matches Cloud Run), suggested tier `db-f1-micro`, 10 GB SSD to start.
+2. `DATABASE_URL` as a Google Secret Manager secret, bound to the Cloud Run service via Workload Identity.
+3. `alembic upgrade head` run against the new instance (one-time, before any code deploy).
+4. New Cloud Run revision with the `DATABASE_URL` binding active — canary gate → smoke → full.
+
+**Do not spin up an instance before a GG go-decision on the trigger.**
+
+---
+
 ## Production state (Phase 3.1b deployed — 2026-06-08)
 
 Both surfaces are **fully current**. Backend carries Phase 3.1 code (AVIASALES_LIVE flag wiring, deeplink separator fix); prod runs **live Aviasales inventory** (`AVIASALES_LIVE=true` baked into `deploy-prod.yml`). Frontend unchanged.
@@ -277,8 +311,8 @@ No application logic changed. Four CI/process-hygiene items:
 
 *Production hardening (deferred):*
 - #8 — Promote optimizer eval to blocking CI gate
-- #10 — Wire Sentry for error aggregation
-- #12 — Enable "Require branches to be up to date" branch protection
+- ~~#10 — Wire Sentry for error aggregation — closed Phase 3.2-A (2026-06-08)~~
+- ~~#12 — Branch protection applied to main — closed Phase 3.2-A (2026-06-08)~~
 
 *Phase 2C follow-ups (low priority):*
 - #23 — Re-measure Llama ConversationManager latency post-TPD-reset
