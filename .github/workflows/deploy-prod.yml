@@ -81,6 +81,7 @@ jobs:
             APP_MODE=demo
             APP_ENV=production
             LLM_ROUTING_PROFILE=demo
+            AVIASALES_LIVE=true
           secrets: |
             ANTHROPIC_API_KEY=anthropic-api-key:latest
             AVIASALES_API_KEY=travelpayouts-api-token:latest
