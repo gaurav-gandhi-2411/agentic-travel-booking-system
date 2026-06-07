@@ -100,37 +100,45 @@ class TestKeyPrefix:
 class TestResolveKey:
     @pytest.mark.asyncio
     async def test_returns_tenant_when_key_found(self) -> None:
-        """resolve_key returns the Tenant object when a matching active key exists."""
+        """resolve_key returns the Tenant object when a matching active key exists.
+
+        New two-step contract: session.scalar returns the tenant UUID from the
+        SECURITY DEFINER function; session.get returns the full Tenant object
+        after the RLS context is set.
+        """
+        import uuid as _uuid
+
         from travel_agent.tenancy.models import Tenant
 
         mock_tenant = MagicMock(spec=Tenant)
-        mock_scalars = MagicMock()
-        mock_scalars.first.return_value = mock_tenant
-        mock_result = MagicMock()
-        mock_result.scalars.return_value = mock_scalars
+        tenant_uuid = _uuid.uuid4()
 
         mock_session = AsyncMock()
-        mock_session.execute = AsyncMock(return_value=mock_result)
+        mock_session.scalar = AsyncMock(return_value=tenant_uuid)
+        mock_session.get = AsyncMock(return_value=mock_tenant)
 
         result = await resolve_key("some-valid-key", mock_session)
 
         assert result is mock_tenant
-        mock_session.execute.assert_awaited_once()
+        mock_session.scalar.assert_awaited_once()
+        mock_session.get.assert_awaited_once_with(Tenant, tenant_uuid)
 
     @pytest.mark.asyncio
     async def test_returns_none_when_key_not_found(self) -> None:
-        """resolve_key returns None when no matching key exists."""
-        mock_scalars = MagicMock()
-        mock_scalars.first.return_value = None
-        mock_result = MagicMock()
-        mock_result.scalars.return_value = mock_scalars
+        """resolve_key returns None when no matching key exists.
 
+        New two-step contract: session.scalar returns None from the SECURITY
+        DEFINER function; resolve_key returns None immediately without calling
+        session.get.
+        """
         mock_session = AsyncMock()
-        mock_session.execute = AsyncMock(return_value=mock_result)
+        mock_session.scalar = AsyncMock(return_value=None)
 
         result = await resolve_key("nonexistent-key", mock_session)
 
         assert result is None
+        mock_session.scalar.assert_awaited_once()
+        mock_session.get.assert_not_awaited()
 
 
 # ── seed_demo_tenant (mocked DB) ─────────────────────────────────────────────

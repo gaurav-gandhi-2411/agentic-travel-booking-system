@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import uuid
 from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import (
@@ -11,6 +10,8 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.sql import text
+
+from travel_agent.persistence.rls import _validate_tenant_id
 
 _engine: AsyncEngine | None = None
 _session_factory: async_sessionmaker[AsyncSession] | None = None
@@ -63,7 +64,7 @@ async def set_rls_tenant(session: AsyncSession, tenant_id: str) -> None:
     """Set the per-request Postgres session variable consumed by RLS policies.
 
     asyncpg rejects parameterized SET LOCAL (syntax error at '$1'), so the UUID
-    is validated then inlined. uuid.UUID() ensures only hex+hyphens are emitted.
+    is validated then inlined. Raises ValueError if tenant_id is not a valid UUID.
     """
-    validated = str(uuid.UUID(tenant_id))
+    validated = _validate_tenant_id(tenant_id)
     await session.execute(text(f"SET LOCAL app.current_tenant = '{validated}'"))

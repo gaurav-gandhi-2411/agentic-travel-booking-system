@@ -3,10 +3,13 @@ from __future__ import annotations
 import hashlib
 import os
 import secrets
+import uuid
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql import text
 
+from travel_agent.persistence.engine import set_rls_tenant
 from travel_agent.tenancy.models import ApiKey, Tenant
 
 # Raw keys are 32 URL-safe random bytes → 43-char base64url string.
@@ -43,21 +46,21 @@ def key_prefix(raw_key: str) -> str:
 async def resolve_key(raw_key: str, session: AsyncSession) -> Tenant | None:
     """Look up the tenant for a raw API key.
 
+    Two-step pattern: the SECURITY DEFINER function bypasses FORCE RLS for the
+    bootstrap lookup (no tenant context exists yet), then the RLS context is set
+    and the full Tenant is fetched via the normal ORM path (RLS-scoped).
+
     Returns the Tenant if the key is active and its tenant is active, else None.
-    This query runs BEFORE the RLS session var is set — the caller is responsible
-    for setting app.current_tenant after a successful resolution.
     """
     key_hash_val = hash_key(raw_key)
-    result = await session.execute(
-        select(Tenant)
-        .join(ApiKey, ApiKey.tenant_id == Tenant.id)
-        .where(
-            ApiKey.key_hash == key_hash_val,
-            ApiKey.is_active.is_(True),
-            Tenant.is_active.is_(True),
-        )
+    tenant_id: uuid.UUID | None = await session.scalar(
+        text("SELECT resolve_api_key_secure(:kh)"),
+        {"kh": key_hash_val},
     )
-    return result.scalars().first()
+    if tenant_id is None:
+        return None
+    await set_rls_tenant(session, str(tenant_id))
+    return await session.get(Tenant, tenant_id)
 
 
 async def create_tenant_with_key(  # noqa: PLR0913
