@@ -8,8 +8,6 @@ no plaintext key column exists on ApiKey.
 
 from __future__ import annotations
 
-import uuid
-
 import pytest
 
 from travel_agent.tenancy.models import ApiKey, Base, Tenant
