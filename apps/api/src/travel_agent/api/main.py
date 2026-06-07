@@ -26,6 +26,7 @@ from travel_agent.api.middleware.request_id import RequestIDMiddleware
 from travel_agent.api.routes.refine import router as refine_router
 from travel_agent.api.routes.search import router as search_router
 from travel_agent.observability.langfuse_client import get_langfuse
+from travel_agent.observability.sentry import init_sentry
 
 load_dotenv()
 
@@ -50,6 +51,7 @@ logger = structlog.get_logger(__name__)
 # ── lifespan ──────────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    init_sentry()
     profile = os.environ.get("LLM_ROUTING_PROFILE", "local")
     app_mode = os.environ.get("APP_MODE", "synthetic")
 
