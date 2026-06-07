@@ -80,18 +80,18 @@ These have hard-won design decisions baked in. Each has an ADR or a Phase docume
 
 **OpenRouter as free-routing primary.** `config/llm_routing.yaml` uses OpenRouter as the primary provider for the `free` routing profile (not just experimental scaffolding). `OPENROUTER_API_KEY` is bound to the prod service for on-demand activation via `LLM_ROUTING_PROFILE=free` header override. Currently prod runs `LLM_ROUTING_PROFILE=demo` so OpenRouter isn't invoked in normal traffic. Groq is the fallback.
 
-## Production state (Phase 3.1 deployed — 2026-06-07)
+## Production state (Phase 3.1b deployed — 2026-06-08)
 
-Both surfaces are **fully current**. Backend carries Phase 3.1 code (AVIASALES_LIVE flag wiring, deeplink separator fix); prod runs synthetic path (`AVIASALES_LIVE` absent from `deploy-prod.yml`). Frontend unchanged.
+Both surfaces are **fully current**. Backend carries Phase 3.1 code (AVIASALES_LIVE flag wiring, deeplink separator fix); prod runs **live Aviasales inventory** (`AVIASALES_LIVE=true` baked into `deploy-prod.yml`). Frontend unchanged.
 
 ### Backend (Cloud Run)
 
-- **Running revision:** `agentic-travel-booking-api-prod-00022-wit` at 100% traffic
-- **Image:** built from `main` HEAD at commit `e6ca02d` (Phase 3.1 complete)
+- **Running revision:** `agentic-travel-booking-api-prod-00025-gaw` at 100% traffic
+- **Image:** built from `main` HEAD at commit `4f0c02f` (Phase 3.1b — AVIASALES_LIVE=true in deploy-prod.yml)
 - **Git equivalent:** fully current with main; 0 commits behind in `apps/api/`
-- **Deploy (Phase 3.1, 2026-06-07):** stage=canary (`00022-wit` at 0% + tag) → GG canary smoke passed → stage=full (`00022-wit` at 100%). Staleness check confirmed backend=current, frontend=current immediately post-deploy.
+- **Deploy (Phase 3.1b, 2026-06-08):** stage=canary (`00025-gaw` at 0% + tag) → GG canary smoke passed (live fare + clean deeplink) → stage=full (`00025-gaw` at 100%).
 - **Service URL:** `https://agentic-travel-booking-api-prod-rqyyasfwaa-el.a.run.app`
-- **Env bindings active:** `APP_ENV=production`, `UPSTASH_REDIS_URL`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `AVIASALES_API_KEY`, `AVIASALES_PARTNER_ID` — all bound. `AVIASALES_LIVE` NOT set → synthetic path active.
+- **Env bindings active:** `APP_ENV=production`, `UPSTASH_REDIS_URL`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `AVIASALES_API_KEY`, `AVIASALES_PARTNER_ID`, `AVIASALES_LIVE=true` — all bound. Live inventory active.
 - **Deploy method:** `workflow_dispatch stage=canary` (Gate 1) → human smoke test → `workflow_dispatch stage=full` (Gate 2 after GG approval)
 
 See ADR-0023 for the full backend deploy narrative.
@@ -203,7 +203,11 @@ Confirm: both archetype card `deeplink` fields have exactly one `?`, `marker=727
 
 ### Step 6: prod canary → full — DONE (2026-06-07)
 
-Canary (`00022-wit`) deployed at 0% → GG smoke passed → stage=full → `00022-wit` at 100%. Staleness guardrail confirmed backend=current, frontend=current. `AVIASALES_LIVE` absent throughout — prod serves synthetic path. Live inventory flip is a separate future canary.
+Canary (`00022-wit`) deployed at 0% → GG smoke passed → stage=full → `00022-wit` at 100%. Staleness guardrail confirmed backend=current, frontend=current. `AVIASALES_LIVE` absent throughout — prod served synthetic path.
+
+### Phase 3.1b: live inventory flip — DONE (2026-06-08)
+
+Canary (`00025-gaw`) deployed at 0% with `AVIASALES_LIVE=true` baked → GG smoke passed (live fare + clean deeplink) → stage=full → `00025-gaw` at 100%. Prod now serves live Aviasales inventory.
 
 ---
 
