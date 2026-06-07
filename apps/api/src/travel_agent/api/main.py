@@ -20,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from travel_agent.api.cache import search_cache
-from travel_agent.api.middleware.auth import DemoAuthMiddleware
+from travel_agent.api.middleware.auth import TenantAuthMiddleware
 from travel_agent.api.middleware.llm_profile import LLMProfileMiddleware
 from travel_agent.api.middleware.request_id import RequestIDMiddleware
 from travel_agent.api.routes.refine import router as refine_router
@@ -131,7 +131,7 @@ app.add_middleware(
     allow_headers=["Content-Type", "X-API-Key", "X-LLM-Profile"],
 )
 app.add_middleware(LLMProfileMiddleware)
-app.add_middleware(DemoAuthMiddleware)
+app.add_middleware(TenantAuthMiddleware)
 app.add_middleware(RequestIDMiddleware)
 
 app.include_router(search_router)
