@@ -39,6 +39,8 @@ class TenantAuthMiddleware(BaseHTTPMiddleware):
         if self._mode in _LOCAL_MODES:
             request.state.tenant_id = "local"
             request.state.user_id = "local"
+            request.state.inventory_adapter = "aviasales"  # default for local/synthetic dev
+            request.state.affiliate_enabled = True
             return await call_next(request)
 
         raw_key = _extract_key(request)
@@ -62,6 +64,8 @@ class TenantAuthMiddleware(BaseHTTPMiddleware):
         request.state.tenant_id = str(tenant.id)
         # user_id == tenant_id until a per-user model exists
         request.state.user_id = str(tenant.id)
+        request.state.inventory_adapter = tenant.inventory_adapter
+        request.state.affiliate_enabled = tenant.affiliate_enabled
         return await call_next(request)
 
 

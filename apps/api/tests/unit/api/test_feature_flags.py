@@ -107,23 +107,29 @@ def test_build_agents_affiliate_on_by_default(monkeypatch: pytest.MonkeyPatch) -
 
 
 def test_build_agents_affiliate_off_suppresses_marker(monkeypatch: pytest.MonkeyPatch) -> None:
-    """partner_marker is empty when AFFILIATE_DEEPLINKS="false"."""
+    """partner_marker is empty when affiliate_enabled=False (per-tenant config).
+
+    Phase 3.2-A Step 4: affiliate gating moved from AFFILIATE_DEEPLINKS env var
+    to the per-tenant affiliate_enabled flag passed as a parameter.
+    """
     monkeypatch.setenv("AVIASALES_PARTNER_ID", "my-marker")
-    monkeypatch.setenv("AFFILIATE_DEEPLINKS", "false")
 
     with patch(_MOCK_LLM_TARGET, return_value=(MagicMock(), "test-model")):
-        _, optimizer = _build_agents("demo-llama")
+        _, optimizer = _build_agents("demo-llama", affiliate_enabled=False)
 
     assert optimizer._partner_marker == ""
 
 
 def test_build_agents_affiliate_off_with_zero(monkeypatch: pytest.MonkeyPatch) -> None:
-    """partner_marker is empty when AFFILIATE_DEEPLINKS="0"."""
+    """partner_marker is empty when affiliate_enabled=False even with AVIASALES_PARTNER_ID set.
+
+    Phase 3.2-A Step 4: the affiliate_enabled parameter (from tenant config) is
+    the sole gating mechanism — env-var AFFILIATE_DEEPLINKS is no longer consulted.
+    """
     monkeypatch.setenv("AVIASALES_PARTNER_ID", "my-marker")
-    monkeypatch.setenv("AFFILIATE_DEEPLINKS", "0")
 
     with patch(_MOCK_LLM_TARGET, return_value=(MagicMock(), "test-model")):
-        _, optimizer = _build_agents("demo-llama")
+        _, optimizer = _build_agents("demo-llama", affiliate_enabled=False)
 
     assert optimizer._partner_marker == ""
 
