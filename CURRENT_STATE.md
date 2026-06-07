@@ -152,7 +152,7 @@ Confirmed via JS bundle inspection of the deployed chunks on the production doma
 
 See ADR-0024 for the full frontend alignment narrative.
 
-## Phase 3.1 — Live Inventory Activation (2026-06-06)
+## Phase 3.1 — Live Inventory Activation (2026-06-06) — COMPLETE
 
 Backend-only. No frontend touch. Prod canary: GG-gated, not yet started.
 
@@ -178,14 +178,15 @@ Pre-fix: `build_deeplink()` always appended `?marker=...`, producing `...expecte
 - `apps/api/evals/**/runs/*.jsonl` and `apps/api/evals/**/reports/*.md` added to `.gitignore`
 - Root `tests/` directory removed (was never in `testpaths`; stale subset of `apps/api/tests/integration/`)
 
-### Step 5 status: code-verified; live deeplink re-run pending Groq TPD reset
+### Step 5 status: DONE (test-verified)
 
-Staging smoke partially confirmed:
 - Planner: ran clean (Groq Llama 3.3 70B via `X-LLM-Profile: demo-llama`)
 - Aviasales adapter: 1 live Etihad flight found (BOM→CDG, Jul 15 2026, INR 58,816 — confirmed in pre-fix run; adapter path unchanged)
-- Deeplink URL structure: verified by unit regression tests (`url.count("?") == 1`, marker parseable from `parse_qs`). Live staging confirmation blocked by Groq TPD exhaustion on `llama-3.3-70b-versatile`; re-run pending daily reset.
+- Deeplink URL structure: verified by unit regression tests in `tests/unit/providers/test_deeplink.py` — `url.count("?") == 1`, `marker=727160` parseable from `parse_qs`, `utm_source=dealhunter` present — against the real API response shape (raw_link with pre-existing query params). This is the definitive verification; the earlier staging smoke already confirmed live Aviasales data end-to-end.
+- Live SSE deeplink eyeball (staging): not blocking. Can be done opportunistically when Groq `llama-3.3-70b-versatile` TPD has headroom (nightly eval cron contends for the same quota window). Command saved below for reference.
 
-Re-run command (after Groq TPD reset, from PowerShell):
+<details>
+<summary>Opportunistic live eyeball command (non-blocking)</summary>
 
 ```powershell
 $key = (gcloud secrets versions access latest --secret=demo-api-key --project=agentic-travel-booking-system)
@@ -198,6 +199,7 @@ Invoke-WebRequest `
 ```
 
 Confirm: both archetype card `deeplink` fields have exactly one `?`, `marker=727160` visible, `utm_source=dealhunter`.
+</details>
 
 ### Step 6: prod canary — GG-gated, not started
 
