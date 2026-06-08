@@ -96,21 +96,47 @@ Code-complete, locally tested. **Not deployed — prod still on `00025-gaw` with
 - Branch protection applied to `main`: PR required, 0 approvals (solo), `CI / API (Python 3.12)` + `CI / Web (Node 20)` required, strict (branch up-to-date), force-push off, deletions off.
 - 573 tests (was 498), 87.49% coverage (was 87.01%). ruff + mypy clean (135 source files).
 
-### RLS hardening debt (carried to Phase 3.2-A.1)
+### RLS hardening debt → resolved in Phase 3.2-A.1
 
-Current migration uses `ENABLE ROW LEVEL SECURITY` (not `FORCE`). Superusers / table owners bypass RLS by default. The auth bootstrap query (key→tenant resolution) currently relies on this bypass — it runs before any tenant context exists on the connection. Consequence: in production with a non-superuser app role, a superuser DBA connection could still read across tenants. Phase 3.2-A.1 closes this with `FORCE ROW LEVEL SECURITY` + a `SECURITY DEFINER` function.
+Closed by the second migration (`b2c3d4e5f6a7`) and the two-step resolve pattern. See Phase 3.2-A.1 section below.
 
 ### Cloud SQL — DEFERRED (on-demand, no instance provisioned)
 
 **Decision (2026-06-08):** Do not provision Cloud SQL until there is a concrete trigger — a pilot tenant, a persistence-needing demo, or a paying prospect. A standing Cloud SQL bill for infra serving zero tenants is premature, and deploying while RLS hardening debt exists would bring an incomplete security posture to prod.
 
+### PROVISIONING GATE — seed_demo_tenant idempotency under non-superuser app role
+
+`seed_demo_tenant()` uses `SELECT WHERE slug='demo'` as its existence check. Under `FORCE ROW LEVEL SECURITY`, a non-superuser app role sees **zero rows** (no `app.current_tenant` context set at startup time) — the check always returns `None`, triggering a duplicate-insert attempt on every restart. The unique constraint on `slug` prevents data corruption, but the unhandled `IntegrityError` crashes startup.
+
+**This blocks Cloud SQL provisioning.** Before any Cloud SQL instance is provisioned, `seed_demo_tenant()` must be updated to catch `IntegrityError` on the slug unique constraint (insert-then-catch pattern, not check-then-insert). Do not provision without resolving this first.
+
 **When the trigger fires, the provisioning steps are:**
-1. Cloud SQL Postgres 16 instance — region `asia-south1` (matches Cloud Run), suggested tier `db-f1-micro`, 10 GB SSD to start.
-2. `DATABASE_URL` as a Google Secret Manager secret, bound to the Cloud Run service via Workload Identity.
-3. `alembic upgrade head` run against the new instance (one-time, before any code deploy).
-4. New Cloud Run revision with the `DATABASE_URL` binding active — canary gate → smoke → full.
+1. Fix `seed_demo_tenant()` — insert-then-catch `IntegrityError` on slug unique constraint.
+2. Cloud SQL Postgres 16 instance — region `asia-south1` (matches Cloud Run), suggested tier `db-f1-micro`, 10 GB SSD to start.
+3. `DATABASE_URL` as a Google Secret Manager secret, bound to the Cloud Run service via Workload Identity.
+4. `alembic upgrade head` run against the new instance (one-time, before any code deploy).
+5. New Cloud Run revision with the `DATABASE_URL` binding active — canary gate → smoke → full.
 
 **Do not spin up an instance before a GG go-decision on the trigger.**
+
+## Phase 3.2-A.1 — RLS Hardening — COMPLETE (2026-06-08, local/test only)
+
+Code-complete, locally tested. **Not deployed — prod still on `00025-gaw` with no Postgres.**
+
+### What shipped
+
+- Migration `b2c3d4e5f6a7`: `ALTER TABLE tenants FORCE ROW LEVEL SECURITY` + `ALTER TABLE api_keys FORCE ROW LEVEL SECURITY` + `SECURITY DEFINER` function `resolve_api_key_secure(p_key_hash text) RETURNS uuid`. Function is owned by the superuser/BYPASSRLS role, has `SET search_path = public` pinned, and returns only the matching `tenant_id` — minimum bypass surface.
+- `resolve_key()` two-step: SECURITY DEFINER bootstrap lookup (no tenant context set) → `set_rls_tenant()` → `session.get(Tenant)` via normal RLS-scoped ORM path. No direct ORM join bypasses FORCE RLS.
+- `_validate_tenant_id()` in `persistence/rls.py` — calls `uuid.UUID()`, raises `ValueError` on any non-UUID input. Called at every `SET LOCAL` site; the inline SQL string is unreachable without passing through this guard.
+- Tests (21 new):
+  - **Injection-rejection unit tests** (`tests/unit/persistence/test_rls_validation.py`, 17 tests): `_validate_tenant_id`, `apply_rls_tenant`, and `set_rls_tenant` all raise `ValueError` before producing SQL for plain strings, SQL injection payloads, UUID-with-appended-SQL, empty string, whitespace, and UUID-with-extra-chars.
+  - **SECURITY DEFINER bootstrap** (`tests/integration/test_rls_hardening.py`, 3 tests): `resolve_api_key_secure()` returns correct tenant UUID from a non-superuser `app_role` connection with no `app.current_tenant` set. Full `resolve_key()` two-step verified via `rls_session`.
+  - **FORCE RLS table-owner isolation** (`tests/integration/test_rls_hardening.py`, 1 test): Creates `app_owner` role, transfers table ownership, `SET LOCAL ROLE app_owner`. Proves zero rows visible with no context, and tenant A's context cannot see tenant B's rows (`b_count == 0` held).
+- 594 tests (was 573), 87.65% coverage (was 87.49%). ruff + mypy clean (139 source files). mypy overrides for `tests.*` and `evals.*` remain in place (pre-existing 125 errors in test layer).
+
+### Remaining provisioning gap
+
+`seed_demo_tenant()` idempotency under FORCE RLS is unresolved. See PROVISIONING GATE note in the Cloud SQL deferral section above.
 
 ---
 
@@ -340,12 +366,12 @@ No application logic changed. Four CI/process-hygiene items:
 
 ## Tests / lint / types — current state
 
-**As of Phase 3.1 (2026-06-06) — code baseline verified:**
-- 498 tests passing, 87.01% coverage (was 485 / 86.46% at Phase 2D close)
-  - +11 unit tests: `AVIASALES_LIVE` and `AFFILIATE_DEEPLINKS` flag behaviour (`tests/unit/api/test_feature_flags.py`)
-  - +2 deeplink regression tests: raw_link with/without pre-existing query params (`tests/unit/providers/test_deeplink.py`)
-- ruff check passing
-- mypy: source layer clean; 125 pre-existing errors in test files (`[attr-defined]` on mock objects, `[arg-type]` on protocol stubs, `[unused-ignore]`) — all in test layer, none introduced by Phase 3.1
+**As of Phase 3.2-A.1 (2026-06-08) — code baseline verified:**
+- 594 tests passing, 87.65% coverage (was 573 / 87.49% at Phase 3.2-A close)
+  - +17 unit tests: injection-rejection for `_validate_tenant_id`, `apply_rls_tenant`, `set_rls_tenant` (`tests/unit/persistence/test_rls_validation.py`)
+  - +4 integration tests: SECURITY DEFINER bootstrap (3) + FORCE RLS table-owner isolation (1) (`tests/integration/test_rls_hardening.py`)
+- ruff check passing (full `.`)
+- mypy: 139 source files, 0 issues. `[[tool.mypy.overrides]]` with `ignore_errors = true` on `tests.*` and `evals.*` suppresses 125 pre-existing test-layer errors (none introduced by Phase 3.2-A/A.1)
 - Frontend: unchanged from Phase 2D (lint clean, typecheck clean, build green)
 
 **Known-broken and accepted:**
