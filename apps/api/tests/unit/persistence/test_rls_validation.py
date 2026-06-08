@@ -14,7 +14,6 @@ import pytest
 from travel_agent.persistence.engine import set_rls_tenant
 from travel_agent.persistence.rls import _validate_tenant_id, apply_rls_tenant
 
-
 # ===========================================================================
 # TestValidateTenantId
 # ===========================================================================
@@ -24,27 +23,27 @@ class TestValidateTenantId:
     """_validate_tenant_id rejects bad inputs and accepts canonical UUIDs."""
 
     def test_rejects_plain_string(self) -> None:
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match=r"badly formed"):
             _validate_tenant_id("not-a-uuid")
 
     def test_rejects_sql_injection_attempt(self) -> None:
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match=r"badly formed"):
             _validate_tenant_id("'; DROP TABLE tenants; --")
 
     def test_rejects_uuid_with_appended_sql(self) -> None:
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match=r"badly formed"):
             _validate_tenant_id("00000000-0000-0000-0000-000000000000'; DROP TABLE tenants;")
 
     def test_rejects_empty_string(self) -> None:
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match=r"badly formed"):
             _validate_tenant_id("")
 
     def test_rejects_whitespace(self) -> None:
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match=r"badly formed"):
             _validate_tenant_id("   ")
 
     def test_rejects_uuid_with_extra_chars(self) -> None:
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match=r"badly formed"):
             _validate_tenant_id("00000000-0000-0000-0000-000000000000x")
 
     def test_accepts_valid_uuid(self) -> None:
@@ -75,21 +74,21 @@ class TestApplyRlsTenantValidation:
     async def test_rejects_injection_before_sql(self) -> None:
         """ValueError raised before session.execute is ever awaited."""
         mock_session = AsyncMock()
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match=r"badly formed"):
             await apply_rls_tenant(mock_session, "'; DROP TABLE tenants; --")
         mock_session.execute.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_rejects_empty_string_before_sql(self) -> None:
         mock_session = AsyncMock()
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match=r"badly formed"):
             await apply_rls_tenant(mock_session, "")
         mock_session.execute.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_rejects_uuid_with_extra_chars_before_sql(self) -> None:
         mock_session = AsyncMock()
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match=r"badly formed"):
             await apply_rls_tenant(mock_session, "00000000-0000-0000-0000-000000000000x")
         mock_session.execute.assert_not_awaited()
 
@@ -113,21 +112,21 @@ class TestSetRlsTenantValidation:
     @pytest.mark.asyncio
     async def test_rejects_injection_before_sql(self) -> None:
         mock_session = AsyncMock()
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match=r"badly formed"):
             await set_rls_tenant(mock_session, "'; DROP TABLE tenants; --")
         mock_session.execute.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_rejects_empty_string_before_sql(self) -> None:
         mock_session = AsyncMock()
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match=r"badly formed"):
             await set_rls_tenant(mock_session, "")
         mock_session.execute.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_rejects_plain_string_before_sql(self) -> None:
         mock_session = AsyncMock()
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match=r"badly formed"):
             await set_rls_tenant(mock_session, "not-a-uuid")
         mock_session.execute.assert_not_awaited()
 
