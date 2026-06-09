@@ -138,6 +138,35 @@ Code-complete, locally tested. **Not deployed — prod still on `00025-gaw` with
 
 `seed_demo_tenant()` idempotency under FORCE RLS is unresolved. See PROVISIONING GATE note in the Cloud SQL deferral section above.
 
+## Phase 3.2-C — Live Hotel Adapter + Interface Generalization — PARKED (2026-06-09, local/test only)
+
+**Not deployed — prod still on `00025-gaw`. 3.2-C parked due to Hotellook sunset.**
+
+### Step 1 shipped (commit `1b74334`)
+
+- `providers/base.py`: `InventoryProvider` Protocol (`@runtime_checkable`, `close()` only) + shared exception hierarchy (`InventoryProviderError`, `InventoryRateLimitError`, `InventoryServerError`, `InventoryClientError`).
+- `AviasalesAdapter` conformed (additive only): `AviasalesError` now subclasses `InventoryProviderError`. All existing exception names preserved. All existing Aviasales tests pass unchanged.
+- **Normalization position recorded:** The Protocol is agnostic — it defines lifecycle only, no search method signatures or return types. The existing split (raw dicts in `AviasalesAdapter`, normalization in `FlightHunterAgent`) is preserved by design.
+
+### Hotellook sunset — confirmed before any adapter code was built
+
+Travelpayouts officially discontinued the Hotellook brand, closed the affiliate program, and stopped the `engine.hotellook.com` API (surviving links redirect to Booking.com). The MD5/engine API documentation found during research is stale. Confirmed from Travelpayouts' own help center. No `curl` needed — escalated to GG, decision received immediately.
+
+**Decision: do NOT build a Hotellook adapter. No graceful-404 workaround.** 3.2-C's interface-generalization purpose (two real adapters) cannot be served by a dead API.
+
+### What's preserved
+
+- `providers/base.py` (the `InventoryProvider` contract) is kept — it is useful regardless of Hotellook. The Aviasales adapter's conformance demonstrates the lifecycle pattern for any future second adapter.
+- `SyntheticProvider.get_hotels()` remains the only hotel inventory source. `HotelHunterAgent` continues to use `SyntheticProvider` unchanged.
+
+### Open question: hotel inventory source
+
+The second real inventory adapter (hotels) has no confirmed target API. Hotellook is the only Travelpayouts hotel product; its shutdown leaves the hotel vertical without a live affiliate source. This is an open architectural question.
+
+### Second real adapter — deferred
+
+The bookable-inventory proof (TBO / GDS) is a separate iteration, gated on GG's sandbox signup. Until that signup completes, the `InventoryProvider` contract is demonstrated by one real adapter (Aviasales flights) plus one synthetic fallback (hotels). 3.2-C is parked at Step 1.
+
 ---
 
 ## Production state (Phase 3.1b deployed — 2026-06-08)
@@ -366,8 +395,10 @@ No application logic changed. Four CI/process-hygiene items:
 
 ## Tests / lint / types — current state
 
-**As of Phase 3.2-A.1 (2026-06-08) — code baseline verified:**
-- 594 tests passing, 87.65% coverage (was 573 / 87.49% at Phase 3.2-A close)
+**As of Phase 3.2-C Step 1 (2026-06-09) — code baseline verified:**
+- 597 tests total (579 passed, 3 skipped, 15 Docker-blocked integration tests — pre-existing); 594 unit tests from 3.2-A.1 + 3 additional; coverage unchanged at ≥87.65%
+  - Phase 3.2-C Step 1 added no new tests; the +3 count reflects test-collection differences vs. the Docker-blocked environment
+  - No test regressions — all pre-existing unit tests pass
   - +17 unit tests: injection-rejection for `_validate_tenant_id`, `apply_rls_tenant`, `set_rls_tenant` (`tests/unit/persistence/test_rls_validation.py`)
   - +4 integration tests: SECURITY DEFINER bootstrap (3) + FORCE RLS table-owner isolation (1) (`tests/integration/test_rls_hardening.py`)
 - ruff check passing (full `.`)
