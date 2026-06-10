@@ -23,6 +23,7 @@ from travel_agent.api.cache import search_cache
 from travel_agent.api.middleware.auth import TenantAuthMiddleware
 from travel_agent.api.middleware.llm_profile import LLMProfileMiddleware
 from travel_agent.api.middleware.request_id import RequestIDMiddleware
+from travel_agent.api.routes.book import router as book_router
 from travel_agent.api.routes.refine import router as refine_router
 from travel_agent.api.routes.search import router as search_router
 from travel_agent.observability.langfuse_client import get_langfuse
@@ -138,6 +139,7 @@ app.add_middleware(RequestIDMiddleware)
 
 app.include_router(search_router)
 app.include_router(refine_router)
+app.include_router(book_router)
 
 
 @app.get("/health", response_model=None)
