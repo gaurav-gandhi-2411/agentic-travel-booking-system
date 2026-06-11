@@ -23,7 +23,7 @@ from starlette.types import ASGIApp
 from travel_agent.persistence.engine import get_session_factory
 from travel_agent.tenancy.service import resolve_key
 
-_GUARDED_PREFIXES = ("/search", "/refine")
+_GUARDED_PREFIXES = ("/search", "/refine", "/book", "/cancel")
 _LOCAL_MODES = {"local", "synthetic"}
 
 
@@ -39,7 +39,16 @@ class TenantAuthMiddleware(BaseHTTPMiddleware):
         if self._mode in _LOCAL_MODES:
             request.state.tenant_id = "local"
             request.state.user_id = "local"
-            request.state.inventory_adapter = "aviasales"  # default for local/synthetic dev
+            # Booking routes default to mock_bookable so /book reaches MockBookableProvider.
+            # Search/refine keep "aviasales" (falls through to SyntheticProvider without
+            # AVIASALES_LIVE=true — existing documented behavior preserved).
+            # Set MOCK_INVENTORY_ADAPTER=aviasales to test the not_bookable booking path.
+            if any(request.url.path.startswith(p) for p in ("/book", "/cancel")):
+                request.state.inventory_adapter = os.environ.get(
+                    "MOCK_INVENTORY_ADAPTER", "mock_bookable"
+                )
+            else:
+                request.state.inventory_adapter = "aviasales"
             request.state.affiliate_enabled = True
             return await call_next(request)
 

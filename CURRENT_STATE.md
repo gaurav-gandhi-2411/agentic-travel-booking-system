@@ -498,6 +498,37 @@ agentic-travel-booking-system/
 └── README.md
 ```
 
+## Phase 3.2-E.2 — Booking UI in the Demo — COMPLETE (2026-06-11, local/test only)
+
+Frontend-only iteration. No backend changes. Prod stays `00025-gaw`.
+
+### What shipped
+
+- `apps/web/app/api/book/route.ts` — Next.js SSE proxy to backend `POST /book`; validates `offer_id` + `idempotency_key`; 30s timeout; forwards `X-API-Key`.
+- `apps/web/app/api/cancel/route.ts` — Next.js SSE proxy to backend `POST /cancel`; validates `booking_ref`; 15s timeout.
+- `apps/web/hooks/useBookingStream.ts` — 7-state booking hook (`idle | revalidating | price_confirm | confirmed | cancelling | cancelled | error`); idempotency key generated per attempt; `confirmPriceChange()` issues a new key on price-change re-confirm; `AbortController` lifecycle mirrors `useSearchStream`.
+- `apps/web/lib/event-map.ts` — additive: 14 booking SSE fields added to `SseEvent` (`offer_id`, `pnr`, `offer_lock_id`, `hold_expires_at`, `current_price_inr`, `previous_price_inr`, `is_available`, `price_changed`, `booking_ref`, `cancelled`, `code`, `sandbox`, `idempotency_key`, `audit_id`).
+- `apps/web/components/demo/BookingPanel.tsx` — full-width booking flow panel; renders all 7 states; sandbox badge visible throughout; hold-expiry countdown; code-specific error messages for `not_bookable`, `unavailable`, `conflict`, `provider_error`, `not_found`.
+- `apps/web/components/demo/ArchetypeCard.tsx` — additive: `onBook?` + `isBookingActive?` props; "Book this flight" button rendered below the existing "Book on Aviasales" link when `onBook` is provided. Existing Aviasales link preserved exactly.
+- `apps/web/components/demo/DemoClient.tsx` — additive: `useBookingStream` hook instantiated; `selectedArchetype` state; `handleBook`/`handleBookingClose` callbacks; `BookingPanel` rendered between results grid and refinement section.
+
+### Hard constraints honored
+
+- Price-changed gate: `booking_priced{price_changed:true}` renders the price-confirm UI; no auto-confirm path exists in the hook or UI.
+- Sandbox labeling: amber "Sandbox · demo booking — no payment taken" badge visible in all booking states except cancelled/error-after-cancel.
+- Search/refine flow: all existing DemoClient behavior preserved; additions are strictly additive.
+- No deploy: local/test only.
+
+### Future backend enhancement (filed as non-blocking follow-up)
+
+**Tenant bookable capability flag.** The current UI shows "Book this flight" on every ArchetypeCard regardless of tenant type. For a search-only tenant (Aviasales), clicking the button opens the BookingPanel, which immediately renders the `not_bookable` error from the backend's capability gate (`get_bookable_provider → None → booking_error{not_bookable}`).
+
+A cleaner UX would disable or hide the "Book this flight" button up-front for search-only tenants — before the user clicks. This requires the backend to expose a `bookable: bool` capability flag in the search response or a tenant-context endpoint. That is a **backend change (out of scope for 3.2-E.2)**. The open-then-not_bookable behavior ships now; this note is a pointer for the next iteration that touches the search/tenant API surface.
+
+Potential implementation: add `bookable: bool` to the `done` SSE event (or a new `tenant_context` event early in the stream), read it in `useSearchStream`, thread it as a prop to `ArchetypeCard`.
+
+---
+
 ## What "ready to ship" looks like for any iteration
 
 Across all phases of this project, the consistent definition has been:

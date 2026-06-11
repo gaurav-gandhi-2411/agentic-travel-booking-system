@@ -19,7 +19,6 @@ from travel_agent.coordinator.state import RequestState
 from travel_agent.providers.base import (
     BookableInventoryProvider,
     BookingConflictError,
-    InventoryProviderError,
 )
 
 
@@ -47,14 +46,7 @@ async def stream_book(
 
     try:
         reval = await provider.revalidate(offer_id)
-    except InventoryProviderError as exc:
-        yield {
-            "type": BookingEventType.BOOKING_ERROR,
-            "message": str(exc),
-            "code": "provider_error",
-        }
-        return
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         yield {
             "type": BookingEventType.BOOKING_ERROR,
             "message": str(exc),
@@ -99,14 +91,7 @@ async def stream_book(
             "code": "conflict",
         }
         return
-    except InventoryProviderError as exc:
-        yield {
-            "type": BookingEventType.BOOKING_ERROR,
-            "message": str(exc),
-            "code": "provider_error",
-        }
-        return
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         yield {
             "type": BookingEventType.BOOKING_ERROR,
             "message": str(exc),
@@ -137,14 +122,7 @@ async def stream_cancel(
     """
     try:
         result = await provider.cancel(booking_ref)
-    except InventoryProviderError as exc:
-        yield {
-            "type": BookingEventType.BOOKING_ERROR,
-            "message": str(exc),
-            "code": "provider_error",
-        }
-        return
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         yield {
             "type": BookingEventType.BOOKING_ERROR,
             "message": str(exc),

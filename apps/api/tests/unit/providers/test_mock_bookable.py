@@ -1,8 +1,8 @@
-from __future__ import annotations
-
 """Tests for MockBookableProvider and capability-segregation seam (Phase 3.2-C.1)."""
 
-from datetime import datetime, timezone
+from __future__ import annotations
+
+from datetime import UTC, datetime
 
 import pytest
 
@@ -67,7 +67,7 @@ async def test_lifecycle_search_revalidate_book_cancel() -> None:
 
     # 4. hold_expires_at is a future aware datetime
     parsed_expires = datetime.fromisoformat(result.hold_expires_at)
-    assert parsed_expires > datetime.now(timezone.utc)
+    assert parsed_expires > datetime.now(UTC)
 
     # 5. Idempotent retry: same offer_id + same key → same PNR and lock ID
     result2 = await mock.book(offer.offer_id, idempotency_key="idem-001")
