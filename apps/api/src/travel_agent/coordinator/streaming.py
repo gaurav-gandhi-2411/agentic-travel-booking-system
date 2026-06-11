@@ -42,9 +42,11 @@ from travel_agent.coordinator.state import (
 )
 from travel_agent.coordinator.windows import generate_windows
 from travel_agent.providers.aviasales import AviasalesAdapter
+from travel_agent.providers.demo.provider import DemoProvider
 from travel_agent.providers.synthetic import SyntheticProvider
 
 _synthetic = SyntheticProvider()
+_demo = DemoProvider()
 
 
 class StreamEventType(StrEnum):
@@ -184,13 +186,13 @@ async def stream_search(  # noqa: PLR0912, PLR0915
                 "flights_found": len(month_flights),
             }
     else:
-        # Synthetic provider — per-window calls; pass trip_type and duration.
+        # Synthetic/demo provider — per-window calls; pass trip_type and duration.
         for idx, window in enumerate(windows):
             if not state.call_budget.can_call_flight():
                 state.is_partial = True
                 break
             try:
-                window_flights = _synthetic.get_flights(
+                window_flights = _get_search_provider(inventory_adapter).get_flights(
                     intent.origin_iata,
                     intent.destination_iata,
                     window,
@@ -312,7 +314,7 @@ async def stream_replan(  # noqa: PLR0912
             if not call_budget.can_call_flight():
                 break
             try:
-                window_flights = _synthetic.get_flights(
+                window_flights = _get_search_provider(inventory_adapter).get_flights(
                     intent.origin_iata,
                     intent.destination_iata,
                     window,
@@ -373,6 +375,18 @@ def _get_adapter() -> AviasalesAdapter | None:
         return AviasalesAdapter()
     except RuntimeError:
         return None
+
+
+def _get_search_provider(inventory_adapter: str) -> SyntheticProvider | DemoProvider:
+    """Return the per-window search provider for non-Aviasales slugs.
+
+    "demo" uses DemoProvider; everything else falls through to the module-level
+    SyntheticProvider singleton (_synthetic). The Aviasales path never reaches
+    this function — it takes the ``if adapter is not None`` branch above.
+    """
+    if inventory_adapter == "demo":
+        return _demo
+    return _synthetic
 
 
 def _get_adapter_for_tenant(inventory_adapter: str) -> AviasalesAdapter | None:
