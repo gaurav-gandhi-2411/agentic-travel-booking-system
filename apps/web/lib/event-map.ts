@@ -73,6 +73,21 @@ export interface SseEvent {
   args_summary?: string;
   // conversation_message
   text?: string;
+  // booking SSE fields
+  offer_id?: string;
+  pnr?: string;
+  offer_lock_id?: string;
+  idempotency_key?: string;
+  audit_id?: string | null;
+  hold_expires_at?: string;
+  current_price_inr?: number;
+  previous_price_inr?: number;
+  is_available?: boolean;
+  price_changed?: boolean;
+  booking_ref?: string;
+  cancelled?: boolean;
+  code?: string;
+  sandbox?: boolean;
 }
 
 /**
