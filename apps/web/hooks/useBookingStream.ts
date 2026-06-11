@@ -70,7 +70,7 @@ async function consumeBookingStream(
   signal: AbortSignal,
   onEvent: (event: SseEvent) => void,
   onDone: () => void,
-  onError: (msg: string) => void,
+  onError: (msg: string, code?: string) => void,
 ): Promise<void> {
   const response = await fetch(url, {
     method: 'POST',
@@ -98,7 +98,7 @@ async function consumeBookingStream(
 
     for (const event of parsed) {
       if (event.type === 'booking_error') {
-        onError(event.message ?? 'Unknown booking error');
+        onError(event.message ?? 'Unknown booking error', event.code);
         return;
       }
       onEvent(event);
@@ -120,8 +120,6 @@ export function useBookingStream(): BookingStream {
   const [confirmedEvent, setConfirmedEvent] = useState<BookingConfirmedData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
-  const [currentOfferId, setCurrentOfferId] = useState<string | null>(null);
-  const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const currentOfferIdRef = useRef<string | null>(null);
 
@@ -132,8 +130,6 @@ export function useBookingStream(): BookingStream {
     setConfirmedEvent(null);
     setError(null);
     setErrorCode(null);
-    setCurrentOfferId(null);
-    setIdempotencyKey(null);
     currentOfferIdRef.current = null;
   }, []);
 
@@ -191,10 +187,11 @@ export function useBookingStream(): BookingStream {
             return prev;
           });
         },
-        (msg) => {
+        (msg, code) => {
           if (!controller.signal.aborted) {
             setStatus('error');
             setError(msg);
+            setErrorCode(code ?? null);
           }
         },
       );
@@ -207,8 +204,6 @@ export function useBookingStream(): BookingStream {
 
   const book = useCallback((offerId: string, requestId?: string) => {
     const key = crypto.randomUUID();
-    setCurrentOfferId(offerId);
-    setIdempotencyKey(key);
     currentOfferIdRef.current = offerId;
     void _runBookStream(offerId, key, requestId);
   }, [_runBookStream]);
@@ -217,7 +212,6 @@ export function useBookingStream(): BookingStream {
     const offerId = currentOfferIdRef.current;
     if (!offerId) return;
     const newKey = crypto.randomUUID();
-    setIdempotencyKey(newKey);
     void _runBookStream(offerId, newKey);
   }, [_runBookStream]);
 
@@ -238,10 +232,6 @@ export function useBookingStream(): BookingStream {
         (event) => {
           if (event.type === 'booking_cancelled') {
             setStatus('cancelled');
-          } else if (event.type === 'booking_error') {
-            setStatus('error');
-            setError(event.message ?? 'Unknown error');
-            setErrorCode(event.code ?? null);
           }
         },
         () => {
@@ -253,10 +243,11 @@ export function useBookingStream(): BookingStream {
             return prev;
           });
         },
-        (msg) => {
+        (msg, code) => {
           if (!controller.signal.aborted) {
             setStatus('error');
             setError(msg);
+            setErrorCode(code ?? null);
           }
         },
       );
