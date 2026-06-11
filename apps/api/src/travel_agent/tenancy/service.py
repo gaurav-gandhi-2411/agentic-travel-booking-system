@@ -5,7 +5,7 @@ import os
 import secrets
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import text
 
@@ -103,7 +103,12 @@ async def create_tenant_with_key(  # noqa: PLR0913
 async def seed_demo_tenant(session: AsyncSession) -> None:
     """Idempotently ensure a demo tenant + the DEMO_API_KEY exist.
 
-    Safe to call on every startup. No-op if the demo slug already exists.
+    Safe to call on every startup, including under FORCE ROW LEVEL SECURITY.
+    Uses insert-then-catch rather than check-then-insert: under FORCE RLS with
+    no app.current_tenant set, a SELECT returns zero rows even when the demo
+    tenant already exists, causing a false "not found" on every restart. We
+    attempt the INSERT directly and treat IntegrityError (slug unique constraint)
+    as "already seeded".
     Raises RuntimeError if DEMO_API_KEY is not set.
     """
     raw_key = os.environ.get("DEMO_API_KEY")
@@ -111,16 +116,15 @@ async def seed_demo_tenant(session: AsyncSession) -> None:
         msg = "DEMO_API_KEY environment variable must be set"
         raise RuntimeError(msg)
 
-    existing = await session.execute(select(Tenant).where(Tenant.slug == "demo"))
-    if existing.scalars().first() is not None:
-        return  # already seeded
-
-    await create_tenant_with_key(
-        session,
-        name="Demo",
-        slug="demo",
-        raw_key=raw_key,
-        description="Seeded demo tenant — backward compat with DEMO_API_KEY",
-        inventory_adapter="demo",
-    )
-    await session.commit()
+    try:
+        await create_tenant_with_key(
+            session,
+            name="Demo",
+            slug="demo",
+            raw_key=raw_key,
+            description="Seeded demo tenant — backward compat with DEMO_API_KEY",
+            inventory_adapter="demo",
+        )
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()

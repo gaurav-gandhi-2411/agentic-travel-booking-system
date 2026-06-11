@@ -155,26 +155,46 @@ class TestSeedDemoTenant:
             await seed_demo_tenant(mock_session)
 
     @pytest.mark.asyncio
-    async def test_no_op_when_demo_tenant_already_exists(
+    async def test_seeds_successfully_when_tenant_absent(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """seed_demo_tenant must be idempotent — skips creation if slug=demo exists."""
-        from travel_agent.tenancy.models import Tenant
-
-        monkeypatch.setenv("DEMO_API_KEY", "test-demo-key-value-abc123xyz")
-
-        mock_existing_tenant = MagicMock(spec=Tenant)
-        mock_scalars = MagicMock()
-        mock_scalars.first.return_value = mock_existing_tenant
-        mock_result = MagicMock()
-        mock_result.scalars.return_value = mock_scalars
+        """First-time seed: flush + commit are called, rollback is not."""
+        monkeypatch.setenv("DEMO_API_KEY", "test-demo-key-fresh-abc123xyz")
 
         mock_session = AsyncMock()
-        mock_session.execute = AsyncMock(return_value=mock_result)
         mock_session.flush = AsyncMock()
         mock_session.commit = AsyncMock()
+        mock_session.rollback = AsyncMock()
 
         await seed_demo_tenant(mock_session)
 
-        # commit must NOT have been called — nothing was created
+        mock_session.flush.assert_awaited()
+        mock_session.commit.assert_awaited_once()
+        mock_session.rollback.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_idempotent_under_force_rls_catches_integrity_error(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Under FORCE RLS, a restart attempt hits IntegrityError on the slug
+        unique constraint. seed_demo_tenant must catch it, rollback, and return
+        without propagating — not crash the startup sequence.
+        """
+        from sqlalchemy.exc import IntegrityError
+
+        monkeypatch.setenv("DEMO_API_KEY", "test-demo-key-force-rls-abc123")
+
+        mock_session = AsyncMock()
+        # flush() raises IntegrityError, simulating the slug unique constraint
+        # firing when the app role has no tenant context (FORCE RLS hides the row).
+        mock_session.flush = AsyncMock(
+            side_effect=IntegrityError("slug", {}, Exception("unique_violation"))
+        )
+        mock_session.rollback = AsyncMock()
+        mock_session.commit = AsyncMock()
+
+        # Must not raise
+        await seed_demo_tenant(mock_session)
+
+        mock_session.rollback.assert_awaited_once()
         mock_session.commit.assert_not_awaited()
