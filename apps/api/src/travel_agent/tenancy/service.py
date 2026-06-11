@@ -121,5 +121,6 @@ async def seed_demo_tenant(session: AsyncSession) -> None:
         slug="demo",
         raw_key=raw_key,
         description="Seeded demo tenant — backward compat with DEMO_API_KEY",
+        inventory_adapter="demo",
     )
     await session.commit()
