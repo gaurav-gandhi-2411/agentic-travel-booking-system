@@ -5,10 +5,13 @@ import { useSearchStream, type NoDataState } from '@/hooks/useSearchStream';
 import SearchInput from '@/components/demo/SearchInput';
 import AgentProgressFeed from '@/components/demo/AgentProgressFeed';
 import ArchetypeCard from '@/components/demo/ArchetypeCard';
+import BookingPanel from '@/components/demo/BookingPanel';
 import ErrorBanner from '@/components/demo/ErrorBanner';
 import ProfileToggle, { useProfilePreference, type LLMProfile } from '@/components/demo/ProfileToggle';
 import ChatLog from '@/components/demo/ChatLog';
+import { useBookingStream } from '@/hooks/useBookingStream';
 import type { ChatMessage } from '@/lib/chat-types';
+import type { Archetype } from '@/lib/event-map';
 import { cn } from '@/lib/utils';
 
 const REFINE_CHIPS = [
@@ -77,6 +80,8 @@ export default function DemoClient() {
   const [refineInput, setRefineInput] = useState('');
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const lastProcessedIndex = useRef(0);
+  const booking = useBookingStream();
+  const [selectedArchetype, setSelectedArchetype] = useState<Archetype | null>(null);
 
   // Cmd+K / Ctrl+K focuses the search textarea
   useEffect(() => {
@@ -178,6 +183,16 @@ export default function DemoClient() {
     refine(text, profile);
     setRefineInput('');
   }, [refineInput, requestId, isStreaming, refine, profile]);
+  const handleBook = useCallback((archetype: Archetype) => {
+    setSelectedArchetype(archetype);
+    booking.book(archetype.flight.id, requestId ?? undefined);
+  }, [booking, requestId]);
+
+  const handleBookingClose = useCallback(() => {
+    booking.reset();
+    setSelectedArchetype(null);
+  }, [booking]);
+
   const optimizerStarted = events.some(e => e.type === 'optimizer_started');
   const showSkeletons = isStreaming && optimizerStarted && archetypes.length === 0;
   const showResults = archetypes.length > 0 || showSkeletons;
@@ -239,10 +254,26 @@ export default function DemoClient() {
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {archetypes.length > 0
-              ? archetypes.map(a => <ArchetypeCard key={a.label} archetype={a} />)
+              ? archetypes.map(a => (
+                <ArchetypeCard
+                  key={a.label}
+                  archetype={a}
+                  onBook={() => handleBook(a)}
+                  isBookingActive={selectedArchetype?.label === a.label && booking.status !== 'idle'}
+                />
+              ))
               : [0, 1].map(i => <ArchetypeSkeleton key={i} />)}
           </div>
         </div>
+      )}
+
+      {/* Booking panel — appears when a booking is in progress */}
+      {selectedArchetype && booking.status !== 'idle' && (
+        <BookingPanel
+          booking={booking}
+          archetype={selectedArchetype}
+          onClose={handleBookingClose}
+        />
       )}
 
       {/* Refinement section — appears after first results */}
