@@ -37,13 +37,13 @@ from travel_agent.providers.demo.provider import (
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture()
+@pytest.fixture
 def window() -> Window:
     """Standard test window: 2025-06-15 → 2025-06-22."""
     return Window(start_date=date(2025, 6, 15), end_date=date(2025, 6, 22))
 
 
-@pytest.fixture()
+@pytest.fixture
 def provider() -> DemoProvider:
     """Fresh DemoProvider instance with empty state."""
     return DemoProvider()
@@ -114,9 +114,9 @@ def test_get_flights_one_way_price(provider: DemoProvider, window: Window) -> No
     rt_prices = {f.id.rsplit("-", 3)[0]: f.price_inr for f in rt_results}
     ow_prices = {f.id.rsplit("-", 3)[0]: f.price_inr for f in ow_results}
 
-    for base_id in rt_prices:
-        assert ow_prices[base_id] < rt_prices[base_id], (
-            f"{base_id}: one-way {ow_prices[base_id]} not < round-trip {rt_prices[base_id]}"
+    for base_id, rt_price in rt_prices.items():
+        assert ow_prices[base_id] < rt_price, (
+            f"{base_id}: one-way {ow_prices[base_id]} not < round-trip {rt_price}"
         )
 
 
