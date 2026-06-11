@@ -59,7 +59,7 @@ def load_routing_config() -> dict[str, dict[str, str]]:
 
 
 def get_active_profile_name() -> str:
-    return os.environ.get("LLM_ROUTING_PROFILE", _DEFAULT_PROFILE)
+    return os.environ.get("LLM_ROUTING_PROFILE", _DEFAULT_PROFILE).strip()
 
 
 def get_active_profile() -> dict[str, str]:

@@ -9,15 +9,17 @@
 profiles:
 
   # ── local ────────────────────────────────────────────────────────────────────
-  # All agents route to Ollama on localhost. Requires a running Ollama instance
-  # with the listed models pulled: `ollama pull qwen2.5:7b && ollama pull qwen2.5:14b`
+  # All agents route to Ollama on localhost. Requires a running Ollama instance.
+  # NOTE (2026-06-11): llama3.1:8b used — qwen3:30b-a3b's thinking mode causes
+  # empty tool calls with tool_choice="required"; llama3.1:8b has tools without
+  # thinking mode and is faster on local hardware.
   local:
-    planner:        qwen2.5:7b
-    flight_hunter:  qwen2.5:7b
-    hotel_hunter:   qwen2.5:7b
-    optimizer:      qwen2.5:14b
-    booking:        qwen2.5:7b
-    conversation:   qwen2.5:14b
+    planner:        llama3.1:8b
+    flight_hunter:  llama3.1:8b
+    hotel_hunter:   llama3.1:8b
+    optimizer:      llama3.1:8b
+    booking:        llama3.1:8b
+    conversation:   llama3.1:8b
     provider:       ollama
     base_url:       http://localhost:11434
 
