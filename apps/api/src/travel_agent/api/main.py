@@ -93,10 +93,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             "OPENROUTER_API_KEY not set — X-LLM-Profile: demo-qwen requests will fail at runtime."
         )
 
-    if app_mode == "demo" and not os.environ.get("NVIDIA_API_KEY"):
-        logger.warning(
-            "NVIDIA_API_KEY not set — demo-deepseek-v4 profile requests will fail at runtime."
-        )
+    # Seed the demo tenant if DATABASE_URL is configured (APP_MODE=demo only).
+    # seed_demo_tenant is idempotent: insert-then-catch IntegrityError, safe on
+    # every restart. Skipped in synthetic/local modes (no DATABASE_URL needed).
+    if app_mode == "demo" and os.environ.get("DATABASE_URL"):
+        from travel_agent.persistence.engine import get_session_factory  # noqa: PLC0415
+        from travel_agent.tenancy.service import seed_demo_tenant  # noqa: PLC0415
+
+        _factory = get_session_factory()
+        async with _factory() as _session:
+            await seed_demo_tenant(_session)
+        logger.info("demo_tenant_seeded")
 
     # Langfuse observability — optional; never raises on missing keys
     lf = get_langfuse()
