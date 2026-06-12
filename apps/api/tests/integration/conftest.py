@@ -131,3 +131,24 @@ async def rls_session(db_engine: AsyncEngine) -> AsyncSession:  # type: ignore[r
     async with factory() as session:
         yield session  # type: ignore[misc]
         await session.rollback()
+
+
+@pytest_asyncio.fixture
+async def app_role_session(db_engine: AsyncEngine) -> AsyncSession:  # type: ignore[return]
+    """AsyncSession connected as app_role for the entire connection lifetime.
+
+    Unlike rls_session (which uses SET LOCAL ROLE inside individual transactions),
+    this fixture uses SET ROLE (no LOCAL keyword) so the non-superuser role persists
+    across commit/rollback boundaries. This is required for testing seed_demo_tenant,
+    which commits internally — SET LOCAL ROLE would be reset by that commit.
+
+    Connection-level role switch means FORCE RLS is enforced for every statement,
+    exactly as it will be in production when the app connects as a non-superuser role.
+    """
+    async with db_engine.connect() as conn:
+        # SET ROLE (connection-scoped): survives COMMIT and BEGIN, unlike SET LOCAL ROLE.
+        await conn.execute(text("SET ROLE app_role"))
+        async with AsyncSession(bind=conn) as session:
+            yield session  # type: ignore[misc]
+            await session.rollback()
+        await conn.execute(text("RESET ROLE"))

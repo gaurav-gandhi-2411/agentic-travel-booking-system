@@ -261,3 +261,79 @@ class TestRequestStatePopulation:
         resolved = await resolve_key(raw, async_session)
         assert resolved is not None
         assert resolved.affiliate_enabled is False
+
+
+# ===========================================================================
+# TestSeedDemoTenantForceRLS
+# ===========================================================================
+
+
+class TestSeedDemoTenantForceRLS:
+    """seed_demo_tenant is idempotent when the session is a non-superuser under FORCE RLS.
+
+    Production scenario: the app connects as a least-privilege app role (non-superuser),
+    FORCE RLS is active, and there is no app.current_tenant context set at seed time.
+    Under these conditions a SELECT-based idempotency check returns 0 rows even when the
+    demo tenant already exists — the row is hidden by FORCE RLS. The insert-then-catch
+    strategy (catch IntegrityError on slug unique constraint) is the correct fix.
+
+    These tests use app_role_session, which establishes a connection with SET ROLE
+    app_role (connection-scoped, not SET LOCAL which would be transaction-scoped).
+    The role persists across the internal commit inside seed_demo_tenant.
+    """
+
+    async def test_app_role_session_is_non_superuser(
+        self,
+        app_role_session: AsyncSession,
+    ) -> None:
+        """Sanity check: the app_role_session fixture runs as a non-superuser.
+
+        Superusers bypass FORCE RLS even when it is set; non-superusers don't.
+        If this assertion fails the FORCE-RLS tests are meaningless.
+        """
+        is_superuser = await app_role_session.scalar(
+            text("SELECT usesuper FROM pg_user WHERE usename = current_user")
+        )
+        assert is_superuser is False, (
+            "app_role_session is running as a superuser — FORCE RLS will not apply. "
+            "Check that the db_engine fixture created app_role without SUPERUSER."
+        )
+
+    async def test_double_seed_no_error_under_force_rls(
+        self,
+        app_role_session: AsyncSession,
+        async_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Two consecutive seed_demo_tenant calls as app_role must not raise.
+
+        Under FORCE RLS with no tenant context, app_role cannot SELECT the existing
+        demo tenant row (the row is hidden). The insert-then-catch strategy handles
+        this: each call attempts the INSERT; the second (and any subsequent) call
+        catches the IntegrityError on the slug unique constraint, rolls back, and
+        returns cleanly. The count is verified via the superuser async_session, which
+        bypasses RLS and always sees the real row count.
+        """
+        monkeypatch.setenv("DEMO_API_KEY", "rls-idempotent-test-key-abc123")
+
+        # First call: either creates the tenant (INSERT succeeds) or finds it already
+        # exists from a prior test in the session and catches IntegrityError — both are
+        # valid; in both cases the function must not raise.
+        await seed_demo_tenant(app_role_session)
+
+        # Second call: the tenant now definitely exists; FORCE RLS hides it from
+        # app_role (no tenant context), so a SELECT-based check would wrongly believe
+        # it's absent. The insert-then-catch strategy must handle this correctly.
+        await seed_demo_tenant(app_role_session)  # must not raise
+
+        # Verify exactly one demo tenant using the superuser session.
+        # We cannot use app_role_session here because FORCE RLS with no tenant
+        # context would return 0 rows — the count would be wrong.
+        result = await async_session.execute(
+            select(func.count()).select_from(Tenant).where(Tenant.slug == "demo")
+        )
+        count = result.scalar()
+        assert count == 1, (
+            f"Expected exactly 1 demo tenant after double seed, found {count}. "
+            "Duplicate rows indicate the IntegrityError was not caught correctly."
+        )
