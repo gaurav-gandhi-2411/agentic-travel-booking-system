@@ -612,6 +612,71 @@ The canary deploy needs these, each of which is GG-gated:
 
 ---
 
+## Phase 3.2-F.1 — Resolver redesign + schema isolation for FREE managed Postgres — CODE-COMPLETE, VERIFIED LIVE (2026-06-14, branch `fix/resolver-bootstrap-auth-schema-isolation`, PR open, NOT merged)
+
+**Decision change from 3.2-F:** deploy on **FREE managed Postgres (Supabase free tier,
+$0 standing cost)**, not Cloud SQL. The Cloud SQL instance `dealhunter-prod-pg16` is torn
+down. Fly/Railway have no free Postgres in 2026, so the superuser-provider path is dropped.
+This **supersedes** the 3.2-F "resolver/RLS blocker — RESOLVED (BYPASSRLS owner)" note above
+and its Cloud SQL `deploy-prod.yml` connectivity steps — those are obsolete.
+
+### Resolver redesign — NO BYPASSRLS, NO superuser, FORCE RLS intact
+- Migration `e5f6a7b8c9d0` was **rewritten** (file renamed `…_resolver_bootstrap_auth_policy.py`;
+  the old NOLOGIN-BYPASSRLS-owner version is gone). Managed free Postgres gives no superuser
+  and forbids `CREATE ROLE … BYPASSRLS`, so the dedicated-bypass-owner approach is impossible.
+- New mechanism: an **additive PERMISSIVE, SELECT-only** policy `api_keys_bootstrap_auth`
+  `USING (key_hash = NULLIF(current_setting('app.bootstrap_key_hash', true), ''))`, plus a
+  **SECURITY INVOKER** `resolve_api_key_secure` (runs as the calling app role, fully RLS-bound)
+  that sets the GUC via parameterized `set_config(..., true)`, reads the one permitted row,
+  clears the GUC, returns `tenant_id`. A row is visible IFF the caller presents its exact
+  64-hex SHA-256 — **exact-secret-only, not enumerable, no cross-tenant scan**. When the GUC
+  is unset (all normal traffic) the policy adds zero visibility; SELECT isolation is byte-
+  identical to before. `tenants` needs no bootstrap policy; tenant `is_active` is checked in
+  `resolve_key` step 2. FORCE ROW LEVEL SECURITY stays ON for both tables.
+- The rewrite is on **unpushed** local history; new commits (no amend) on the branch.
+
+### Dedicated `dealhunter` schema isolation (SHARED instance)
+- Supabase free tier caps at 2 projects (both in use), so DealHunter **shares the existing
+  shopping-assistant project** (ref `zwvvuvaasbotamxbixny`; review-iq untouched). ALL objects
+  — tenants/api_keys, `resolve_api_key_secure`, every RLS policy, and **`alembic_version`** —
+  live in a dedicated **`dealhunter`** schema (`persistence/schema.py:DB_SCHEMA`), never
+  `public`. `env.py` creates the schema in its own committed txn, pins `search_path` to it via
+  a connection **startup parameter** (`server_settings`), and sets `version_table_schema` so
+  histories can never collide with the co-tenant's `public.alembic_version`. The runtime engine
+  pins `search_path=dealhunter` the same way. **Connectivity: Supabase Session pooler, port
+  5432** (transaction-mode 6543 is unsafe — a non-LOCAL `SET search_path` can be lost between
+  statements; verified the port is the authoritative session-mode signal).
+
+### Startup guard — "never serve as `postgres`" is STRUCTURAL, not a checklist
+- **HARD RULE: the prod `DATABASE_URL` MUST use the least-privilege `dealhunter_app` role,
+  NEVER `postgres`.** On Supabase the platform `postgres` admin role is `rolsuper=false` but
+  **`rolbypassrls=true`** (immutable) — connecting as it would silently void all tenant
+  isolation. `persistence/engine.py:assert_runtime_role_unprivileged()` runs at FastAPI
+  startup whenever `DATABASE_URL` is set and **raises RuntimeError (hard fail, loud)** if the
+  connected role has `rolsuper` or `rolbypassrls`. `postgres` is used for migrations/
+  provisioning only. The accepted security invariant is "the RUNTIME role serving traffic is
+  non-superuser AND non-BYPASSRLS" — not "no role anywhere has bypassrls".
+
+### Live verification (real Supabase, not local)
+- `scripts/verify_resolver_free_pg.py` ran **26/26 PASS** against the shopping-assistant
+  instance (PG 17.6): clean `alembic upgrade head` as the non-superuser owner; `public`
+  byte-identical before/after (blast-radius); all objects in `dealhunter`; cross-tenant
+  SELECT/UPDATE/DELETE = 0 and cross-tenant INSERT rejected by WITH CHECK; bootstrap reveals
+  exactly the presented row (never B); A2 guard + double-seed idempotency; startup guard
+  passes the app role and refuses the BYPASSRLS owner. The script **self-cleans to pristine**
+  (drops the `dealhunter` schema + verify role; never touches `public`) so the real deploy
+  migrates fresh via the pipeline. Note: spec pinned PG16; Supabase serves PG17.6 (forward-
+  compatible with FORCE RLS, permissive policies, `set_config`).
+- Local gate: ruff clean · mypy clean (157 files) · **603 unit tests** (86.15%). Integration
+  tests are Docker-blocked locally; the live script is the stronger proof.
+
+### REMAINING — GG-gated (unchanged shape, Supabase target)
+PR review/merge (GG); then create a Supabase **Session-pooler** `DATABASE_URL` secret for the
+**`dealhunter_app`** role (provision that role + grants on the `dealhunter` schema first);
+update `deploy-prod.yml` to use it (show diff); canary → smoke → full; point the frontend.
+
+---
+
 ## What "ready to ship" looks like for any iteration
 
 Across all phases of this project, the consistent definition has been:
