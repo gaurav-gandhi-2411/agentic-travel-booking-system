@@ -30,13 +30,14 @@ def upgrade() -> None:
     # Returns only the tenant UUID — minimum data needed for the bootstrap lookup.
     # SECURITY DEFINER runs as the function owner (the superuser/BYPASSRLS role
     # that created it), bypassing FORCE RLS for this one narrow operation.
-    # SET search_path pins the schema to prevent search-path injection.
+    # SET search_path pins the dedicated schema (prevents search-path injection AND
+    # keeps the lookup inside DealHunter's isolated schema on a shared instance).
     op.execute(
         """
         CREATE FUNCTION resolve_api_key_secure(p_key_hash text)
         RETURNS uuid
         SECURITY DEFINER
-        SET search_path = public
+        SET search_path = dealhunter
         LANGUAGE sql
         AS $$
             SELECT t.id

@@ -29,6 +29,12 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.sql import text
 from testcontainers.postgres import PostgresContainer
 
+from travel_agent.persistence.schema import DB_SCHEMA
+
+# Every test connection must select DealHunter's dedicated schema (migrations create
+# all objects there, not in public). Set on the engine so unqualified queries resolve.
+_SEARCH_PATH = {"server_settings": {"search_path": DB_SCHEMA}}
+
 # Non-superuser role used for RLS-enforced queries in tests.
 # The role is created with LOGIN + PASSWORD so app_role_session can connect
 # directly — matching the production Cloud SQL posture (direct-login non-superuser,
@@ -90,7 +96,9 @@ async def db_engine(asyncpg_url: str) -> AsyncEngine:  # type: ignore[return]
     SELECT/INSERT/UPDATE/DELETE on the tenancy tables. Superusers bypass RLS in
     Postgres (even with FORCE), so RLS tests must run as this non-privileged role.
     """
-    engine = create_async_engine(asyncpg_url, echo=False, pool_pre_ping=False)
+    engine = create_async_engine(
+        asyncpg_url, echo=False, pool_pre_ping=False, connect_args=_SEARCH_PATH
+    )
     async with engine.begin() as conn:
         # Create app_role once; IF NOT EXISTS avoids errors on repeated calls.
         # _APP_ROLE is a module-level constant ("app_role"), not user input.
@@ -104,11 +112,14 @@ async def db_engine(asyncpg_url: str) -> AsyncEngine:  # type: ignore[return]
                 f"END $$"
             )
         )
+        # Least privilege, schema-scoped: USAGE on the dedicated schema only, plus DML
+        # on its two tables. No privileges on public.
+        await conn.execute(text(f"GRANT USAGE ON SCHEMA {DB_SCHEMA} TO {_APP_ROLE}"))
         await conn.execute(
-            text(f"GRANT SELECT, INSERT, UPDATE, DELETE ON tenants TO {_APP_ROLE}")
+            text(f"GRANT SELECT, INSERT, UPDATE, DELETE ON {DB_SCHEMA}.tenants TO {_APP_ROLE}")
         )
         await conn.execute(
-            text(f"GRANT SELECT, INSERT, UPDATE, DELETE ON api_keys TO {_APP_ROLE}")
+            text(f"GRANT SELECT, INSERT, UPDATE, DELETE ON {DB_SCHEMA}.api_keys TO {_APP_ROLE}")
         )
 
     yield engine  # type: ignore[misc]
@@ -158,7 +169,9 @@ async def app_role_session(
     # Pass the URL object directly — str() masks the password as '***' which
     # would be passed literally to asyncpg, causing InvalidPasswordError.
     app_url = make_url(asyncpg_url).set(username=_APP_ROLE, password=_APP_ROLE_PASSWORD)
-    engine = create_async_engine(app_url, echo=False, pool_pre_ping=False)
+    engine = create_async_engine(
+        app_url, echo=False, pool_pre_ping=False, connect_args=_SEARCH_PATH
+    )
     try:
         factory = async_sessionmaker(engine, expire_on_commit=False)
         async with factory() as session:
