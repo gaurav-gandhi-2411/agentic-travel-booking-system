@@ -47,11 +47,21 @@ def key_prefix(raw_key: str) -> str:
 async def resolve_key(raw_key: str, session: AsyncSession) -> Tenant | None:
     """Look up the tenant for a raw API key.
 
-    Two-step pattern: the SECURITY DEFINER function bypasses FORCE RLS for the
-    bootstrap lookup (no tenant context exists yet), then the RLS context is set
-    and the full Tenant is fetched via the normal ORM path (RLS-scoped).
+    Two-step pattern, both steps under FORCE RLS as the (non-superuser, non-BYPASSRLS)
+    app role — no superuser dependency and no RLS bypass:
 
-    Returns the Tenant if the key is active and its tenant is active, else None.
+    1. ``resolve_api_key_secure`` (SECURITY INVOKER) sets the transaction-local GUC
+       ``app.bootstrap_key_hash`` and reads the single ``api_keys`` row whose UNIQUE
+       ``key_hash`` matches. That read is permitted by the additive
+       ``api_keys_bootstrap_auth`` policy — a row is visible IFF the caller presents its
+       exact hash (the secret it already holds), so no cross-tenant visibility is
+       granted. The function returns only the row's ``tenant_id`` and clears the GUC.
+    2. The RLS context (``app.current_tenant``) is set to that tenant_id and the full
+       Tenant is fetched through the normal ``id = app.current_tenant`` isolation policy.
+
+    Returns the Tenant if the key is active and its tenant is active, else None. The
+    tenant ``is_active`` check lives here (step 2) because the bootstrap resolver reads
+    only ``api_keys``; an inactive tenant resolves a tenant_id but is rejected below.
     """
     key_hash_val = hash_key(raw_key)
     tenant_id: uuid.UUID | None = await session.scalar(
@@ -61,7 +71,10 @@ async def resolve_key(raw_key: str, session: AsyncSession) -> Tenant | None:
     if tenant_id is None:
         return None
     await set_rls_tenant(session, str(tenant_id))
-    return await session.get(Tenant, tenant_id)
+    tenant = await session.get(Tenant, tenant_id)
+    if tenant is None or not tenant.is_active:
+        return None
+    return tenant
 
 
 async def create_tenant_with_key(  # noqa: PLR0913
