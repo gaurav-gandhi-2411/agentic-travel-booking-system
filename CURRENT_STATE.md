@@ -529,6 +529,89 @@ Potential implementation: add `bookable: bool` to the `done` SSE event (or a new
 
 ---
 
+## Phase 3.2-F — Provision + Deploy (go live) — IN PROGRESS (2026-06-13)
+
+Cloud SQL instance provisioned + migrated + demo tenant seeded. **Backend NOT yet
+deployed — prod still `00025-gaw` (no Postgres). Stopped at the GG-gated canary.**
+
+### Cloud SQL instance (provisioned, GG-approved ~$11/mo)
+- Instance: `dealhunter-prod-pg16`, PostgreSQL **16**, region `asia-south1` (matches
+  Cloud Run). Public IP `8.231.91.1`, SSL required. DB `dealhunter`.
+- Roles:
+  - `postgres` — cloudsqlsuperuser, **rolsuper=false, rolbypassrls=false** (Cloud SQL
+    limits it; it is subject to FORCE RLS — this is the crux of the blocker below).
+  - `dealhunter_app` — the application role. **LOGIN, NOINHERIT, rolsuper=false,
+    rolbypassrls=false.** Least privilege: SELECT/INSERT/UPDATE/DELETE on `tenants` +
+    `api_keys`, EXECUTE on the resolver. No DDL, no TRUNCATE. This is the role the
+    deployed app connects as, so FORCE RLS actually binds it.
+  - `dealhunter_resolver` — **NOLOGIN BYPASSRLS**, owns `resolve_api_key_secure`,
+    granted only SELECT on the two tables. See resolver fix below. `dealhunter_app`
+    is NOT a member and cannot SET ROLE to it.
+- `alembic_version` = **`e5f6a7b8c9d0`** (head). FORCE ROW LEVEL SECURITY ON for both
+  tables.
+
+### The resolver/RLS blocker — RESOLVED (isolation-preserving)
+**Root cause:** `resolve_api_key_secure` is SECURITY DEFINER, so it runs as its
+*owner*. Migration `b2c3d4e5f6a7` created it owned by the migration-runner. On Cloud
+SQL that runner is `postgres`, which has `rolbypassrls=false`, so under FORCE RLS the
+resolver's bootstrap SELECT (run with no `app.current_tenant`) returned **0 rows for
+every key** → production auth would have been dead for all requests. The
+testcontainers suite hid this because its migration-runner is a real superuser.
+(The earlier `_prod_verify_final.py` "ALL PASSED" did not reflect live reality;
+confirmed broken by direct probe: a freshly-committed valid key resolved to `None`.)
+
+**Fix (migration `e5f6a7b8c9d0`, verified live):** a dedicated **NOLOGIN BYPASSRLS**
+role `dealhunter_resolver` owns the resolver and is granted only SELECT on the two
+tables it reads. SECURITY DEFINER then bypasses FORCE RLS for that one narrow
+bootstrap lookup only. Confirmed on Cloud SQL: Cloud SQL **permits** `CREATE ROLE ...
+BYPASSRLS` on a custom role; after the fix a valid key resolves to its tenant,
+cross-tenant SELECT = 0 rows, no-context SELECT = 0 rows for `dealhunter_app`.
+FORCE RLS stays ON; the traffic role stays fully policed. **No isolation weakened.**
+
+### Seed-under-FORCE-RLS fix (migration `c3d4e5f6a7b8` + service A2)
+- `c3d4e5f6a7b8` tightens the FOR ALL policies' WITH CHECK: allow INSERT when no
+  tenant context is set (bootstrap/seed) while still rejecting a tenant-scoped session
+  inserting another tenant's row. SELECT/UPDATE/DELETE USING isolation unchanged.
+- `create_tenant_with_key` (A2) sets `app.current_tenant` to the new tenant's id
+  before flush, resets it after — so INSERT...RETURNING works on the direct-login
+  non-superuser path. `seed_demo_tenant` is insert-then-catch (IntegrityError on slug).
+
+### Demo tenant (seeded, idempotent)
+- Re-seeded via the real `seed_demo_tenant` code path as `dealhunter_app`, keyed to the
+  **`demo-api-key` Secret Manager secret** (prefix `4df9a058`, the value
+  `DEMO_API_KEY=demo-api-key:latest` injects). `inventory_adapter="demo"`,
+  `affiliate_enabled=true`. Exactly 1 demo tenant; re-seed is a clean no-op.
+  (A prior session's orphan demo tenant — key lost to console-only output — was
+  deleted first.) No `KEY_HASH_PEPPER` in prod, so plain SHA-256 on both sides.
+
+### Tests / lint / types
+- Unit suite **600 passed** locally; ruff + mypy clean. Integration tests are
+  Docker-blocked locally (Docker daemon not running) — the RLS/resolver behavior was
+  instead verified **directly against the live Cloud SQL instance** (stronger than the
+  testcontainers superuser path, which masked the resolver bug).
+- Two commits on local `main`: `38e5579` (FORCE-RLS provisioning/seed) and `2d856de`
+  (resolver bypassrls owner). `main` is 40 commits ahead of `origin/main` (3.2-C/E/F
+  arc, all unpushed).
+
+### REMAINING — GG-gated (CRITICAL), not done autonomously
+The canary deploy needs these, each of which is GG-gated:
+1. **Cloud SQL DATABASE_URL secret** (new Secret Manager secret) — `dealhunter_app`
+   creds, NOT `postgres`. Form depends on connectivity choice below.
+2. **Cloud Run ↔ Cloud SQL connectivity** — `deploy-prod.yml` currently has
+   `DATABASE_URL=neon-database-url-prod:latest` (the unused Neon) and **no**
+   `--add-cloudsql-instances`. Recommended: Cloud SQL connector
+   (`--add-cloudsql-instances=agentic-travel-booking-system:asia-south1:dealhunter-prod-pg16`
+   + unix-socket DATABASE_URL) rather than public-IP authorized-networks (Cloud Run
+   egress IPs are dynamic). This materially changes the service config → escalate.
+3. **Edit `deploy-prod.yml`** (load-bearing → CRITICAL): swap the DATABASE_URL secret
+   + add the Cloud SQL instance flag. Show the diff to GG first.
+4. **Push/merge** local `main` (branch protection requires a PR) so the canary image
+   carries the tenancy + resolver fix.
+5. **Canary → smoke → full** via `workflow_dispatch` (GG approves the prod environment
+   gate and the promotion), then point/confirm the Vercel frontend.
+
+---
+
 ## What "ready to ship" looks like for any iteration
 
 Across all phases of this project, the consistent definition has been:
