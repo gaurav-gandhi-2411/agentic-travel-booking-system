@@ -157,9 +157,7 @@ class TestRLSIsolation:
             await apply_rls_tenant(rls_session, str(tenant_a.id))
 
             result = await rls_session.execute(
-                text("UPDATE tenants SET name = 'PWNED' WHERE id = :id").bindparams(
-                    id=tenant_b.id
-                )
+                text("UPDATE tenants SET name = 'PWNED' WHERE id = :id").bindparams(id=tenant_b.id)
             )
             assert result.rowcount == 0, (
                 f"UPDATE isolation FAILED: tenant A updated {result.rowcount} of "
@@ -206,9 +204,7 @@ class TestRLSIsolation:
         b_count = await async_session.scalar(
             text("SELECT COUNT(*) FROM tenants WHERE id = :id").bindparams(id=tenant_b.id)
         )
-        assert b_count == 1, (
-            "Tenant B's row was deleted — DELETE isolation failed."
-        )
+        assert b_count == 1, "Tenant B's row was deleted — DELETE isolation failed."
 
     async def test_no_rls_context_sees_no_rows(
         self, async_session: AsyncSession, rls_session: AsyncSession
@@ -232,8 +228,7 @@ class TestRLSIsolation:
             result = await rls_session.execute(select(ApiKey))
             row = result.scalars().first()
             assert row is None, (
-                "Expected no rows when app_role has empty app.current_tenant, "
-                f"but got: {row!r}"
+                f"Expected no rows when app_role has empty app.current_tenant, but got: {row!r}"
             )
 
 
@@ -284,9 +279,7 @@ class TestAffiliateConfig:
 class TestRequestStatePopulation:
     """After resolve_key succeeds, the returned tenant has the expected attributes."""
 
-    async def test_tenant_id_populated_after_resolve(
-        self, async_session: AsyncSession
-    ) -> None:
+    async def test_tenant_id_populated_after_resolve(self, async_session: AsyncSession) -> None:
         """After resolve_key succeeds, the returned tenant has a UUID id."""
         raw = generate_raw_key()
         tenant, _key = await create_tenant_with_key(
@@ -303,9 +296,7 @@ class TestRequestStatePopulation:
             f"Resolved tenant id {resolved.id} != created tenant id {tenant.id}"
         )
 
-    async def test_inventory_adapter_populated(
-        self, async_session: AsyncSession
-    ) -> None:
+    async def test_inventory_adapter_populated(self, async_session: AsyncSession) -> None:
         """resolve_key returns a tenant with inventory_adapter set."""
         raw = generate_raw_key()
         _tenant, _key = await create_tenant_with_key(
@@ -558,9 +549,7 @@ class TestSeedDemoTenantForceRLS:
                         await conn.execute(text("SET LOCAL ROLE app_role"))
                         # asyncpg rejects bound params for SET LOCAL — interpolate UUID
                         # directly (safe: UUIDs are hex+hyphens, no injection risk).
-                        await conn.execute(
-                            text(f"SET LOCAL app.current_tenant = '{tenant_a_id}'")
-                        )
+                        await conn.execute(text(f"SET LOCAL app.current_tenant = '{tenant_a_id}'"))
                         await conn.execute(
                             text(
                                 "INSERT INTO api_keys "
@@ -577,7 +566,7 @@ class TestSeedDemoTenantForceRLS:
             # Always clean up the two test tenants regardless of pass/fail
             async with db_engine.begin() as cleanup_conn:
                 await cleanup_conn.execute(
-                    text(
-                        "DELETE FROM tenants WHERE id = :a_id OR id = :b_id"
-                    ).bindparams(a_id=tenant_a_id, b_id=tenant_b_id)
+                    text("DELETE FROM tenants WHERE id = :a_id OR id = :b_id").bindparams(
+                        a_id=tenant_a_id, b_id=tenant_b_id
+                    )
                 )

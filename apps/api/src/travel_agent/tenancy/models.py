@@ -15,18 +15,14 @@ class Base(DeclarativeBase):
 class Tenant(Base):
     __tablename__ = "tenants"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     slug: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
     # Per-tenant config consumed by the pipeline (Step 4)
     inventory_adapter: Mapped[str] = mapped_column(
         String(50), nullable=False, server_default="aviasales"
     )
-    affiliate_enabled: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default="true"
-    )
+    affiliate_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
     rate_limit_tier: Mapped[str] = mapped_column(
         String(50), nullable=False, server_default="standard"
     )
@@ -49,9 +45,7 @@ class Tenant(Base):
 class ApiKey(Base):
     __tablename__ = "api_keys"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("tenants.id", ondelete="CASCADE"),
@@ -67,8 +61,6 @@ class ApiKey(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    last_used_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     tenant: Mapped[Tenant] = relationship("Tenant", back_populates="api_keys")

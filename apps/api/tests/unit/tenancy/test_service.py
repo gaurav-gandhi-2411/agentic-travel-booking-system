@@ -146,9 +146,7 @@ class TestResolveKey:
 
 class TestSeedDemoTenant:
     @pytest.mark.asyncio
-    async def test_raises_when_demo_api_key_missing(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_raises_when_demo_api_key_missing(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("DEMO_API_KEY", raising=False)
         mock_session = AsyncMock()
         with pytest.raises(RuntimeError, match="DEMO_API_KEY"):

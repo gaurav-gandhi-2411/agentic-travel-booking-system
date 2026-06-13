@@ -140,14 +140,10 @@ async def test_search_offer_id_accepted_by_revalidate(
 
 
 @pytest.mark.asyncio
-async def test_search_offer_id_accepted_by_book(
-    provider: DemoProvider, window: Window
-) -> None:
+async def test_search_offer_id_accepted_by_book(provider: DemoProvider, window: Window) -> None:
     """offer_id for DEMO-FLT-001 from get_flights() books successfully."""
     results = provider.get_flights("DEL", "BOM", window)
-    flt_001 = next(
-        f for f in results if f.id.startswith("DEMO-FLT-001")
-    )
+    flt_001 = next(f for f in results if f.id.startswith("DEMO-FLT-001"))
     offer_id = flt_001.id
 
     result = await provider.book(offer_id, "key-001")
@@ -248,9 +244,7 @@ async def test_price_changed_second_attempt_books_successfully() -> None:
 
 
 @pytest.mark.asyncio
-async def test_idempotent_book_returns_same_result(
-    provider: DemoProvider, window: Window
-) -> None:
+async def test_idempotent_book_returns_same_result(provider: DemoProvider, window: Window) -> None:
     """Same (offer_id, idempotency_key) called twice → identical BookingResult."""
     offer_id = f"DEMO-FLT-001-{window.start_date.isoformat()}"
 
@@ -263,9 +257,7 @@ async def test_idempotent_book_returns_same_result(
 
 
 @pytest.mark.asyncio
-async def test_idempotency_conflict_different_offer(
-    provider: DemoProvider, window: Window
-) -> None:
+async def test_idempotency_conflict_different_offer(provider: DemoProvider, window: Window) -> None:
     """Reusing an idempotency key with a different offer_id raises BookingConflictError."""
     offer_id_a = f"DEMO-FLT-001-{window.start_date.isoformat()}"
     offer_id_b = f"DEMO-FLT-004-{window.start_date.isoformat()}"

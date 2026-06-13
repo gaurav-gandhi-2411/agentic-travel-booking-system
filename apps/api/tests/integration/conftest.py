@@ -151,7 +151,8 @@ async def rls_session(db_engine: AsyncEngine) -> AsyncSession:  # type: ignore[r
 
 @pytest_asyncio.fixture
 async def app_role_session(
-    asyncpg_url: str, db_engine: AsyncEngine  # db_engine ensures the role exists first
+    asyncpg_url: str,
+    db_engine: AsyncEngine,  # db_engine ensures the role exists first
 ) -> AsyncSession:  # type: ignore[return]
     """AsyncSession connecting DIRECTLY as app_role (LOGIN non-superuser).
 

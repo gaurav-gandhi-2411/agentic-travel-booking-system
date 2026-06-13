@@ -109,9 +109,7 @@ class MockBookableProvider:
 
         pnr = f"MOCK-PNR-{uuid.uuid4().hex[:8].upper()}"
         offer_lock_id = f"MOCK-LOCK-{uuid.uuid4().hex[:8].upper()}"
-        hold_expires_at = (
-            _datetime.now(UTC) + timedelta(minutes=HOLD_TTL_MINUTES)
-        ).isoformat()
+        hold_expires_at = (_datetime.now(UTC) + timedelta(minutes=HOLD_TTL_MINUTES)).isoformat()
 
         result = BookingResult(
             pnr=pnr,

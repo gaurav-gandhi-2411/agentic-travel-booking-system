@@ -106,9 +106,7 @@ class TestBootstrapAuthResolver:
             leftover = await app_role_session.scalar(
                 text("SELECT current_setting('app.bootstrap_key_hash', true)")
             )
-            assert leftover in (None, ""), (
-                f"bootstrap GUC leaked after resolve: {leftover!r}"
-            )
+            assert leftover in (None, ""), f"bootstrap GUC leaked after resolve: {leftover!r}"
 
 
 # ===========================================================================
@@ -119,17 +117,13 @@ class TestBootstrapAuthResolver:
 class TestBootstrapPolicyExposure:
     """The bootstrap-auth policy reveals exactly the presented row, nothing more."""
 
-    async def test_no_role_has_bypassrls_or_superuser(
-        self, app_role_session: AsyncSession
-    ) -> None:
+    async def test_no_role_has_bypassrls_or_superuser(self, app_role_session: AsyncSession) -> None:
         """app_role is neither superuser nor BYPASSRLS, and no resolver-owner role exists.
 
         The whole point of the redesign: the runtime path needs no privileged role.
         """
         flags = await app_role_session.execute(
-            text(
-                "SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user"
-            )
+            text("SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user")
         )
         rolsuper, rolbypassrls = flags.one()
         assert rolsuper is False, "app_role must not be a superuser"
@@ -163,9 +157,7 @@ class TestBootstrapPolicyExposure:
 
         async with app_role_session.begin():
             # No bootstrap hash set yet, no tenant context → default-deny, zero rows.
-            none_visible = await app_role_session.scalar(
-                text("SELECT COUNT(*) FROM api_keys")
-            )
+            none_visible = await app_role_session.scalar(text("SELECT COUNT(*) FROM api_keys"))
             assert none_visible == 0, (
                 f"FORCE RLS default-deny failed: saw {none_visible} rows with no context"
             )
@@ -186,9 +178,7 @@ class TestBootstrapPolicyExposure:
                 text("SELECT COUNT(*) FROM api_keys WHERE tenant_id = :tid"),
                 {"tid": tenant_b.id},
             )
-            total_visible = await app_role_session.scalar(
-                text("SELECT COUNT(*) FROM api_keys")
-            )
+            total_visible = await app_role_session.scalar(text("SELECT COUNT(*) FROM api_keys"))
             assert a_visible == 1, f"Expected A's row visible, got {a_visible}"
             assert b_visible == 0, (
                 f"Bootstrap exposure leaked: tenant B's row visible ({b_visible}) when "
@@ -218,9 +208,7 @@ class TestBootstrapPolicyExposure:
 
         async with app_role_session.begin():
             # Normal traffic: only app.current_tenant set, bootstrap GUC never touched.
-            await app_role_session.execute(
-                text(f"SET LOCAL app.current_tenant = '{tenant_a.id}'")
-            )
+            await app_role_session.execute(text(f"SET LOCAL app.current_tenant = '{tenant_a.id}'"))
             a_visible = await app_role_session.scalar(
                 text("SELECT COUNT(*) FROM api_keys WHERE tenant_id = :tid"),
                 {"tid": tenant_a.id},
@@ -252,9 +240,7 @@ class TestForceRlsTableOwner:
     4. Restoring original ownership in a finally block so other tests are unaffected.
     """
 
-    async def test_force_rls_applies_to_table_owner_role(
-        self, async_session: AsyncSession
-    ) -> None:
+    async def test_force_rls_applies_to_table_owner_role(self, async_session: AsyncSession) -> None:
         """FORCE RLS: table-owner connection sees only its own tenant's rows."""
         # ── seed data as superuser ────────────────────────────────────────────
         raw_a, raw_b = generate_raw_key(), generate_raw_key()
@@ -299,27 +285,21 @@ class TestForceRlsTableOwner:
                 await async_session.execute(text("SET LOCAL ROLE app_owner"))
 
                 # No tenant context: FORCE RLS → default-deny, zero rows
-                no_ctx_count = await async_session.scalar(
-                    text("SELECT COUNT(*) FROM api_keys")
-                )
+                no_ctx_count = await async_session.scalar(text("SELECT COUNT(*) FROM api_keys"))
                 assert no_ctx_count == 0, (
                     f"FORCE RLS failed: table owner saw {no_ctx_count} rows with no context"
                 )
 
                 # Set RLS context to tenant A (inline validated UUID)
                 tid_a = str(tenant_a.id)
-                await async_session.execute(
-                    text(f"SET LOCAL app.current_tenant = '{tid_a}'")
-                )
+                await async_session.execute(text(f"SET LOCAL app.current_tenant = '{tid_a}'"))
 
                 # Tenant A's own key is visible
                 a_count = await async_session.scalar(
                     text("SELECT COUNT(*) FROM api_keys WHERE tenant_id = :tid"),
                     {"tid": tenant_a.id},
                 )
-                assert a_count == 1, (
-                    f"Expected 1 row for tenant A under FORCE RLS, got {a_count}"
-                )
+                assert a_count == 1, f"Expected 1 row for tenant A under FORCE RLS, got {a_count}"
 
                 # Tenant B's key is NOT visible to A's context
                 b_count = await async_session.scalar(
@@ -331,10 +311,6 @@ class TestForceRlsTableOwner:
                 )
         finally:
             # ── restore ownership so other tests aren't affected ──────────────
-            await async_session.execute(
-                text("ALTER TABLE tenants OWNER TO CURRENT_USER")
-            )
-            await async_session.execute(
-                text("ALTER TABLE api_keys OWNER TO CURRENT_USER")
-            )
+            await async_session.execute(text("ALTER TABLE tenants OWNER TO CURRENT_USER"))
+            await async_session.execute(text("ALTER TABLE api_keys OWNER TO CURRENT_USER"))
             await async_session.commit()

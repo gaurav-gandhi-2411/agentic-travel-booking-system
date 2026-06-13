@@ -80,9 +80,7 @@ class TestApiKeyModel:
     def test_no_plaintext_key_column(self) -> None:
         """Security invariant: a column named 'key' must never exist."""
         cols = _column_names(ApiKey)
-        assert "key" not in cols, (
-            "Plaintext 'key' column found on ApiKey — store key_hash only"
-        )
+        assert "key" not in cols, "Plaintext 'key' column found on ApiKey — store key_hash only"
 
     def test_key_hash_length_constraint(self) -> None:
         """key_hash is a SHA-256 hex digest: exactly 64 characters."""

@@ -29,7 +29,7 @@ def _get_url() -> str:
         raise RuntimeError(msg)
     for prefix in ("postgresql://", "postgres://"):
         if raw.startswith(prefix):
-            return "postgresql+asyncpg://" + raw[len(prefix):]
+            return "postgresql+asyncpg://" + raw[len(prefix) :]
     return raw
 
 

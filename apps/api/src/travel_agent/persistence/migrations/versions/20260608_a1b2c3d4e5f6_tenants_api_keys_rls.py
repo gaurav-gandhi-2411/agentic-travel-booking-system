@@ -5,6 +5,7 @@ Revises:
 Create Date: 2026-06-08
 
 """
+
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -44,9 +45,7 @@ def upgrade() -> None:
             nullable=False,
             server_default="standard",
         ),
-        sa.Column(
-            "is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")
-        ),
+        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -72,9 +71,7 @@ def upgrade() -> None:
         sa.Column("key_hash", sa.String(64), nullable=False),
         sa.Column("key_prefix", sa.String(8), nullable=False),
         sa.Column("description", sa.String(255), nullable=True),
-        sa.Column(
-            "is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")
-        ),
+        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),

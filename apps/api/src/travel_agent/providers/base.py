@@ -51,10 +51,10 @@ class RevalidationResult:
 class BookingResult:
     """Provider-level booking record. Fields mirror coordinator.state.BookingStatus."""
 
-    pnr: str                      # → BookingStatus.pnr
-    offer_lock_id: str            # → BookingStatus.offer_lock_id
-    hold_expires_at: str          # ISO 8601 → BookingStatus.hold_expires_at
-    idempotency_key: str          # → BookingStatus.idempotency_key
+    pnr: str  # → BookingStatus.pnr
+    offer_lock_id: str  # → BookingStatus.offer_lock_id
+    hold_expires_at: str  # ISO 8601 → BookingStatus.hold_expires_at
+    idempotency_key: str  # → BookingStatus.idempotency_key
     audit_id: UUID | None = None  # → BookingStatus.audit_id
 
 

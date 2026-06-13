@@ -15,9 +15,7 @@ class BookingAgent:
     def __init__(self, provider: BookableInventoryProvider) -> None:
         self._provider = provider
 
-    async def run(
-        self, state: RequestState, offer_id: str, idempotency_key: str
-    ) -> RequestState:
+    async def run(self, state: RequestState, offer_id: str, idempotency_key: str) -> RequestState:
         """Call provider.book() and map the BookingResult into state.booking.
 
         Args:

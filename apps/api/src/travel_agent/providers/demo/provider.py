@@ -20,6 +20,7 @@ PRICE-CHANGED TRIGGER (stateful):
 
 THIS IS A SANDBOX MOCK. No real inventory, no real PNR, no payments.
 """
+
 from __future__ import annotations
 
 import dataclasses
@@ -45,6 +46,7 @@ from travel_agent.providers.base import (
 HOLD_TTL_MINUTES: int = 15
 
 # ── catalog entries ────────────────────────────────────────────────────────────
+
 
 @dataclasses.dataclass(frozen=True)
 class _DemoFlight:
@@ -115,15 +117,17 @@ def _base_offer_id(offer_id: str) -> str:
 
 # ── internal hold state ────────────────────────────────────────────────────────
 
+
 @dataclasses.dataclass
 class _HoldRecord:
-    offer_id: str          # window-qualified ID as passed to book()
+    offer_id: str  # window-qualified ID as passed to book()
     idempotency_key: str
     result: BookingResult
     cancelled: bool = False
 
 
 # ── provider ──────────────────────────────────────────────────────────────────
+
 
 class DemoProvider:
     """Unified search + bookable provider for the closed-loop demo.
@@ -132,9 +136,9 @@ class DemoProvider:
     """
 
     def __init__(self) -> None:
-        self._holds: dict[str, _HoldRecord] = {}           # pnr → HoldRecord
-        self._idempotency_index: dict[str, str] = {}        # idempotency_key → pnr
-        self._price_changed_shown: set[str] = set()         # base offer IDs shown price change
+        self._holds: dict[str, _HoldRecord] = {}  # pnr → HoldRecord
+        self._idempotency_index: dict[str, str] = {}  # idempotency_key → pnr
+        self._price_changed_shown: set[str] = set()  # base offer IDs shown price change
 
     # ── InventoryProvider ──────────────────────────────────────────────────
 
@@ -260,9 +264,7 @@ class DemoProvider:
             )
 
         current_price = (
-            PRICE_CHANGE_NEW_PRICE
-            if base == PRICE_CHANGE_OFFER_ID
-            else self._offer_price(base)
+            PRICE_CHANGE_NEW_PRICE if base == PRICE_CHANGE_OFFER_ID else self._offer_price(base)
         )
         return RevalidationResult(
             offer_id=offer_id,
@@ -289,9 +291,7 @@ class DemoProvider:
 
         pnr = f"DEMO-PNR-{uuid.uuid4().hex[:8].upper()}"
         offer_lock_id = f"DEMO-LOCK-{uuid.uuid4().hex[:8].upper()}"
-        hold_expires_at = (
-            _datetime.now(UTC) + timedelta(minutes=HOLD_TTL_MINUTES)
-        ).isoformat()
+        hold_expires_at = (_datetime.now(UTC) + timedelta(minutes=HOLD_TTL_MINUTES)).isoformat()
 
         result = BookingResult(
             pnr=pnr,

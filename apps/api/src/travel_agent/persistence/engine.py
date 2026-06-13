@@ -22,7 +22,7 @@ def _normalise_url(url: str) -> str:
     """Ensure the URL uses the asyncpg driver scheme."""
     for prefix in ("postgresql://", "postgres://"):
         if url.startswith(prefix):
-            return "postgresql+asyncpg://" + url[len(prefix):]
+            return "postgresql+asyncpg://" + url[len(prefix) :]
     return url
 
 

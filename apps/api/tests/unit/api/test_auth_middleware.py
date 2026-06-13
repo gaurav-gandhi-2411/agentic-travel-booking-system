@@ -35,9 +35,7 @@ class TestExtractKey:
         assert _extract_key(req) == "my-api-key-value"
 
     def test_prefers_bearer_over_x_api_key(self) -> None:
-        req = self._make_request(
-            {"Authorization": "Bearer bearer-key", "X-API-Key": "x-api-key"}
-        )
+        req = self._make_request({"Authorization": "Bearer bearer-key", "X-API-Key": "x-api-key"})
         assert _extract_key(req) == "bearer-key"
 
     def test_returns_none_when_no_key(self) -> None:
@@ -57,9 +55,7 @@ class TestExtractKey:
 
 
 @pytest.mark.parametrize("app_mode", ["local", "synthetic"])
-def test_local_mode_bypasses_auth_on_search(
-    app_mode: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_local_mode_bypasses_auth_on_search(app_mode: str, monkeypatch: pytest.MonkeyPatch) -> None:
     """In local/synthetic modes, /search should pass with no API key."""
     monkeypatch.setenv("APP_MODE", app_mode)
 

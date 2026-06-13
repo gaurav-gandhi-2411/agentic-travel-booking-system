@@ -57,9 +57,7 @@ async def test_book_mock_tenant_returns_confirmed() -> None:
     fresh_provider = MockBookableProvider()
     body = BookRequest(offer_id="MOCK-OFFER-001", idempotency_key="idem-mock-001")
 
-    with patch(
-        "travel_agent.api.routes.book.get_bookable_provider", return_value=fresh_provider
-    ):
+    with patch("travel_agent.api.routes.book.get_bookable_provider", return_value=fresh_provider):
         events = await _collect(_sse_book_generator(body, "mock_bookable"))
 
     types = [e["type"] for e in events]
@@ -92,9 +90,7 @@ async def test_cancel_unknown_ref_returns_not_found() -> None:
     fresh_provider = MockBookableProvider()
     body = CancelRequest(booking_ref="TOTALLY-UNKNOWN-REF")
 
-    with patch(
-        "travel_agent.api.routes.book.get_bookable_provider", return_value=fresh_provider
-    ):
+    with patch("travel_agent.api.routes.book.get_bookable_provider", return_value=fresh_provider):
         events = await _collect(_sse_cancel_generator(body, "mock_bookable"))
 
     assert len(events) == 1
@@ -119,9 +115,7 @@ async def test_cancel_happy_path_returns_cancelled() -> None:
     pnr = confirmed["pnr"]
 
     body = CancelRequest(booking_ref=pnr)
-    with patch(
-        "travel_agent.api.routes.book.get_bookable_provider", return_value=fresh_provider
-    ):
+    with patch("travel_agent.api.routes.book.get_bookable_provider", return_value=fresh_provider):
         events = await _collect(_sse_cancel_generator(body, "mock_bookable"))
 
     assert len(events) == 1
@@ -141,9 +135,7 @@ async def test_book_idempotency_same_key_same_offer_same_pnr() -> None:
     offer_id = MOCK_CATALOG[0].offer_id
     body = BookRequest(offer_id=offer_id, idempotency_key="idem-same-1")
 
-    with patch(
-        "travel_agent.api.routes.book.get_bookable_provider", return_value=fresh_provider
-    ):
+    with patch("travel_agent.api.routes.book.get_bookable_provider", return_value=fresh_provider):
         events1 = await _collect(_sse_book_generator(body, "mock_bookable"))
         events2 = await _collect(_sse_book_generator(body, "mock_bookable"))
 
@@ -157,16 +149,10 @@ async def test_book_idempotency_same_key_different_offer_conflict() -> None:
     assert len(MOCK_CATALOG) >= 2, "Need at least 2 offers in MOCK_CATALOG"
     fresh_provider = MockBookableProvider()
 
-    body1 = BookRequest(
-        offer_id=MOCK_CATALOG[0].offer_id, idempotency_key="shared-endpoint-key-X"
-    )
-    body2 = BookRequest(
-        offer_id=MOCK_CATALOG[1].offer_id, idempotency_key="shared-endpoint-key-X"
-    )
+    body1 = BookRequest(offer_id=MOCK_CATALOG[0].offer_id, idempotency_key="shared-endpoint-key-X")
+    body2 = BookRequest(offer_id=MOCK_CATALOG[1].offer_id, idempotency_key="shared-endpoint-key-X")
 
-    with patch(
-        "travel_agent.api.routes.book.get_bookable_provider", return_value=fresh_provider
-    ):
+    with patch("travel_agent.api.routes.book.get_bookable_provider", return_value=fresh_provider):
         events1 = await _collect(_sse_book_generator(body1, "mock_bookable"))
         assert any(e["type"] == BookingEventType.BOOKING_CONFIRMED for e in events1)
 
