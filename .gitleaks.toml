@@ -1,0 +1,16 @@
+# gitleaks configuration — extends the default ruleset (keeps every default rule).
+#
+# Why this allowlist exists: test files use obvious NON-SECRET placeholder API keys as
+# fixtures — e.g. "idempotent-key-test-xyz99", "test-demo-key-...", "app_role_test_password".
+# The default `generic-api-key` rule flags these on entropy alone. Real secrets never live
+# in the test tree (they come from gitignored .env files, GitHub Secrets, or Secret Manager),
+# so the test directories are allowlisted from secret scanning. Application/source code is
+# still fully scanned.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Placeholder API keys in test fixtures are not real secrets"
+paths = [
+  '''apps/api/tests/.*''',
+]
