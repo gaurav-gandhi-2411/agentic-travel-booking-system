@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import os
 import secrets
 import uuid
 
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import text
 
@@ -70,6 +71,7 @@ async def create_tenant_with_key(  # noqa: PLR0913
     slug: str,
     raw_key: str,
     description: str | None = None,
+    tenant_id: uuid.UUID | None = None,
     inventory_adapter: str = "aviasales",
     affiliate_enabled: bool = True,
     rate_limit_tier: str = "standard",
@@ -78,26 +80,69 @@ async def create_tenant_with_key(  # noqa: PLR0913
 
     The raw_key is hashed before storage. Returns (Tenant, ApiKey).
     The caller must commit the session.
-    """
-    tenant = Tenant(
-        name=name,
-        slug=slug,
-        inventory_adapter=inventory_adapter,
-        affiliate_enabled=affiliate_enabled,
-        rate_limit_tier=rate_limit_tier,
-    )
-    session.add(tenant)
-    await session.flush()  # populate tenant.id
 
-    api_key = ApiKey(
-        tenant_id=tenant.id,
-        key_hash=hash_key(raw_key),
-        key_prefix=key_prefix(raw_key),
-        description=description,
-        is_active=True,
-    )
-    session.add(api_key)
-    return tenant, api_key
+    A2 — bootstrap context management: if no RLS context is currently set (the
+    normal provisioning/seed path), the function temporarily sets app.current_tenant
+    to the new tenant's id via the validated set_rls_tenant path so INSERT...RETURNING
+    succeeds under FORCE RLS on non-superuser connections. Context is reset to ""
+    before returning so subsequent calls on the same session each manage their own
+    context window.
+
+    Guard: if a context IS already set and it differs from the new tenant's id, raises
+    RuntimeError — tenant provisioning must run from a context-free session, not inside
+    an active tenant scope. The RLS WITH CHECK policy enforces the same invariant at
+    the DB layer; this guard surfaces it earlier with a clear message.
+    """
+    effective_id = tenant_id if tenant_id is not None else uuid.uuid4()
+
+    prior_ctx: str = (
+        await session.scalar(text("SELECT current_setting('app.current_tenant', true)"))
+    ) or ""
+
+    context_set_here = False
+    if prior_ctx:
+        if prior_ctx != str(effective_id):
+            msg = (
+                f"Session is already scoped to tenant {prior_ctx}; cannot provision "
+                f"new tenant {effective_id} from within an active tenant context. "
+                "Call create_tenant_with_key from a context-free session."
+            )
+            raise RuntimeError(msg)
+        # prior_ctx == effective_id: unusual re-entry; proceed without re-setting
+    else:
+        await set_rls_tenant(session, str(effective_id))
+        context_set_here = True
+
+    try:
+        tenant = Tenant(
+            id=effective_id,
+            name=name,
+            slug=slug,
+            inventory_adapter=inventory_adapter,
+            affiliate_enabled=affiliate_enabled,
+            rate_limit_tier=rate_limit_tier,
+        )
+        session.add(tenant)
+        await session.flush()
+
+        api_key = ApiKey(
+            tenant_id=tenant.id,
+            key_hash=hash_key(raw_key),
+            key_prefix=key_prefix(raw_key),
+            description=description,
+            is_active=True,
+        )
+        session.add(api_key)
+        await session.flush()  # flush api_key under the correct context before resetting
+
+        return tenant, api_key
+    finally:
+        if context_set_here:
+            with contextlib.suppress(Exception):
+                await session.execute(text("SET LOCAL app.current_tenant = ''"))
+                # contextlib.suppress silences the execute if the session is in an
+                # error state (e.g., flush raised IntegrityError) — the caller's
+                # rollback resets SET LOCAL context automatically in that case.
 
 
 async def seed_demo_tenant(session: AsyncSession) -> None:
@@ -127,4 +172,11 @@ async def seed_demo_tenant(session: AsyncSession) -> None:
         )
         await session.commit()
     except IntegrityError:
+        await session.rollback()
+    except ProgrammingError as exc:
+        # Defensive: guard against RLS WITH CHECK rejection on INSERT. This path
+        # fires when the DB schema predates the tightened WITH CHECK migration or
+        # an unexpected policy configuration rejects the bootstrap INSERT.
+        if "row-level security" not in str(exc).lower():
+            raise
         await session.rollback()

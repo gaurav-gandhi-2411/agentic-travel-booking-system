@@ -10,7 +10,8 @@ import uuid
 
 import pytest
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import ProgrammingError
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.sql import text
 
 from travel_agent.persistence.rls import apply_rls_tenant
@@ -132,6 +133,82 @@ class TestRLSIsolation:
                 f"RLS isolation failed: tenant A read tenant B's api_key row "
                 f"(tenant_b.id={tenant_b.id})"
             )
+
+    async def test_tenant_a_cannot_update_tenant_b_rows(
+        self, async_session: AsyncSession, rls_session: AsyncSession
+    ) -> None:
+        """FOR UPDATE isolation: tenant A cannot UPDATE rows belonging to tenant B.
+
+        Verifies that the per-command UPDATE policy's USING clause is enforced.
+        The UPDATE targets tenant B's row by primary key; under FORCE RLS with
+        tenant A's context, the row is invisible and rowcount must be 0.
+        """
+        raw_a, raw_b = generate_raw_key(), generate_raw_key()
+        tenant_a, _ = await create_tenant_with_key(
+            async_session, name="RLS Update A", slug="rls-upd-a", raw_key=raw_a
+        )
+        tenant_b, _ = await create_tenant_with_key(
+            async_session, name="RLS Update B", slug="rls-upd-b", raw_key=raw_b
+        )
+        await async_session.commit()
+
+        async with rls_session.begin():
+            await rls_session.execute(text("SET LOCAL ROLE app_role"))
+            await apply_rls_tenant(rls_session, str(tenant_a.id))
+
+            result = await rls_session.execute(
+                text("UPDATE tenants SET name = 'PWNED' WHERE id = :id").bindparams(
+                    id=tenant_b.id
+                )
+            )
+            assert result.rowcount == 0, (
+                f"UPDATE isolation FAILED: tenant A updated {result.rowcount} of "
+                "tenant B's rows. FOR UPDATE USING policy may not be applied."
+            )
+
+        name_after = await async_session.scalar(
+            text("SELECT name FROM tenants WHERE id = :id").bindparams(id=tenant_b.id)
+        )
+        assert name_after == "RLS Update B", (
+            f"Tenant B's name was mutated to '{name_after}' despite UPDATE isolation."
+        )
+
+    async def test_tenant_a_cannot_delete_tenant_b_rows(
+        self, async_session: AsyncSession, rls_session: AsyncSession
+    ) -> None:
+        """FOR DELETE isolation: tenant A cannot DELETE rows belonging to tenant B.
+
+        Verifies that the per-command DELETE policy's USING clause is enforced.
+        The DELETE targets tenant B's row by primary key; under FORCE RLS with
+        tenant A's context, the row is invisible and rowcount must be 0.
+        """
+        raw_a, raw_b = generate_raw_key(), generate_raw_key()
+        tenant_a, _ = await create_tenant_with_key(
+            async_session, name="RLS Delete A", slug="rls-del-a", raw_key=raw_a
+        )
+        tenant_b, _ = await create_tenant_with_key(
+            async_session, name="RLS Delete B", slug="rls-del-b", raw_key=raw_b
+        )
+        await async_session.commit()
+
+        async with rls_session.begin():
+            await rls_session.execute(text("SET LOCAL ROLE app_role"))
+            await apply_rls_tenant(rls_session, str(tenant_a.id))
+
+            result = await rls_session.execute(
+                text("DELETE FROM tenants WHERE id = :id").bindparams(id=tenant_b.id)
+            )
+            assert result.rowcount == 0, (
+                f"DELETE isolation FAILED: tenant A deleted {result.rowcount} of "
+                "tenant B's rows. FOR DELETE USING policy may not be applied."
+            )
+
+        b_count = await async_session.scalar(
+            text("SELECT COUNT(*) FROM tenants WHERE id = :id").bindparams(id=tenant_b.id)
+        )
+        assert b_count == 1, (
+            "Tenant B's row was deleted — DELETE isolation failed."
+        )
 
     async def test_no_rls_context_sees_no_rows(
         self, async_session: AsyncSession, rls_session: AsyncSession
@@ -277,9 +354,15 @@ class TestSeedDemoTenantForceRLS:
     demo tenant already exists — the row is hidden by FORCE RLS. The insert-then-catch
     strategy (catch IntegrityError on slug unique constraint) is the correct fix.
 
-    These tests use app_role_session, which establishes a connection with SET ROLE
-    app_role (connection-scoped, not SET LOCAL which would be transaction-scoped).
-    The role persists across the internal commit inside seed_demo_tenant.
+    Option A2 (create_tenant_with_key bootstrap context management): the function
+    auto-sets app.current_tenant to the new tenant's id before the INSERT, so
+    INSERT...RETURNING succeeds under FORCE RLS without requiring the caller to manage
+    context. Context is reset to "" after the flush; SELECT isolation is unchanged.
+
+    These tests use app_role_session, which connects DIRECTLY as app_role (LOGIN
+    non-superuser) — matching the production Cloud SQL posture. The previous SET ROLE
+    implementation masked the INSERT...RETURNING FORCE-RLS bug; the direct-login path
+    correctly exposes it and verifies the A2 fix.
     """
 
     async def test_app_role_session_is_non_superuser(
@@ -292,7 +375,7 @@ class TestSeedDemoTenantForceRLS:
         If this assertion fails the FORCE-RLS tests are meaningless.
         """
         is_superuser = await app_role_session.scalar(
-            text("SELECT usesuper FROM pg_user WHERE usename = current_user")
+            text("SELECT rolsuper FROM pg_roles WHERE rolname = current_user")
         )
         assert is_superuser is False, (
             "app_role_session is running as a superuser — FORCE RLS will not apply. "
@@ -337,3 +420,164 @@ class TestSeedDemoTenantForceRLS:
             f"Expected exactly 1 demo tenant after double seed, found {count}. "
             "Duplicate rows indicate the IntegrityError was not caught correctly."
         )
+
+    async def test_bootstrap_insert_returning_no_context(
+        self,
+        app_role_session: AsyncSession,
+        async_session: AsyncSession,
+    ) -> None:
+        """A2: create_tenant_with_key succeeds via direct-login non-superuser with no context.
+
+        Verifies the A2 bootstrap invariant:
+          1. create_tenant_with_key via app_role_session (no prior context) — must succeed.
+             A2 sets app.current_tenant to the new tenant's id before the INSERT so
+             INSERT...RETURNING passes under FORCE RLS (non-superuser direct-login path).
+          2. SELECT via app_role_session immediately after — must return 0 rows.
+             A2 resets context to '' after flush; FORCE RLS default-deny applies to SELECT.
+          3. Superuser confirms the row was persisted.
+
+        Pre-A2 this path raised InsufficientPrivilegeError. A2 makes bootstrap
+        provisioning self-contained without widening SELECT isolation.
+        """
+        raw_key = generate_raw_key()
+        slug = f"boot-a2-{uuid.uuid4().hex[:8]}"
+
+        # 1. Provision via app_role_session (no prior context) — must succeed.
+        tenant, _api_key = await create_tenant_with_key(
+            app_role_session,
+            name="Bootstrap A2 Test",
+            slug=slug,
+            raw_key=raw_key,
+        )
+        assert tenant.id is not None
+        await app_role_session.commit()
+
+        # 2. SELECT via app_role_session with no context — must return 0 rows.
+        count = await app_role_session.scalar(text("SELECT COUNT(*) FROM tenants"))
+        assert count == 0, (
+            f"No-context SELECT returned {count} rows after A2 bootstrap INSERT. "
+            "A2 must reset context after flush; FORCE RLS default-deny must apply to SELECT."
+        )
+
+        # 3. Superuser confirms the row exists.
+        persisted = await async_session.scalar(
+            text("SELECT COUNT(*) FROM tenants WHERE id = :id").bindparams(id=tenant.id)
+        )
+        assert persisted == 1, "Bootstrap-inserted row should exist in DB (superuser view)."
+
+        # Cleanup (cascades to api_keys via FK)
+        await async_session.execute(
+            text("DELETE FROM tenants WHERE id = :id").bindparams(id=tenant.id)
+        )
+        await async_session.commit()
+
+    async def test_a2_guard_scoped_session_cannot_mint_different_tenant(
+        self,
+        app_role_session: AsyncSession,
+        async_session: AsyncSession,
+    ) -> None:
+        """A2 guard: a session scoped to tenant A cannot create a new tenant B.
+
+        If app.current_tenant is already set (runtime: request arrived with a valid
+        API key), calling create_tenant_with_key for a DIFFERENT tenant must raise
+        RuntimeError — not silently succeed or let the RLS WITH CHECK fire instead.
+
+        This confirms A2's bootstrap encapsulation is not a cross-tenant write hole.
+        """
+        # Seed anchor tenant A (superuser path, no FORCE RLS)
+        raw_a = generate_raw_key()
+        tenant_a, _ = await create_tenant_with_key(
+            async_session,
+            name="Guard Anchor A",
+            slug=f"guard-a-{uuid.uuid4().hex[:8]}",
+            raw_key=raw_a,
+        )
+        await async_session.commit()
+
+        try:
+            # Scope app_role_session to tenant A, then try to create a NEW tenant.
+            # A2 must detect prior_ctx != effective_id and refuse immediately.
+            async with app_role_session.begin():
+                await apply_rls_tenant(app_role_session, str(tenant_a.id))
+
+                with pytest.raises(RuntimeError, match="context"):
+                    await create_tenant_with_key(
+                        app_role_session,
+                        name="Guard Minted B",
+                        slug=f"guard-b-{uuid.uuid4().hex[:8]}",
+                        raw_key=generate_raw_key(),
+                    )
+        finally:
+            await async_session.execute(
+                text("DELETE FROM tenants WHERE id = :id").bindparams(id=tenant_a.id)
+            )
+            await async_session.commit()
+
+    async def test_cross_tenant_insert_rejected_under_with_check(
+        self,
+        db_engine: AsyncEngine,
+    ) -> None:
+        """Tightened WITH CHECK blocks cross-tenant INSERT from a tenant-scoped session.
+
+        Negative proof: a session with app.current_tenant = A cannot INSERT an
+        api_key row whose tenant_id = B. This confirms that the bootstrap allowance
+        (no tenant context → INSERT is permitted) does NOT open a hole for sessions
+        that already have a tenant context set.
+        """
+        import uuid as _uuid
+
+        tenant_a_id = _uuid.uuid4()
+        tenant_b_id = _uuid.uuid4()
+
+        # Setup: create two tenants as DB superuser (bypasses FORCE RLS for seeding)
+        async with db_engine.begin() as setup_conn:
+            await setup_conn.execute(
+                text(
+                    "INSERT INTO tenants "
+                    "(id, name, slug, inventory_adapter, affiliate_enabled, "
+                    "rate_limit_tier, is_active, created_at, updated_at) VALUES "
+                    "(:a_id, 'RLS Neg A', :a_slug, 'demo', true, 'standard', true, now(), now()),"
+                    "(:b_id, 'RLS Neg B', :b_slug, 'demo', true, 'standard', true, now(), now())"
+                ).bindparams(
+                    a_id=tenant_a_id,
+                    a_slug=f"rls-neg-a-{str(tenant_a_id)[:8]}",
+                    b_id=tenant_b_id,
+                    b_slug=f"rls-neg-b-{str(tenant_b_id)[:8]}",
+                )
+            )
+
+        # Test: as app_role with tenant A context, attempt INSERT for tenant B.
+        # WITH CHECK should reject it with a row-level security error.
+        try:
+            with pytest.raises(ProgrammingError, match="row-level security"):  # noqa: PT012
+                async with db_engine.connect() as conn:
+                    async with conn.begin():
+                        # SET LOCAL ROLE: non-superuser, subject to FORCE RLS.
+                        # SET LOCAL app.current_tenant: scopes the session to tenant A.
+                        # Both are LOCAL (transaction-scoped) for clean cleanup.
+                        await conn.execute(text("SET LOCAL ROLE app_role"))
+                        # asyncpg rejects bound params for SET LOCAL — interpolate UUID
+                        # directly (safe: UUIDs are hex+hyphens, no injection risk).
+                        await conn.execute(
+                            text(f"SET LOCAL app.current_tenant = '{tenant_a_id}'")
+                        )
+                        await conn.execute(
+                            text(
+                                "INSERT INTO api_keys "
+                                "(id, tenant_id, key_hash, key_prefix, is_active, created_at) "
+                                "VALUES (:id, :tenant_id, :key_hash, :prefix, true, now())"
+                            ).bindparams(
+                                id=_uuid.uuid4(),
+                                tenant_id=tenant_b_id,  # B's ID while session is A
+                                key_hash="b" * 64,
+                                prefix="tstpfx01",
+                            )
+                        )
+        finally:
+            # Always clean up the two test tenants regardless of pass/fail
+            async with db_engine.begin() as cleanup_conn:
+                await cleanup_conn.execute(
+                    text(
+                        "DELETE FROM tenants WHERE id = :a_id OR id = :b_id"
+                    ).bindparams(a_id=tenant_a_id, b_id=tenant_b_id)
+                )

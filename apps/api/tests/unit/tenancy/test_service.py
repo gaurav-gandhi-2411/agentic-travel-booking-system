@@ -162,6 +162,9 @@ class TestSeedDemoTenant:
         monkeypatch.setenv("DEMO_API_KEY", "test-demo-key-fresh-abc123xyz")
 
         mock_session = AsyncMock()
+        # scalar() returns None — simulates no RLS context currently set,
+        # which is the bootstrap path that A2 handles.
+        mock_session.scalar = AsyncMock(return_value=None)
         mock_session.flush = AsyncMock()
         mock_session.commit = AsyncMock()
         mock_session.rollback = AsyncMock()
@@ -185,6 +188,8 @@ class TestSeedDemoTenant:
         monkeypatch.setenv("DEMO_API_KEY", "test-demo-key-force-rls-abc123")
 
         mock_session = AsyncMock()
+        # scalar() returns None — simulates no RLS context currently set.
+        mock_session.scalar = AsyncMock(return_value=None)
         # flush() raises IntegrityError, simulating the slug unique constraint
         # firing when the app role has no tenant context (FORCE RLS hides the row).
         mock_session.flush = AsyncMock(

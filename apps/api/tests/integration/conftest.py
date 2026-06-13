@@ -29,8 +29,13 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.sql import text
 from testcontainers.postgres import PostgresContainer
 
-# Name of the non-superuser role used for RLS-enforced queries in tests.
+# Non-superuser role used for RLS-enforced queries in tests.
+# The role is created with LOGIN + PASSWORD so app_role_session can connect
+# directly — matching the production Cloud SQL posture (direct-login non-superuser,
+# not superuser + SET ROLE). SET ROLE from a superuser connection masks the
+# INSERT...RETURNING FORCE-RLS bug that direct-login exposes.
 _APP_ROLE = "app_role"
+_APP_ROLE_PASSWORD = "app_role_test_password"  # test-container only, never prod  # noqa: S105
 
 
 # ---------------------------------------------------------------------------
@@ -94,7 +99,7 @@ async def db_engine(asyncpg_url: str) -> AsyncEngine:  # type: ignore[return]
             text(
                 f"DO $$ BEGIN "
                 f"  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{_APP_ROLE}') "
-                f"  THEN CREATE ROLE {_APP_ROLE} NOINHERIT; "
+                f"  THEN CREATE ROLE {_APP_ROLE} NOINHERIT LOGIN PASSWORD '{_APP_ROLE_PASSWORD}'; "
                 f"  END IF; "
                 f"END $$"
             )
@@ -134,21 +139,30 @@ async def rls_session(db_engine: AsyncEngine) -> AsyncSession:  # type: ignore[r
 
 
 @pytest_asyncio.fixture
-async def app_role_session(db_engine: AsyncEngine) -> AsyncSession:  # type: ignore[return]
-    """AsyncSession connected as app_role for the entire connection lifetime.
+async def app_role_session(
+    asyncpg_url: str, db_engine: AsyncEngine  # db_engine ensures the role exists first
+) -> AsyncSession:  # type: ignore[return]
+    """AsyncSession connecting DIRECTLY as app_role (LOGIN non-superuser).
 
-    Unlike rls_session (which uses SET LOCAL ROLE inside individual transactions),
-    this fixture uses SET ROLE (no LOCAL keyword) so the non-superuser role persists
-    across commit/rollback boundaries. This is required for testing seed_demo_tenant,
-    which commits internally — SET LOCAL ROLE would be reset by that commit.
+    Matches the production Cloud SQL posture: a non-superuser LOGIN role connecting
+    directly, not a superuser connection that then does SET ROLE. The previous
+    SET ROLE implementation masked the INSERT...RETURNING FORCE-RLS bug because
+    PostgreSQL treats a superuser-origin SET ROLE session differently from a
+    direct-login non-superuser session for RETURNING visibility under FORCE RLS.
 
-    Connection-level role switch means FORCE RLS is enforced for every statement,
-    exactly as it will be in production when the app connects as a non-superuser role.
+    The db_engine dependency ensures app_role (LOGIN PASSWORD) is created before
+    the first direct-login attempt.
     """
-    async with db_engine.connect() as conn:
-        # SET ROLE (connection-scoped): survives COMMIT and BEGIN, unlike SET LOCAL ROLE.
-        await conn.execute(text("SET ROLE app_role"))
-        async with AsyncSession(bind=conn) as session:
+    from sqlalchemy import make_url
+
+    # Pass the URL object directly — str() masks the password as '***' which
+    # would be passed literally to asyncpg, causing InvalidPasswordError.
+    app_url = make_url(asyncpg_url).set(username=_APP_ROLE, password=_APP_ROLE_PASSWORD)
+    engine = create_async_engine(app_url, echo=False, pool_pre_ping=False)
+    try:
+        factory = async_sessionmaker(engine, expire_on_commit=False)
+        async with factory() as session:
             yield session  # type: ignore[misc]
             await session.rollback()
-        await conn.execute(text("RESET ROLE"))
+    finally:
+        await engine.dispose()
