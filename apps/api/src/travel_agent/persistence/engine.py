@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.sql import text
 
 from travel_agent.persistence.rls import _validate_tenant_id
+from travel_agent.persistence.schema import DB_SCHEMA
 
 _engine: AsyncEngine | None = None
 _session_factory: async_sessionmaker[AsyncSession] | None = None
@@ -37,6 +38,10 @@ def get_engine() -> AsyncEngine:
             _normalise_url(raw),
             echo=os.environ.get("DB_ECHO", "false").lower() == "true",
             pool_pre_ping=True,
+            # Pin every pooled connection to DealHunter's dedicated schema. The ORM and
+            # the resolver call resolve to DB_SCHEMA objects only; `public` is never on
+            # the path, so a shared instance's `public`/co-tenant objects are unreachable.
+            connect_args={"server_settings": {"search_path": DB_SCHEMA}},
         )
     return _engine
 
@@ -58,6 +63,39 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     factory = get_session_factory()
     async with factory() as session:
         yield session
+
+
+async def assert_runtime_role_unprivileged(session: AsyncSession) -> None:
+    """Refuse to start if the connected DB role can bypass Row-Level Security.
+
+    Tenant isolation depends on FORCE ROW LEVEL SECURITY binding the connection. A role
+    with ``rolsuper`` or ``rolbypassrls`` skips RLS entirely and would silently void all
+    cross-tenant isolation — with no error and no log. On managed Postgres (e.g. Supabase)
+    the platform admin role ``postgres`` has ``rolbypassrls = true``; it is for migrations
+    and provisioning only. The deployed app MUST connect as a dedicated least-privilege
+    role (e.g. ``dealhunter_app``) that is non-superuser and non-BYPASSRLS.
+
+    This guard makes "never serve traffic as a bypass role" structural, not a deploy-
+    checklist hope: it raises RuntimeError (hard fail, loud) at startup otherwise.
+    """
+    row = (
+        await session.execute(
+            text(
+                "SELECT current_user, rolsuper, rolbypassrls "
+                "FROM pg_roles WHERE rolname = current_user"
+            )
+        )
+    ).one()
+    role_name, is_super, is_bypass = str(row[0]), bool(row[1]), bool(row[2])
+    if is_super or is_bypass:
+        msg = (
+            f"REFUSING TO START: the database role '{role_name}' can BYPASS Row-Level "
+            f"Security (rolsuper={is_super}, rolbypassrls={is_bypass}). Serving traffic as "
+            f"this role would SILENTLY VOID all tenant isolation. Point DATABASE_URL at a "
+            f"dedicated least-privilege application role (non-superuser, non-BYPASSRLS) — "
+            f"never the platform admin/superuser role."
+        )
+        raise RuntimeError(msg)
 
 
 async def set_rls_tenant(session: AsyncSession, tenant_id: str) -> None:

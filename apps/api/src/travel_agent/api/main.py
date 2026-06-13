@@ -93,6 +93,21 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             "OPENROUTER_API_KEY not set — X-LLM-Profile: demo-qwen requests will fail at runtime."
         )
 
+    # Runtime-role guard: whenever a database is configured, the connected role MUST be a
+    # least-privilege, non-superuser, non-BYPASSRLS role. A bypass role (e.g. the managed
+    # platform 'postgres' admin role on Supabase) would silently void FORCE-RLS tenant
+    # isolation. Refuse to start otherwise — structurally enforce "never serve as postgres".
+    if os.environ.get("DATABASE_URL"):
+        from travel_agent.persistence.engine import (  # noqa: PLC0415
+            assert_runtime_role_unprivileged,
+            get_session_factory,
+        )
+
+        _factory = get_session_factory()
+        async with _factory() as _session:
+            await assert_runtime_role_unprivileged(_session)
+        logger.info("runtime_db_role_verified")
+
     # Seed the demo tenant if DATABASE_URL is configured (APP_MODE=demo only).
     # seed_demo_tenant is idempotent: insert-then-catch IntegrityError, safe on
     # every restart. Skipped in synthetic/local modes (no DATABASE_URL needed).
