@@ -20,12 +20,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from travel_agent.api.cache import search_cache
-from travel_agent.api.middleware.auth import DemoAuthMiddleware
+from travel_agent.api.middleware.auth import TenantAuthMiddleware
 from travel_agent.api.middleware.llm_profile import LLMProfileMiddleware
 from travel_agent.api.middleware.request_id import RequestIDMiddleware
+from travel_agent.api.routes.book import router as book_router
 from travel_agent.api.routes.refine import router as refine_router
 from travel_agent.api.routes.search import router as search_router
 from travel_agent.observability.langfuse_client import get_langfuse
+from travel_agent.observability.sentry import init_sentry
 
 load_dotenv()
 
@@ -50,6 +52,7 @@ logger = structlog.get_logger(__name__)
 # ── lifespan ──────────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    init_sentry()
     profile = os.environ.get("LLM_ROUTING_PROFILE", "local")
     app_mode = os.environ.get("APP_MODE", "synthetic")
 
@@ -90,10 +93,32 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             "OPENROUTER_API_KEY not set — X-LLM-Profile: demo-qwen requests will fail at runtime."
         )
 
-    if app_mode == "demo" and not os.environ.get("NVIDIA_API_KEY"):
-        logger.warning(
-            "NVIDIA_API_KEY not set — demo-deepseek-v4 profile requests will fail at runtime."
+    # Runtime-role guard: whenever a database is configured, the connected role MUST be a
+    # least-privilege, non-superuser, non-BYPASSRLS role. A bypass role (e.g. the managed
+    # platform 'postgres' admin role on Supabase) would silently void FORCE-RLS tenant
+    # isolation. Refuse to start otherwise — structurally enforce "never serve as postgres".
+    if os.environ.get("DATABASE_URL"):
+        from travel_agent.persistence.engine import (  # noqa: PLC0415
+            assert_runtime_role_unprivileged,
+            get_session_factory,
         )
+
+        _factory = get_session_factory()
+        async with _factory() as _session:
+            await assert_runtime_role_unprivileged(_session)
+        logger.info("runtime_db_role_verified")
+
+    # Seed the demo tenant if DATABASE_URL is configured (APP_MODE=demo only).
+    # seed_demo_tenant is idempotent: insert-then-catch IntegrityError, safe on
+    # every restart. Skipped in synthetic/local modes (no DATABASE_URL needed).
+    if app_mode == "demo" and os.environ.get("DATABASE_URL"):
+        from travel_agent.persistence.engine import get_session_factory  # noqa: PLC0415
+        from travel_agent.tenancy.service import seed_demo_tenant  # noqa: PLC0415
+
+        _factory = get_session_factory()
+        async with _factory() as _session:
+            await seed_demo_tenant(_session)
+        logger.info("demo_tenant_seeded")
 
     # Langfuse observability — optional; never raises on missing keys
     lf = get_langfuse()
@@ -131,11 +156,12 @@ app.add_middleware(
     allow_headers=["Content-Type", "X-API-Key", "X-LLM-Profile"],
 )
 app.add_middleware(LLMProfileMiddleware)
-app.add_middleware(DemoAuthMiddleware)
+app.add_middleware(TenantAuthMiddleware)
 app.add_middleware(RequestIDMiddleware)
 
 app.include_router(search_router)
 app.include_router(refine_router)
+app.include_router(book_router)
 
 
 @app.get("/health", response_model=None)

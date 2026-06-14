@@ -1,138 +1,137 @@
-# Project Spec: DealHunter — Phase 3.1 (Live Inventory Activation)
+# Project Spec: DealHunter — Phase 3.2-E.2 (Booking UI in the Demo)
 
 ## Goal
 
-Switch the flight pipeline from synthetic data to **live Aviasales inventory**,
-without touching any other layer. The `AviasalesAdapter` and the dual-mode
-`FlightHunterAgent` constructor already exist; this iteration wires real data in
-behind a feature flag, makes the affiliate-deeplink emission toggleable, cleans
-accumulated repo hygiene debt, and reconciles the issue backlog.
+Make the booking loop **clickable**. Surface the full lifecycle — select an offer
+from search results → see it re-priced (revalidate) → confirm (book) → see the
+confirmation (PNR + hold expiry) → optionally cancel — in the existing Next.js
+demo UI, consuming the `/book` and `/cancel` SSE endpoints built in 3.2-E.1.
 
-This is a demo-credibility and optional-affiliate-revenue win. It is **not** the
-B2B productization phase (auth, multi-tenancy, BYO real inventory for inventory
-owners, booking/payments) — that is Phase 3.2 and beyond, and is explicitly out
-of scope here.
+This is what turns the product from "an API that books" into "a thing a prospect
+can drive in a browser." It is a **sandbox** experience end-to-end: the UI must
+make clear bookings are simulated (no payment, no real ticket).
+
+**Local/test only — no deploy** (blocked by the Cloud SQL gate regardless).
+Prod stays `00025-gaw`.
 
 ## Current state (existing project)
 
-- Production is current and healthy: backend Cloud Run `00019-liy` (main HEAD,
-  modulo one docs-only commit `8f11926`), frontend Vercel on `1cf0a07`.
-- Quality baseline: 485 tests pass (3 skipped), 86.46% coverage, ruff + mypy clean.
-- **Seam already exists:** `AviasalesAdapter` is complete; `FlightHunterAgent`
-  has a dual-mode constructor — inject the adapter to activate live data.
-  Missing only: `AVIASALES_API_KEY` in prod env + injection at startup.
-- `providers/aviasales/deeplink.py` is complete — builds Travelpayouts affiliate
-  URLs carried on every archetype card. Currently always emitted.
-- Synthetic path (`SyntheticProvider`) is the default and must remain the
-  fallback when live mode is off.
+- Frontend: Next.js 15 / React 19 on Vercel (`apps/web`). Components under
+  `components/demo/` (DemoClient, ProfileToggle, ChatLog, ChatMessage); SSE
+  consumed via `hooks/useSearchStream`; `lib/event-map.ts`, `lib/chat-types.ts`.
+- The search + refine flow already works in the UI against the live backend.
+- Backend booking endpoints exist (3.2-E.1): `POST /book`, `POST /cancel`, SSE
+  events `booking_revalidating`, `booking_priced` (carries `price_changed` +
+  both prices), `booking_confirmed` (pnr, hold_expires_at), `booking_cancelled`,
+  `booking_error` (codes: `not_bookable`, `conflict`, `unavailable`,
+  `provider_error`, plus any `not_found` used by cancel). Every event carries
+  `sandbox: true`.
+- Booking requires a bookable-provider tenant (`mock_bookable`); a search-only
+  tenant (Aviasales) is gated out with `booking_error{not_bookable}`.
 
-### Load-bearing — do NOT touch without escalating (from CURRENT_STATE.md)
-- `config/llm_routing.yaml`
-- `apps/api/src/travel_agent/agents/optimizer.py` (system prompt — re-baselining required)
-- `apps/api/src/travel_agent/evals/optimizer/thresholds.py` and `runner.py`
-- `apps/api/src/travel_agent/llm/` adapters
-- `apps/api/src/travel_agent/agents/conversation_manager.py` + prompt/types
+### Load-bearing — do NOT touch without escalating
+- Backend (all of `apps/api`) — this iteration is frontend-only
+- The existing search/refine UI flow — preserve its behavior exactly
 - `.github/workflows/deploy-*.yml`
 
-### Out of scope this iteration (do NOT build)
-- `agents/booking.py` (BookingAgent — stays a stub; Phase E)
-- Any payment / payment-gateway code
-- Real auth or multi-tenancy (`tenancy/` stays empty; `tenant_id`/`user_id` stay unpopulated)
-- Live hotel adapter (hotels stay on `SyntheticProvider`)
-- Generalizing the `InventoryProvider` interface (deferred to Phase 3.2 when a 2nd real adapter exists)
+## Scope
+
+### In scope
+- **Read `/mnt/skills/public/frontend-design/SKILL.md` first** (and any frontend
+  conventions in the repo) before writing UI code.
+- A **"Book" affordance** on archetype/offer cards in the existing results view.
+  Selecting it starts the booking flow for that `offer_id`.
+- A **booking flow UI** consuming `/book` SSE: a re-pricing state
+  (`booking_revalidating`), a **price-confirmation step** when `price_changed=true`
+  (show old vs new price; require an explicit user confirm — never auto-book), a
+  confirmed state (`booking_confirmed`: PNR, hold-expiry countdown), and a
+  **Cancel** action calling `/cancel`.
+- A consumer hook (`hooks/useBookingStream` or equivalent) mirroring
+  `useSearchStream`'s pattern for the booking SSE.
+- **Sandbox labeling:** the UI clearly marks the booking as simulated (a visible
+  "Sandbox / demo booking — no payment taken" badge on the confirmation).
+- **Graceful error states:** `not_bookable` (this inventory source can't book),
+  `unavailable`, `conflict`, `not_found`, `provider_error` each render a clear,
+  non-crashing message.
+- An idempotency key generated client-side per booking attempt and reused on
+  retry of the *same* offer.
+
+### Out of scope (do NOT build)
+- Any backend change (endpoints, events, agents) — frozen this iteration.
+- Payments UI, passenger-details forms, seat selection (no real booking data path yet).
+- Per-tenant admin/onboarding UI (later).
+- Cloud deploy / Vercel deploy / Cloud SQL.
 
 ## Tech stack
-- Python 3.12, FastAPI (existing — no new framework)
-- Aviasales / Travelpayouts API via the existing `AviasalesAdapter` (no new SDK unless the adapter already declares one)
-
-## Architecture (no new top-level dirs)
-```
-apps/api/src/travel_agent/
-├── agents/flight_hunter.py        # dual-mode constructor — wire injection here
-├── providers/aviasales/
-│   ├── adapter.py                 # AviasalesAdapter (read; confirm contract)
-│   └── deeplink.py                # affiliate URL builder — gate emission on flag
-├── api/                           # startup wiring — inject adapter when AVIASALES_LIVE=true
-└── coordinator/                   # unchanged
-```
-
-## Feature flags (new, env-driven)
-- `AVIASALES_LIVE` (default `false`): when true AND `AVIASALES_API_KEY` is present,
-  inject `AviasalesAdapter` into `FlightHunterAgent`; otherwise fall back to synthetic.
-- `AFFILIATE_DEEPLINKS` (default `true`): when false, archetype cards carry no
-  affiliate deeplink. (Forward-protection for white-label/inventory-owner buyers.)
+- Next.js 15 / React 19, existing styling system. No new UI framework. Escalate
+  before adding any dependency.
 
 ## Verification commands
 ```yaml
-- name: tests
-  cmd: pytest -q
+- name: web_build
+  cmd: "cd apps/web && npm run build"
   required: true
-- name: lint
-  cmd: ruff check .
+- name: web_lint
+  cmd: "cd apps/web && npm run lint"
   required: true
-- name: types
-  cmd: mypy .
+- name: web_typecheck
+  cmd: "cd apps/web && npm run typecheck (or tsc --noEmit)"
   required: true
-- name: live_smoke
-  cmd: "manual — real route search against staging after AVIASALES_API_KEY bound"
+- name: web_tests
+  cmd: "cd apps/web && npm test (if a test runner is configured)"
+  required: false
+- name: manual_flow
+  cmd: "run web locally against a mock_bookable tenant; click search -> book -> confirm -> cancel"
   required: true
 ```
 
 ## Subagent usage rules
-- `executor` for any file write/edit.
-- `verifier` for tests/lint/types.
-- Orchestrator does NOT write code.
-- Repo-hygiene triage (step 1) and backlog reconciliation are cheap `git`/`gh`
-  reads/commits — orchestrator may do directly without a subagent.
+- `executor` for code; `verifier` for build/lint/typecheck. Orchestrator does NOT write code.
 
 ## Escalation rules (orchestrator must ask before doing)
-- Ask before any **production** deploy (canary or full). GG gates prod.
-- Ask if the `AviasalesAdapter` contract differs from assumed (e.g. response
-  shape, auth header, rate limits, a `raw_link` field the deeplink builder needs) —
-  report the real contract, don't guess.
-- Ask before deleting or moving the undocumented root `tests/` directory —
-  confirm it holds nothing load-bearing first.
-- Ask before touching any file in the "Load-bearing" list.
-- Stop and escalate if activating live data breaks the synthetic fallback path.
-- Confirm `AVIASALES_API_KEY` is actually in GG's hands before the
-  bind-and-smoke step; GG obtains it from the Travelpayouts dashboard.
+- At step 1, after reading the frontend skill + existing demo components, propose
+  the UI flow (where Book sits, the price-confirmation step, the states) and show
+  GG BEFORE building.
+- Escalate if surfacing booking requires changing the existing search/refine UI
+  behavior — additive only.
+- Escalate if the backend SSE contract appears insufficient for a clean UX (e.g. a
+  field the UI needs is missing) — report it; do NOT change the backend here.
+- Ask before installing any dependency or any deploy.
 
 ## Hard rules
-- Do NOT introduce any booking, PNR, payment, auth, or multi-tenancy logic.
-- Do NOT relax eval thresholds to make anything pass.
-- Do NOT set `ANTHROPIC_API_KEY` anywhere (GG is on Max — double-bills).
-  `AVIASALES_API_KEY` is a separate third-party key and is fine.
-- Keep `SyntheticProvider` as the working default when `AVIASALES_LIVE=false`.
-- Run the full existing test suite after every executor pass; escalate if any
-  previously-passing test fails.
+- Frontend only. No backend edits.
+- Existing search/refine UI behavior preserved exactly.
+- Price-changed never auto-books — explicit user confirmation required, mirroring
+  the backend gate.
+- Sandbox booking is visibly labeled as simulated; never imply a real ticket/payment.
+- Do NOT deploy (no Vercel deploy, no backend deploy).
 
 ## Budget
-- Soft target: 1 CC session.
-- Hard cap: stop and escalate after 15 executor invocations.
-- Orchestrator runs `/cost` at midpoint and reports.
+- Soft target: 1 CC session. Hard cap: stop and escalate after 18 executor invocations.
+- `/cost` at midpoint, reported.
 
 ## Success criteria (verify ALL before declaring done)
-- With `AVIASALES_LIVE=true` + key bound, a real-route search in **staging**
-  returns real fares (confirmed via logs/response, not synthetic constants).
-- With `AVIASALES_LIVE=false`, the synthetic path works unchanged.
-- `AFFILIATE_DEEPLINKS=false` suppresses affiliate URLs on archetype cards;
-  `true` restores them. Both verified by test.
-- New injection + flag logic has unit tests; synthetic-fallback test added.
-- 485+ tests pass, coverage ≥ 86%, ruff + mypy clean.
-- Repo hygiene resolved: untracked eval reports/runs triaged (commit or
-  gitignore), `uv.lock` committed, root `tests/` dir resolved.
-- Backlog reconciled: close #6 (ConversationManager — implemented) and #9
-  (demo-qwen replaced — done); note #56 is the known #54 docs-only-drift pattern.
-- No change to booking/payment/auth surface.
+- From the demo UI against a `mock_bookable` tenant: a user can search, pick an
+  offer, see it re-priced, confirm, and see a PNR + hold-expiry confirmation —
+  end to end, in the browser.
+- Price-changed path shows old vs new price and requires explicit confirm (no auto-book).
+- Cancel works from the confirmation view and reflects the cancelled state.
+- A search-only (Aviasales) tenant shows a clear "this inventory source can't book"
+  state instead of a Book action that fails.
+- All `booking_error` codes render clean, non-crashing messages.
+- Sandbox/simulated labeling is visible on the booking confirmation.
+- Existing search/refine UI flow unchanged.
+- `npm run build`, lint, and typecheck pass clean. No deploy.
 
 ## Build order
-1. **Hygiene + backlog.** Triage 20 untracked files (commit eval artifacts or
-   add to `.gitignore`), commit `uv.lock`, resolve root `tests/` dir (escalate
-   if unsure), close #6 and #9, comment-and-note #56.
-2. **Read the seam.** Inspect `AviasalesAdapter`, `FlightHunterAgent` dual-mode
-   constructor, and `deeplink.py`. Report the real adapter contract before wiring.
-3. **Wire injection** behind `AVIASALES_LIVE` (default false); affiliate emission
-   behind `AFFILIATE_DEEPLINKS` (default true). Synthetic remains fallback.
-4. **Tests.** Injection, both flags, synthetic-fallback. Verifier pass.
-5. **Staging deploy + live smoke** on a real route (after GG confirms key bound).
-6. **Prod** canary → GG smoke → full. Update CURRENT_STATE.md. (GG-gated.)
+1. Read `frontend-design/SKILL.md` + existing `components/demo/*`, `useSearchStream`,
+   `event-map.ts`, `chat-types.ts`. Propose the booking UI flow + states + where
+   the Book affordance sits. Show GG; no code yet.
+2. `useBookingStream` hook consuming `/book` SSE (mirror `useSearchStream`).
+3. Booking flow UI: Book affordance → revalidating → price-confirm (if changed) →
+   confirmed (PNR + hold countdown) → cancel. Sandbox badge.
+4. Capability + error states (not_bookable for Aviasales tenant; all error codes).
+5. Verify: build + lint + typecheck; manual click-through search→book→confirm→cancel
+   locally against a mock_bookable tenant.
+6. Report. No deploy. Note the product is now demonstrable end-to-end in a browser.
+```

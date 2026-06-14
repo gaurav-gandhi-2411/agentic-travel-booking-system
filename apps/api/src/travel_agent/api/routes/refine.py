@@ -163,6 +163,8 @@ async def _refine_generator(  # noqa: PLR0911, PLR0912, PLR0915
     request_id: str,
     refinement: str,
     profile: str,
+    affiliate_enabled: bool = True,
+    inventory_adapter: str = "aviasales",
 ) -> AsyncGenerator[str, None]:
     def _event(data: dict[str, object]) -> str:
         return f"data: {json.dumps(data)}\n\n"
@@ -244,14 +246,12 @@ async def _refine_generator(  # noqa: PLR0911, PLR0912, PLR0915
 
         try:
             optimizer_client, optimizer_model = get_llm_client_and_model("optimizer", profile)
-            _affiliate_on = os.environ.get("AFFILIATE_DEEPLINKS", "true").lower() not in (
-                "false",
-                "0",
-            )
             optimizer = OptimizerAgent(
                 client=optimizer_client,
                 model=optimizer_model,
-                partner_marker=os.environ.get("AVIASALES_PARTNER_ID", "") if _affiliate_on else "",
+                partner_marker=(
+                    os.environ.get("AVIASALES_PARTNER_ID", "") if affiliate_enabled else ""
+                ),
             )
         except Exception as exc:
             yield _event({"type": StreamEventType.ERROR, "message": str(exc)})
@@ -297,20 +297,18 @@ async def _refine_generator(  # noqa: PLR0911, PLR0912, PLR0915
 
         try:
             optimizer_client, optimizer_model = get_llm_client_and_model("optimizer", profile)
-            _affiliate_on = os.environ.get("AFFILIATE_DEEPLINKS", "true").lower() not in (
-                "false",
-                "0",
-            )
             optimizer = OptimizerAgent(
                 client=optimizer_client,
                 model=optimizer_model,
-                partner_marker=os.environ.get("AVIASALES_PARTNER_ID", "") if _affiliate_on else "",
+                partner_marker=(
+                    os.environ.get("AVIASALES_PARTNER_ID", "") if affiliate_enabled else ""
+                ),
             )
         except Exception as exc:
             yield _event({"type": StreamEventType.ERROR, "message": str(exc)})
             return
 
-        async for evt in stream_replan(new_intent, optimizer):
+        async for evt in stream_replan(new_intent, optimizer, inventory_adapter=inventory_adapter):
             yield _event(evt)
 
     else:  # NO_OP
@@ -333,8 +331,18 @@ async def _refine_generator(  # noqa: PLR0911, PLR0912, PLR0915
 async def refine(body: RefineRequest, request: Request) -> StreamingResponse:
     llm_profile = getattr(request.state, "llm_profile", None)
     profile = _resolve_profile(llm_profile)
+    # Per-tenant config injected by TenantAuthMiddleware; fall back to defaults
+    # for callers that bypass auth (e.g. test fixtures that don't hit the middleware).
+    affiliate_enabled: bool = getattr(request.state, "affiliate_enabled", True)
+    inventory_adapter: str = getattr(request.state, "inventory_adapter", "aviasales")
     return StreamingResponse(
-        _refine_generator(body.request_id, body.refinement, profile),
+        _refine_generator(
+            body.request_id,
+            body.refinement,
+            profile,
+            affiliate_enabled=affiliate_enabled,
+            inventory_adapter=inventory_adapter,
+        ),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

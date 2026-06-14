@@ -42,9 +42,11 @@ from travel_agent.coordinator.state import (
 )
 from travel_agent.coordinator.windows import generate_windows
 from travel_agent.providers.aviasales import AviasalesAdapter
+from travel_agent.providers.demo.provider import DemoProvider
 from travel_agent.providers.synthetic import SyntheticProvider
 
 _synthetic = SyntheticProvider()
+_demo = DemoProvider()
 
 
 class StreamEventType(StrEnum):
@@ -103,8 +105,17 @@ async def stream_search(  # noqa: PLR0912, PLR0915
     query: str,
     planner: PlannerAgent,
     optimizer: OptimizerAgent,
+    inventory_adapter: str = "aviasales",
 ) -> AsyncGenerator[dict[str, object], None]:
-    """Async generator: run the full agent pipeline and yield SSE event dicts."""
+    """Async generator: run the full agent pipeline and yield SSE event dicts.
+
+    Args:
+        query: Raw user search query.
+        planner: Configured PlannerAgent instance.
+        optimizer: Configured OptimizerAgent instance.
+        inventory_adapter: Tenant's inventory adapter slug (e.g. "aviasales").
+            Defaults to "aviasales" for backward compatibility.
+    """
     # ── Planner ────────────────────────────────────────────────────────────────
     yield {"type": "planner_started"}
 
@@ -131,7 +142,7 @@ async def stream_search(  # noqa: PLR0912, PLR0915
         "windows": [{"start": str(w.start_date), "end": str(w.end_date)} for w in windows],
     }
 
-    adapter = _get_adapter()
+    adapter = _get_adapter_for_tenant(inventory_adapter)
     all_flights: list[FlightOption] = []
     state.phase = CoordinatorPhase.SEARCHING
 
@@ -175,13 +186,13 @@ async def stream_search(  # noqa: PLR0912, PLR0915
                 "flights_found": len(month_flights),
             }
     else:
-        # Synthetic provider — per-window calls; pass trip_type and duration.
+        # Synthetic/demo provider — per-window calls; pass trip_type and duration.
         for idx, window in enumerate(windows):
             if not state.call_budget.can_call_flight():
                 state.is_partial = True
                 break
             try:
-                window_flights = _synthetic.get_flights(
+                window_flights = _get_search_provider(inventory_adapter).get_flights(
                     intent.origin_iata,
                     intent.destination_iata,
                     window,
@@ -240,12 +251,19 @@ async def stream_search(  # noqa: PLR0912, PLR0915
 async def stream_replan(  # noqa: PLR0912
     intent: TravelIntent,
     optimizer: OptimizerAgent,
+    inventory_adapter: str = "aviasales",
 ) -> AsyncGenerator[dict[str, object], None]:
     """Async generator: run flight-search using a pre-built TravelIntent.
 
     Used by the /refine REPLAN path to skip PlannerAgent when ConversationManagerAgent
     has already produced a structured intent update. Emits the same SSE events as
     stream_search minus the planner phase (no planner_started / planner_done).
+
+    Args:
+        intent: Pre-built TravelIntent from ConversationManagerAgent.
+        optimizer: Configured OptimizerAgent instance.
+        inventory_adapter: Tenant's inventory adapter slug (e.g. "aviasales").
+            Defaults to "aviasales" for backward compatibility.
     """
     windows = generate_windows(intent)
     yield {
@@ -253,7 +271,7 @@ async def stream_replan(  # noqa: PLR0912
         "windows": [{"start": str(w.start_date), "end": str(w.end_date)} for w in windows],
     }
 
-    adapter = _get_adapter()
+    adapter = _get_adapter_for_tenant(inventory_adapter)
     all_flights: list[FlightOption] = []
     call_budget = CallBudget()
     is_round_trip = intent.trip_type == TripType.ROUND_TRIP
@@ -296,7 +314,7 @@ async def stream_replan(  # noqa: PLR0912
             if not call_budget.can_call_flight():
                 break
             try:
-                window_flights = _synthetic.get_flights(
+                window_flights = _get_search_provider(inventory_adapter).get_flights(
                     intent.origin_iata,
                     intent.destination_iata,
                     window,
@@ -347,10 +365,42 @@ async def stream_replan(  # noqa: PLR0912
 
 
 def _get_adapter() -> AviasalesAdapter | None:
-    """Return AviasalesAdapter if AVIASALES_LIVE=true and key is set, else None."""
+    """Return AviasalesAdapter if AVIASALES_LIVE=true and key is set, else None.
+
+    Used as the default (no tenant context) — preserved for backward compat.
+    """
     if os.environ.get("AVIASALES_LIVE", "").lower() not in ("true", "1"):
         return None
     try:
         return AviasalesAdapter()
     except RuntimeError:
         return None
+
+
+def _get_search_provider(inventory_adapter: str) -> SyntheticProvider | DemoProvider:
+    """Return the per-window search provider for non-Aviasales slugs.
+
+    "demo" uses DemoProvider; everything else falls through to the module-level
+    SyntheticProvider singleton (_synthetic). The Aviasales path never reaches
+    this function — it takes the ``if adapter is not None`` branch above.
+    """
+    if inventory_adapter == "demo":
+        return _demo
+    return _synthetic
+
+
+def _get_adapter_for_tenant(inventory_adapter: str) -> AviasalesAdapter | None:
+    """Return the live adapter for *inventory_adapter* slug, or None for synthetic.
+
+    Currently only "aviasales" maps to a real provider.  Any other value (e.g.
+    "synthetic", "amadeus") falls back to the SyntheticProvider path so callers
+    never crash on an unrecognised slug.
+
+    The aviasales path still requires AVIASALES_LIVE=true and a valid API key —
+    identical to the legacy ``_get_adapter()`` contract so prod behaviour is
+    unchanged for tenants whose stored adapter is "aviasales".
+    """
+    if inventory_adapter == "aviasales":
+        return _get_adapter()
+    # Unknown/future adapters fall through to synthetic
+    return None

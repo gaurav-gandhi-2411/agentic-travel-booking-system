@@ -20,6 +20,8 @@ from typing import Any
 
 import httpx
 
+from travel_agent.providers.base import InventoryProviderError
+
 _BASE_URL = "https://api.travelpayouts.com"
 _PRICES_PATH = "/aviasales/v3/prices_for_dates"
 _HTTP_OK = 200
@@ -30,7 +32,7 @@ _MAX_RETRIES = 3
 _RETRY_BASE_DELAY = 1.0  # seconds; doubles each attempt
 
 
-class AviasalesError(Exception):
+class AviasalesError(InventoryProviderError):
     pass
 
 

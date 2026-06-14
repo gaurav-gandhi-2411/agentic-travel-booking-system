@@ -80,6 +80,95 @@ These have hard-won design decisions baked in. Each has an ADR or a Phase docume
 
 **OpenRouter as free-routing primary.** `config/llm_routing.yaml` uses OpenRouter as the primary provider for the `free` routing profile (not just experimental scaffolding). `OPENROUTER_API_KEY` is bound to the prod service for on-demand activation via `LLM_ROUTING_PROFILE=free` header override. Currently prod runs `LLM_ROUTING_PROFILE=demo` so OpenRouter isn't invoked in normal traffic. Groq is the fallback.
 
+## Phase 3.2-A — Tenancy Foundation — COMPLETE (2026-06-08, local/test only)
+
+Code-complete, locally tested. **Not deployed — prod still on `00025-gaw` with no Postgres.**
+
+### What shipped
+
+- `tenancy/` module: `Tenant` + `ApiKey` SQLAlchemy 2.0 models, `service.py` (key generation / SHA-256 hashing / key→tenant resolution / demo-seed), `config.py` (per-tenant config accessors).
+- `persistence/` layer: async SQLAlchemy engine with lazy init, `rls.py` (RLS session-var helper), `engine.py` (`set_rls_tenant`). All SET LOCAL calls inline a `uuid.UUID()`-validated value — asyncpg rejects parameterized SET LOCAL.
+- Alembic initialized: `alembic.ini` at `apps/api/`, `persistence/migrations/env.py` (async), first migration `a1b2c3d4e5f6` creates `tenants` + `api_keys` tables with `ENABLE ROW LEVEL SECURITY` + `CREATE POLICY` isolation policies.
+- `TenantAuthMiddleware` replaces `DemoAuthMiddleware`. Extracts key from `Authorization: Bearer` or `X-API-Key`. Resolves to Tenant, sets `request.state.tenant_id/user_id/inventory_adapter/affiliate_enabled`. Local/synthetic mode injects synthetic context without hitting DB.
+- `DEMO_API_KEY` backward compat: `seed_demo_tenant()` idempotently seeds a `demo` tenant keyed to the existing env var. `test_demo_key_authenticates` proves compat.
+- Per-tenant config flows through the pipeline: `inventory_adapter` routes adapter selection, `affiliate_enabled` gates deeplinks. Old `AFFILIATE_DEEPLINKS` env var retired.
+- Sentry wired: `observability/sentry.py`, `init_sentry()` called at FastAPI lifespan startup. Graceful no-op when `SENTRY_DSN` unset. DSN to be injected when GG creates the Sentry project.
+- Branch protection applied to `main`: PR required, 0 approvals (solo), `CI / API (Python 3.12)` + `CI / Web (Node 20)` required, strict (branch up-to-date), force-push off, deletions off.
+- 573 tests (was 498), 87.49% coverage (was 87.01%). ruff + mypy clean (135 source files).
+
+### RLS hardening debt → resolved in Phase 3.2-A.1
+
+Closed by the second migration (`b2c3d4e5f6a7`) and the two-step resolve pattern. See Phase 3.2-A.1 section below.
+
+### Cloud SQL — DEFERRED (on-demand, no instance provisioned)
+
+**Decision (2026-06-08):** Do not provision Cloud SQL until there is a concrete trigger — a pilot tenant, a persistence-needing demo, or a paying prospect. A standing Cloud SQL bill for infra serving zero tenants is premature, and deploying while RLS hardening debt exists would bring an incomplete security posture to prod.
+
+### PROVISIONING GATE — seed_demo_tenant idempotency under non-superuser app role
+
+`seed_demo_tenant()` uses `SELECT WHERE slug='demo'` as its existence check. Under `FORCE ROW LEVEL SECURITY`, a non-superuser app role sees **zero rows** (no `app.current_tenant` context set at startup time) — the check always returns `None`, triggering a duplicate-insert attempt on every restart. The unique constraint on `slug` prevents data corruption, but the unhandled `IntegrityError` crashes startup.
+
+**This blocks Cloud SQL provisioning.** Before any Cloud SQL instance is provisioned, `seed_demo_tenant()` must be updated to catch `IntegrityError` on the slug unique constraint (insert-then-catch pattern, not check-then-insert). Do not provision without resolving this first.
+
+**When the trigger fires, the provisioning steps are:**
+1. Fix `seed_demo_tenant()` — insert-then-catch `IntegrityError` on slug unique constraint.
+2. Cloud SQL Postgres 16 instance — region `asia-south1` (matches Cloud Run), suggested tier `db-f1-micro`, 10 GB SSD to start.
+3. `DATABASE_URL` as a Google Secret Manager secret, bound to the Cloud Run service via Workload Identity.
+4. `alembic upgrade head` run against the new instance (one-time, before any code deploy).
+5. New Cloud Run revision with the `DATABASE_URL` binding active — canary gate → smoke → full.
+
+**Do not spin up an instance before a GG go-decision on the trigger.**
+
+## Phase 3.2-A.1 — RLS Hardening — COMPLETE (2026-06-08, local/test only)
+
+Code-complete, locally tested. **Not deployed — prod still on `00025-gaw` with no Postgres.**
+
+### What shipped
+
+- Migration `b2c3d4e5f6a7`: `ALTER TABLE tenants FORCE ROW LEVEL SECURITY` + `ALTER TABLE api_keys FORCE ROW LEVEL SECURITY` + `SECURITY DEFINER` function `resolve_api_key_secure(p_key_hash text) RETURNS uuid`. Function is owned by the superuser/BYPASSRLS role, has `SET search_path = public` pinned, and returns only the matching `tenant_id` — minimum bypass surface.
+- `resolve_key()` two-step: SECURITY DEFINER bootstrap lookup (no tenant context set) → `set_rls_tenant()` → `session.get(Tenant)` via normal RLS-scoped ORM path. No direct ORM join bypasses FORCE RLS.
+- `_validate_tenant_id()` in `persistence/rls.py` — calls `uuid.UUID()`, raises `ValueError` on any non-UUID input. Called at every `SET LOCAL` site; the inline SQL string is unreachable without passing through this guard.
+- Tests (21 new):
+  - **Injection-rejection unit tests** (`tests/unit/persistence/test_rls_validation.py`, 17 tests): `_validate_tenant_id`, `apply_rls_tenant`, and `set_rls_tenant` all raise `ValueError` before producing SQL for plain strings, SQL injection payloads, UUID-with-appended-SQL, empty string, whitespace, and UUID-with-extra-chars.
+  - **SECURITY DEFINER bootstrap** (`tests/integration/test_rls_hardening.py`, 3 tests): `resolve_api_key_secure()` returns correct tenant UUID from a non-superuser `app_role` connection with no `app.current_tenant` set. Full `resolve_key()` two-step verified via `rls_session`.
+  - **FORCE RLS table-owner isolation** (`tests/integration/test_rls_hardening.py`, 1 test): Creates `app_owner` role, transfers table ownership, `SET LOCAL ROLE app_owner`. Proves zero rows visible with no context, and tenant A's context cannot see tenant B's rows (`b_count == 0` held).
+- 594 tests (was 573), 87.65% coverage (was 87.49%). ruff + mypy clean (139 source files). mypy overrides for `tests.*` and `evals.*` remain in place (pre-existing 125 errors in test layer).
+
+### Remaining provisioning gap
+
+`seed_demo_tenant()` idempotency under FORCE RLS is unresolved. See PROVISIONING GATE note in the Cloud SQL deferral section above.
+
+## Phase 3.2-C — Live Hotel Adapter + Interface Generalization — PARKED (2026-06-09, local/test only)
+
+**Not deployed — prod still on `00025-gaw`. 3.2-C parked due to Hotellook sunset.**
+
+### Step 1 shipped (commit `1b74334`)
+
+- `providers/base.py`: `InventoryProvider` Protocol (`@runtime_checkable`, `close()` only) + shared exception hierarchy (`InventoryProviderError`, `InventoryRateLimitError`, `InventoryServerError`, `InventoryClientError`).
+- `AviasalesAdapter` conformed (additive only): `AviasalesError` now subclasses `InventoryProviderError`. All existing exception names preserved. All existing Aviasales tests pass unchanged.
+- **Normalization position recorded:** The Protocol is agnostic — it defines lifecycle only, no search method signatures or return types. The existing split (raw dicts in `AviasalesAdapter`, normalization in `FlightHunterAgent`) is preserved by design.
+
+### Hotellook sunset — confirmed before any adapter code was built
+
+Travelpayouts officially discontinued the Hotellook brand, closed the affiliate program, and stopped the `engine.hotellook.com` API (surviving links redirect to Booking.com). The MD5/engine API documentation found during research is stale. Confirmed from Travelpayouts' own help center. No `curl` needed — escalated to GG, decision received immediately.
+
+**Decision: do NOT build a Hotellook adapter. No graceful-404 workaround.** 3.2-C's interface-generalization purpose (two real adapters) cannot be served by a dead API.
+
+### What's preserved
+
+- `providers/base.py` (the `InventoryProvider` contract) is kept — it is useful regardless of Hotellook. The Aviasales adapter's conformance demonstrates the lifecycle pattern for any future second adapter.
+- `SyntheticProvider.get_hotels()` remains the only hotel inventory source. `HotelHunterAgent` continues to use `SyntheticProvider` unchanged.
+
+### Open question: hotel inventory source
+
+The second real inventory adapter (hotels) has no confirmed target API. Hotellook is the only Travelpayouts hotel product; its shutdown leaves the hotel vertical without a live affiliate source. This is an open architectural question.
+
+### Second real adapter — deferred
+
+The bookable-inventory proof (TBO / GDS) is a separate iteration, gated on GG's sandbox signup. Until that signup completes, the `InventoryProvider` contract is demonstrated by one real adapter (Aviasales flights) plus one synthetic fallback (hotels). 3.2-C is parked at Step 1.
+
+---
+
 ## Production state (Phase 3.1b deployed — 2026-06-08)
 
 Both surfaces are **fully current**. Backend carries Phase 3.1 code (AVIASALES_LIVE flag wiring, deeplink separator fix); prod runs **live Aviasales inventory** (`AVIASALES_LIVE=true` baked into `deploy-prod.yml`). Frontend unchanged.
@@ -277,8 +366,8 @@ No application logic changed. Four CI/process-hygiene items:
 
 *Production hardening (deferred):*
 - #8 — Promote optimizer eval to blocking CI gate
-- #10 — Wire Sentry for error aggregation
-- #12 — Enable "Require branches to be up to date" branch protection
+- ~~#10 — Wire Sentry for error aggregation — closed Phase 3.2-A (2026-06-08)~~
+- ~~#12 — Branch protection applied to main — closed Phase 3.2-A (2026-06-08)~~
 
 *Phase 2C follow-ups (low priority):*
 - #23 — Re-measure Llama ConversationManager latency post-TPD-reset
@@ -306,12 +395,14 @@ No application logic changed. Four CI/process-hygiene items:
 
 ## Tests / lint / types — current state
 
-**As of Phase 3.1 (2026-06-06) — code baseline verified:**
-- 498 tests passing, 87.01% coverage (was 485 / 86.46% at Phase 2D close)
-  - +11 unit tests: `AVIASALES_LIVE` and `AFFILIATE_DEEPLINKS` flag behaviour (`tests/unit/api/test_feature_flags.py`)
-  - +2 deeplink regression tests: raw_link with/without pre-existing query params (`tests/unit/providers/test_deeplink.py`)
-- ruff check passing
-- mypy: source layer clean; 125 pre-existing errors in test files (`[attr-defined]` on mock objects, `[arg-type]` on protocol stubs, `[unused-ignore]`) — all in test layer, none introduced by Phase 3.1
+**As of Phase 3.2-C Step 1 (2026-06-09) — code baseline verified:**
+- 597 tests total (579 passed, 3 skipped, 15 Docker-blocked integration tests — pre-existing); 594 unit tests from 3.2-A.1 + 3 additional; coverage unchanged at ≥87.65%
+  - Phase 3.2-C Step 1 added no new tests; the +3 count reflects test-collection differences vs. the Docker-blocked environment
+  - No test regressions — all pre-existing unit tests pass
+  - +17 unit tests: injection-rejection for `_validate_tenant_id`, `apply_rls_tenant`, `set_rls_tenant` (`tests/unit/persistence/test_rls_validation.py`)
+  - +4 integration tests: SECURITY DEFINER bootstrap (3) + FORCE RLS table-owner isolation (1) (`tests/integration/test_rls_hardening.py`)
+- ruff check passing (full `.`)
+- mypy: 139 source files, 0 issues. `[[tool.mypy.overrides]]` with `ignore_errors = true` on `tests.*` and `evals.*` suppresses 125 pre-existing test-layer errors (none introduced by Phase 3.2-A/A.1)
 - Frontend: unchanged from Phase 2D (lint clean, typecheck clean, build green)
 
 **Known-broken and accepted:**
@@ -406,6 +497,185 @@ agentic-travel-booking-system/
 ├── AUDIT_REPORT.md                   # Original audit (Phase 1 baseline)
 └── README.md
 ```
+
+## Phase 3.2-E.2 — Booking UI in the Demo — COMPLETE (2026-06-11, local/test only)
+
+Frontend-only iteration. No backend changes. Prod stays `00025-gaw`.
+
+### What shipped
+
+- `apps/web/app/api/book/route.ts` — Next.js SSE proxy to backend `POST /book`; validates `offer_id` + `idempotency_key`; 30s timeout; forwards `X-API-Key`.
+- `apps/web/app/api/cancel/route.ts` — Next.js SSE proxy to backend `POST /cancel`; validates `booking_ref`; 15s timeout.
+- `apps/web/hooks/useBookingStream.ts` — 7-state booking hook (`idle | revalidating | price_confirm | confirmed | cancelling | cancelled | error`); idempotency key generated per attempt; `confirmPriceChange()` issues a new key on price-change re-confirm; `AbortController` lifecycle mirrors `useSearchStream`.
+- `apps/web/lib/event-map.ts` — additive: 14 booking SSE fields added to `SseEvent` (`offer_id`, `pnr`, `offer_lock_id`, `hold_expires_at`, `current_price_inr`, `previous_price_inr`, `is_available`, `price_changed`, `booking_ref`, `cancelled`, `code`, `sandbox`, `idempotency_key`, `audit_id`).
+- `apps/web/components/demo/BookingPanel.tsx` — full-width booking flow panel; renders all 7 states; sandbox badge visible throughout; hold-expiry countdown; code-specific error messages for `not_bookable`, `unavailable`, `conflict`, `provider_error`, `not_found`.
+- `apps/web/components/demo/ArchetypeCard.tsx` — additive: `onBook?` + `isBookingActive?` props; "Book this flight" button rendered below the existing "Book on Aviasales" link when `onBook` is provided. Existing Aviasales link preserved exactly.
+- `apps/web/components/demo/DemoClient.tsx` — additive: `useBookingStream` hook instantiated; `selectedArchetype` state; `handleBook`/`handleBookingClose` callbacks; `BookingPanel` rendered between results grid and refinement section.
+
+### Hard constraints honored
+
+- Price-changed gate: `booking_priced{price_changed:true}` renders the price-confirm UI; no auto-confirm path exists in the hook or UI.
+- Sandbox labeling: amber "Sandbox · demo booking — no payment taken" badge visible in all booking states except cancelled/error-after-cancel.
+- Search/refine flow: all existing DemoClient behavior preserved; additions are strictly additive.
+- No deploy: local/test only.
+
+### Future backend enhancement (filed as non-blocking follow-up)
+
+**Tenant bookable capability flag.** The current UI shows "Book this flight" on every ArchetypeCard regardless of tenant type. For a search-only tenant (Aviasales), clicking the button opens the BookingPanel, which immediately renders the `not_bookable` error from the backend's capability gate (`get_bookable_provider → None → booking_error{not_bookable}`).
+
+A cleaner UX would disable or hide the "Book this flight" button up-front for search-only tenants — before the user clicks. This requires the backend to expose a `bookable: bool` capability flag in the search response or a tenant-context endpoint. That is a **backend change (out of scope for 3.2-E.2)**. The open-then-not_bookable behavior ships now; this note is a pointer for the next iteration that touches the search/tenant API surface.
+
+Potential implementation: add `bookable: bool` to the `done` SSE event (or a new `tenant_context` event early in the stream), read it in `useSearchStream`, thread it as a prop to `ArchetypeCard`.
+
+---
+
+## Phase 3.2-F — Provision + Deploy (go live) — IN PROGRESS (2026-06-13)
+
+Cloud SQL instance provisioned + migrated + demo tenant seeded. **Backend NOT yet
+deployed — prod still `00025-gaw` (no Postgres). Stopped at the GG-gated canary.**
+
+### Cloud SQL instance (provisioned, GG-approved ~$11/mo)
+- Instance: `dealhunter-prod-pg16`, PostgreSQL **16**, region `asia-south1` (matches
+  Cloud Run). Public IP `8.231.91.1`, SSL required. DB `dealhunter`.
+- Roles:
+  - `postgres` — cloudsqlsuperuser, **rolsuper=false, rolbypassrls=false** (Cloud SQL
+    limits it; it is subject to FORCE RLS — this is the crux of the blocker below).
+  - `dealhunter_app` — the application role. **LOGIN, NOINHERIT, rolsuper=false,
+    rolbypassrls=false.** Least privilege: SELECT/INSERT/UPDATE/DELETE on `tenants` +
+    `api_keys`, EXECUTE on the resolver. No DDL, no TRUNCATE. This is the role the
+    deployed app connects as, so FORCE RLS actually binds it.
+  - `dealhunter_resolver` — **NOLOGIN BYPASSRLS**, owns `resolve_api_key_secure`,
+    granted only SELECT on the two tables. See resolver fix below. `dealhunter_app`
+    is NOT a member and cannot SET ROLE to it.
+- `alembic_version` = **`e5f6a7b8c9d0`** (head). FORCE ROW LEVEL SECURITY ON for both
+  tables.
+
+### The resolver/RLS blocker — RESOLVED (isolation-preserving)
+**Root cause:** `resolve_api_key_secure` is SECURITY DEFINER, so it runs as its
+*owner*. Migration `b2c3d4e5f6a7` created it owned by the migration-runner. On Cloud
+SQL that runner is `postgres`, which has `rolbypassrls=false`, so under FORCE RLS the
+resolver's bootstrap SELECT (run with no `app.current_tenant`) returned **0 rows for
+every key** → production auth would have been dead for all requests. The
+testcontainers suite hid this because its migration-runner is a real superuser.
+(The earlier `_prod_verify_final.py` "ALL PASSED" did not reflect live reality;
+confirmed broken by direct probe: a freshly-committed valid key resolved to `None`.)
+
+**Fix (migration `e5f6a7b8c9d0`, verified live):** a dedicated **NOLOGIN BYPASSRLS**
+role `dealhunter_resolver` owns the resolver and is granted only SELECT on the two
+tables it reads. SECURITY DEFINER then bypasses FORCE RLS for that one narrow
+bootstrap lookup only. Confirmed on Cloud SQL: Cloud SQL **permits** `CREATE ROLE ...
+BYPASSRLS` on a custom role; after the fix a valid key resolves to its tenant,
+cross-tenant SELECT = 0 rows, no-context SELECT = 0 rows for `dealhunter_app`.
+FORCE RLS stays ON; the traffic role stays fully policed. **No isolation weakened.**
+
+### Seed-under-FORCE-RLS fix (migration `c3d4e5f6a7b8` + service A2)
+- `c3d4e5f6a7b8` tightens the FOR ALL policies' WITH CHECK: allow INSERT when no
+  tenant context is set (bootstrap/seed) while still rejecting a tenant-scoped session
+  inserting another tenant's row. SELECT/UPDATE/DELETE USING isolation unchanged.
+- `create_tenant_with_key` (A2) sets `app.current_tenant` to the new tenant's id
+  before flush, resets it after — so INSERT...RETURNING works on the direct-login
+  non-superuser path. `seed_demo_tenant` is insert-then-catch (IntegrityError on slug).
+
+### Demo tenant (seeded, idempotent)
+- Re-seeded via the real `seed_demo_tenant` code path as `dealhunter_app`, keyed to the
+  **`demo-api-key` Secret Manager secret** (prefix `4df9a058`, the value
+  `DEMO_API_KEY=demo-api-key:latest` injects). `inventory_adapter="demo"`,
+  `affiliate_enabled=true`. Exactly 1 demo tenant; re-seed is a clean no-op.
+  (A prior session's orphan demo tenant — key lost to console-only output — was
+  deleted first.) No `KEY_HASH_PEPPER` in prod, so plain SHA-256 on both sides.
+
+### Tests / lint / types
+- Unit suite **600 passed** locally; ruff + mypy clean. Integration tests are
+  Docker-blocked locally (Docker daemon not running) — the RLS/resolver behavior was
+  instead verified **directly against the live Cloud SQL instance** (stronger than the
+  testcontainers superuser path, which masked the resolver bug).
+- Two commits on local `main`: `38e5579` (FORCE-RLS provisioning/seed) and `2d856de`
+  (resolver bypassrls owner). `main` is 40 commits ahead of `origin/main` (3.2-C/E/F
+  arc, all unpushed).
+
+### REMAINING — GG-gated (CRITICAL), not done autonomously
+The canary deploy needs these, each of which is GG-gated:
+1. **Cloud SQL DATABASE_URL secret** (new Secret Manager secret) — `dealhunter_app`
+   creds, NOT `postgres`. Form depends on connectivity choice below.
+2. **Cloud Run ↔ Cloud SQL connectivity** — `deploy-prod.yml` currently has
+   `DATABASE_URL=neon-database-url-prod:latest` (the unused Neon) and **no**
+   `--add-cloudsql-instances`. Recommended: Cloud SQL connector
+   (`--add-cloudsql-instances=agentic-travel-booking-system:asia-south1:dealhunter-prod-pg16`
+   + unix-socket DATABASE_URL) rather than public-IP authorized-networks (Cloud Run
+   egress IPs are dynamic). This materially changes the service config → escalate.
+3. **Edit `deploy-prod.yml`** (load-bearing → CRITICAL): swap the DATABASE_URL secret
+   + add the Cloud SQL instance flag. Show the diff to GG first.
+4. **Push/merge** local `main` (branch protection requires a PR) so the canary image
+   carries the tenancy + resolver fix.
+5. **Canary → smoke → full** via `workflow_dispatch` (GG approves the prod environment
+   gate and the promotion), then point/confirm the Vercel frontend.
+
+---
+
+## Phase 3.2-F.1 — Resolver redesign + schema isolation for FREE managed Postgres — CODE-COMPLETE, VERIFIED LIVE (2026-06-14, branch `fix/resolver-bootstrap-auth-schema-isolation`, PR open, NOT merged)
+
+**Decision change from 3.2-F:** deploy on **FREE managed Postgres (Supabase free tier,
+$0 standing cost)**, not Cloud SQL. The Cloud SQL instance `dealhunter-prod-pg16` is torn
+down. Fly/Railway have no free Postgres in 2026, so the superuser-provider path is dropped.
+This **supersedes** the 3.2-F "resolver/RLS blocker — RESOLVED (BYPASSRLS owner)" note above
+and its Cloud SQL `deploy-prod.yml` connectivity steps — those are obsolete.
+
+### Resolver redesign — NO BYPASSRLS, NO superuser, FORCE RLS intact
+- Migration `e5f6a7b8c9d0` was **rewritten** (file renamed `…_resolver_bootstrap_auth_policy.py`;
+  the old NOLOGIN-BYPASSRLS-owner version is gone). Managed free Postgres gives no superuser
+  and forbids `CREATE ROLE … BYPASSRLS`, so the dedicated-bypass-owner approach is impossible.
+- New mechanism: an **additive PERMISSIVE, SELECT-only** policy `api_keys_bootstrap_auth`
+  `USING (key_hash = NULLIF(current_setting('app.bootstrap_key_hash', true), ''))`, plus a
+  **SECURITY INVOKER** `resolve_api_key_secure` (runs as the calling app role, fully RLS-bound)
+  that sets the GUC via parameterized `set_config(..., true)`, reads the one permitted row,
+  clears the GUC, returns `tenant_id`. A row is visible IFF the caller presents its exact
+  64-hex SHA-256 — **exact-secret-only, not enumerable, no cross-tenant scan**. When the GUC
+  is unset (all normal traffic) the policy adds zero visibility; SELECT isolation is byte-
+  identical to before. `tenants` needs no bootstrap policy; tenant `is_active` is checked in
+  `resolve_key` step 2. FORCE ROW LEVEL SECURITY stays ON for both tables.
+- The rewrite is on **unpushed** local history; new commits (no amend) on the branch.
+
+### Dedicated `dealhunter` schema isolation (SHARED instance)
+- Supabase free tier caps at 2 projects (both in use), so DealHunter **shares the existing
+  shopping-assistant project** (ref `zwvvuvaasbotamxbixny`; review-iq untouched). ALL objects
+  — tenants/api_keys, `resolve_api_key_secure`, every RLS policy, and **`alembic_version`** —
+  live in a dedicated **`dealhunter`** schema (`persistence/schema.py:DB_SCHEMA`), never
+  `public`. `env.py` creates the schema in its own committed txn, pins `search_path` to it via
+  a connection **startup parameter** (`server_settings`), and sets `version_table_schema` so
+  histories can never collide with the co-tenant's `public.alembic_version`. The runtime engine
+  pins `search_path=dealhunter` the same way. **Connectivity: Supabase Session pooler, port
+  5432** (transaction-mode 6543 is unsafe — a non-LOCAL `SET search_path` can be lost between
+  statements; verified the port is the authoritative session-mode signal).
+
+### Startup guard — "never serve as `postgres`" is STRUCTURAL, not a checklist
+- **HARD RULE: the prod `DATABASE_URL` MUST use the least-privilege `dealhunter_app` role,
+  NEVER `postgres`.** On Supabase the platform `postgres` admin role is `rolsuper=false` but
+  **`rolbypassrls=true`** (immutable) — connecting as it would silently void all tenant
+  isolation. `persistence/engine.py:assert_runtime_role_unprivileged()` runs at FastAPI
+  startup whenever `DATABASE_URL` is set and **raises RuntimeError (hard fail, loud)** if the
+  connected role has `rolsuper` or `rolbypassrls`. `postgres` is used for migrations/
+  provisioning only. The accepted security invariant is "the RUNTIME role serving traffic is
+  non-superuser AND non-BYPASSRLS" — not "no role anywhere has bypassrls".
+
+### Live verification (real Supabase, not local)
+- `scripts/verify_resolver_free_pg.py` ran **26/26 PASS** against the shopping-assistant
+  instance (PG 17.6): clean `alembic upgrade head` as the non-superuser owner; `public`
+  byte-identical before/after (blast-radius); all objects in `dealhunter`; cross-tenant
+  SELECT/UPDATE/DELETE = 0 and cross-tenant INSERT rejected by WITH CHECK; bootstrap reveals
+  exactly the presented row (never B); A2 guard + double-seed idempotency; startup guard
+  passes the app role and refuses the BYPASSRLS owner. The script **self-cleans to pristine**
+  (drops the `dealhunter` schema + verify role; never touches `public`) so the real deploy
+  migrates fresh via the pipeline. Note: spec pinned PG16; Supabase serves PG17.6 (forward-
+  compatible with FORCE RLS, permissive policies, `set_config`).
+- Local gate: ruff clean · mypy clean (157 files) · **603 unit tests** (86.15%). Integration
+  tests are Docker-blocked locally; the live script is the stronger proof.
+
+### REMAINING — GG-gated (unchanged shape, Supabase target)
+PR review/merge (GG); then create a Supabase **Session-pooler** `DATABASE_URL` secret for the
+**`dealhunter_app`** role (provision that role + grants on the `dealhunter` schema first);
+update `deploy-prod.yml` to use it (show diff); canary → smoke → full; point the frontend.
+
+---
 
 ## What "ready to ship" looks like for any iteration
 

@@ -47,20 +47,35 @@ class SearchRequest(BaseModel):
     query: str = Field(min_length=3, max_length=1000)
 
 
-def _build_agents(profile: str) -> tuple[PlannerAgent, OptimizerAgent]:
+def _build_agents(
+    profile: str,
+    affiliate_enabled: bool = True,
+) -> tuple[PlannerAgent, OptimizerAgent]:
+    """Build planner and optimizer agents for a request.
+
+    Args:
+        profile: LLM routing profile name.
+        affiliate_enabled: Whether to embed affiliate partner marker in deeplinks.
+            When False, partner_marker is cleared so no affiliate tag is appended.
+    """
     planner_client, planner_model = get_llm_client_and_model("planner", profile)
     optimizer_client, optimizer_model = get_llm_client_and_model("optimizer", profile)
     planner = PlannerAgent(planner_client, planner_model)
-    _affiliate_on = os.environ.get("AFFILIATE_DEEPLINKS", "true").lower() not in ("false", "0")
     optimizer = OptimizerAgent(
         client=optimizer_client,
         model=optimizer_model,
-        partner_marker=os.environ.get("AVIASALES_PARTNER_ID", "") if _affiliate_on else "",
+        partner_marker=os.environ.get("AVIASALES_PARTNER_ID", "") if affiliate_enabled else "",
     )
     return planner, optimizer
 
 
-async def _sse_generator(query: str, profile: str, request_id: str) -> AsyncGenerator[str, None]:
+async def _sse_generator(
+    query: str,
+    profile: str,
+    request_id: str,
+    affiliate_enabled: bool = True,
+    inventory_adapter: str = "aviasales",
+) -> AsyncGenerator[str, None]:
     # Langfuse trace — optional, never breaks the pipeline
     lf = get_langfuse()
     trace = None
@@ -75,11 +90,13 @@ async def _sse_generator(query: str, profile: str, request_id: str) -> AsyncGene
             set_request_trace(trace)
 
     try:
-        planner, optimizer = _build_agents(profile)
+        planner, optimizer = _build_agents(profile, affiliate_enabled=affiliate_enabled)
     except Exception as exc:
         yield f"data: {json.dumps({'type': 'error', 'message': str(exc)})}\n\n"
         return
-    async for event in stream_search(query, planner, optimizer):
+    async for event in stream_search(
+        query, planner, optimizer, inventory_adapter=inventory_adapter
+    ):
         yield f"data: {json.dumps(event)}\n\n"
 
     # End trace and flush
@@ -94,8 +111,18 @@ async def search(body: SearchRequest, request: Request) -> StreamingResponse:
     llm_profile = getattr(request.state, "llm_profile", None)
     profile = _resolve_profile(llm_profile)
     request_id = str(structlog.contextvars.get_contextvars().get("request_id", ""))
+    # Per-tenant config injected by TenantAuthMiddleware; fall back to env-var / defaults
+    # for callers that bypass auth (e.g. test fixtures that don't hit the middleware).
+    affiliate_enabled: bool = getattr(request.state, "affiliate_enabled", True)
+    inventory_adapter: str = getattr(request.state, "inventory_adapter", "aviasales")
     return StreamingResponse(
-        _sse_generator(body.query, profile, request_id),
+        _sse_generator(
+            body.query,
+            profile,
+            request_id,
+            affiliate_enabled=affiliate_enabled,
+            inventory_adapter=inventory_adapter,
+        ),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

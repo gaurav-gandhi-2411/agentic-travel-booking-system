@@ -7,6 +7,8 @@ import { cn } from '@/lib/utils';
 
 interface ArchetypeCardProps {
   archetype: Archetype;
+  onBook?: () => void;
+  isBookingActive?: boolean;
 }
 
 function formatINR(amount: number): string {
@@ -55,7 +57,7 @@ const LABEL_CONFIG = {
   },
 } as const;
 
-export default function ArchetypeCard({ archetype }: ArchetypeCardProps) {
+export default function ArchetypeCard({ archetype, onBook, isBookingActive = false }: ArchetypeCardProps) {
   const { flight, explanation, comparison_to_alternative, deeplink_url, label } = archetype;
   const config = LABEL_CONFIG[label];
   const [comparisonOpen, setComparisonOpen] = useState(false);
@@ -145,6 +147,24 @@ export default function ArchetypeCard({ archetype }: ArchetypeCardProps) {
         <div className="rounded-lg px-4 py-2.5 text-xs text-muted-foreground text-center border border-dashed border-muted-foreground/25">
           Booking link unavailable
         </div>
+      )}
+
+      {/* In-app booking button — only shown when parent wires up the handler */}
+      {onBook && (
+        <button
+          onClick={onBook}
+          disabled={isBookingActive}
+          className={cn(
+            'inline-flex items-center justify-center gap-1.5 rounded-lg px-4 py-2.5',
+            'text-sm font-medium transition-colors duration-150',
+            'border-2',
+            label === 'best-value'
+              ? 'border-teal-600 text-teal-700 hover:bg-teal-50 disabled:opacity-50 disabled:cursor-not-allowed'
+              : 'border-blue-600 text-blue-700 hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed',
+          )}
+        >
+          {isBookingActive ? 'Booking in progress…' : 'Book this flight'}
+        </button>
       )}
     </div>
   );

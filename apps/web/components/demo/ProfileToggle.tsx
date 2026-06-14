@@ -6,7 +6,6 @@ import { cn } from '@/lib/utils';
 export type LLMProfile =
   | 'demo-llama'
   | 'demo-gpt-oss-120b'
-  | 'demo-deepseek-v4'
   | 'demo-haiku';
 
 const STORAGE_KEY = 'preferred_llm_profile';
@@ -21,13 +20,12 @@ export function useProfilePreference(): [LLMProfile, (p: LLMProfile) => void] {
       if (
         stored === 'demo-llama' ||
         stored === 'demo-gpt-oss-120b' ||
-        stored === 'demo-deepseek-v4' ||
         stored === 'demo-haiku'
       ) {
         setProfile(stored as LLMProfile);
       } else {
-        // Stale (demo-qwen from before May 16, or any unknown value) —
-        // fall through to DEFAULT_PROFILE, no setProfile call needed.
+        // Stale (demo-qwen from before May 16, demo-deepseek-v4 removed June 12,
+        // or any unknown value) — fall through to DEFAULT_PROFILE.
         if (stored) localStorage.removeItem(STORAGE_KEY);
       }
     } catch {
@@ -63,12 +61,6 @@ const OPTIONS: Array<{
     value: 'demo-gpt-oss-120b',
     label: 'GPT-OSS',
     sublabel: 'OpenAI open-weight (Groq)',
-    hint: 'Free',
-  },
-  {
-    value: 'demo-deepseek-v4',
-    label: 'DeepSeek',
-    sublabel: 'DeepSeek V4 Flash (NIM)',
     hint: 'Free',
   },
   {
