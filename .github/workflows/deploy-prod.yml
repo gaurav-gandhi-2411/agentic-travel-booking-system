@@ -80,7 +80,7 @@ jobs:
           env_vars: |
             APP_MODE=demo
             APP_ENV=production
-            LLM_ROUTING_PROFILE=demo
+            LLM_ROUTING_PROFILE=demo-llama
             AVIASALES_LIVE=true
           secrets: |
             ANTHROPIC_API_KEY=anthropic-api-key:latest
