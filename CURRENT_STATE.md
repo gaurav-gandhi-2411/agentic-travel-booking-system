@@ -178,22 +178,33 @@ bookings only (no payment/real PNR).
 
 ### Backend (Cloud Run)
 
-- **Running revision:** `agentic-travel-booking-api-prod-00028-xah` at **100% traffic**;
-  prior `00025-gaw` **drained to 0%**. Staleness check: backend current.
-- **Image:** built from `main` HEAD merge commit `0cbbb28` (PR #58 tenancy/resolver/schema/
-  guard + PR #59 Supabase `DATABASE_URL` swap).
-- **Deploy (Phase 3.2-F, 2026-06-14):** `stage=canary` (`00028-xah` at 0% + tag) → GG canary
-  smoke passed (Postgres-backed search→book→confirm→cancel on live Supabase) → `stage=full`
-  (`00028-xah` at 100%).
+- **Running revision:** `agentic-travel-booking-api-prod-00032-cex` at **100% traffic**;
+  prior `00028-xah` **drained to 0%**. Staleness check: backend current (2026-06-14).
+- **Image:** built from `main` HEAD commit `ad6404a` (PR #63 memory bump; PR #62 routing fix
+  also included — both squash-merged 2026-06-14).
+- **Deploy history (2026-06-14):**
+  - 3.2-F initial: `00028-xah` (PR #58/#59 Supabase multi-tenant stack) → 100%.
+  - Hot-fix arc: `/demo` 401s traced to `LLM_ROUTING_PROFILE=demo` routing the planner to
+    `provider: anthropic` (claude-haiku); `ANTHROPIC_API_KEY` is a placeholder by design
+    (double-billing rule). Fix: PR #62 (`LLM_ROUTING_PROFILE=demo` → `demo-llama`). PR #63
+    bumped `--memory=512Mi` → `--memory=1Gi` after `00031-yub` OOM'd at startup (525 MiB
+    used). `00032-cex` canary smoke confirmed `model: llama-3.3-70b-versatile` in structured
+    logs, no 401, full SSE stream → promoted to 100%.
 - **Service URL:** `https://agentic-travel-booking-api-prod-rqyyasfwaa-el.a.run.app`
 - **Database:** Supabase (shared **shopping-assistant** project, ref `zwvvuvaasbotamxbixny`),
   dedicated **`dealhunter`** schema, **PostgreSQL 17.6**, connected as the least-privilege
   **`dealhunter_app`** role (non-superuser, non-BYPASSRLS) via the **session pooler (5432,
   `ssl=require`)**. `public` and the co-tenant project are untouched.
 - **Env/secret bindings active:** `APP_MODE=demo`, `APP_ENV=production`,
-  `LLM_ROUTING_PROFILE=demo`, `AVIASALES_LIVE=true`; secrets `DATABASE_URL=
+  `LLM_ROUTING_PROFILE=demo-llama`, `AVIASALES_LIVE=true`; secrets `DATABASE_URL=
   supabase-dealhunter-url-prod:latest` (NOT `postgres`, NOT 6543), `DEMO_API_KEY`,
   `AVIASALES_*`, `GROQ/OPENROUTER/ANTHROPIC`, `UPSTASH_REDIS_URL`, `LANGFUSE_*`.
+- **LLM routing (live):** `demo-llama` profile — planner on `llama-3.3-70b-versatile` (Groq),
+  all agents on Groq Llama. `ANTHROPIC_API_KEY` secret is a placeholder; Anthropic is never
+  called on the demo path. `demo` and `demo-haiku` profiles remain in `llm_routing.yaml` as
+  the Anthropic premium track (B2B tenant opt-in) — do NOT set `LLM_ROUTING_PROFILE=demo`
+  on the prod deployment without a real `ANTHROPIC_API_KEY`.
+- **Memory:** `--memory=1Gi` (bumped from 512Mi — revision `00031-yub` OOM'd at 525 MiB).
 - **Boot behavior:** the startup guard (`assert_runtime_role_unprivileged`) runs first and
   **refuses to boot** if the DB role can bypass RLS; then `seed_demo_tenant` runs **as
   `dealhunter_app`** (idempotent), seeding exactly one `demo` tenant (`inventory_adapter=
@@ -451,7 +462,7 @@ No application logic changed. Four CI/process-hygiene items:
 ### Production backend (Cloud Run)
 - **Service name:** `agentic-travel-booking-api-prod`
 - **Service URL:** `https://agentic-travel-booking-api-prod-rqyyasfwaa-el.a.run.app`
-- **Running revision:** `agentic-travel-booking-api-prod-00019-liy` at 100% traffic
+- **Running revision:** `agentic-travel-booking-api-prod-00032-cex` at 100% traffic
 - **GCP project:** `agentic-travel-booking-system`
 - **Region:** `asia-south1`
 - **Artifact Registry:** `asia-south1-docker.pkg.dev/agentic-travel-booking-system/travel-agent/api`
