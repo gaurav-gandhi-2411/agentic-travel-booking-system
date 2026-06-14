@@ -169,27 +169,57 @@ The bookable-inventory proof (TBO / GDS) is a separate iteration, gated on GG's 
 
 ---
 
-## Production state (Phase 3.1b deployed — 2026-06-08)
+## Production state (Phase 3.2-F deployed — 2026-06-14) — FIRST POSTGRES-BACKED MULTI-TENANT REVISION
 
-Both surfaces are **fully current**. Backend carries Phase 3.1 code (AVIASALES_LIVE flag wiring, deeplink separator fix); prod runs **live Aviasales inventory** (`AVIASALES_LIVE=true` baked into `deploy-prod.yml`). Frontend unchanged.
+Backend now runs the **multi-tenant, Postgres-backed** stack on **free managed Supabase**
+(tenancy + RLS + bootstrap-auth resolver + booking loop + DemoProvider). Live Aviasales
+inventory stays on (`AVIASALES_LIVE=true`). Demo tenant served via DemoProvider. Sandbox
+bookings only (no payment/real PNR).
 
 ### Backend (Cloud Run)
 
-- **Running revision:** `agentic-travel-booking-api-prod-00025-gaw` at 100% traffic
-- **Image:** built from `main` HEAD at commit `4f0c02f` (Phase 3.1b — AVIASALES_LIVE=true in deploy-prod.yml)
-- **Git equivalent:** fully current with main; 0 commits behind in `apps/api/`
-- **Deploy (Phase 3.1b, 2026-06-08):** stage=canary (`00025-gaw` at 0% + tag) → GG canary smoke passed (live fare + clean deeplink) → stage=full (`00025-gaw` at 100%).
+- **Running revision:** `agentic-travel-booking-api-prod-00028-xah` at **100% traffic**;
+  prior `00025-gaw` **drained to 0%**. Staleness check: backend current.
+- **Image:** built from `main` HEAD merge commit `0cbbb28` (PR #58 tenancy/resolver/schema/
+  guard + PR #59 Supabase `DATABASE_URL` swap).
+- **Deploy (Phase 3.2-F, 2026-06-14):** `stage=canary` (`00028-xah` at 0% + tag) → GG canary
+  smoke passed (Postgres-backed search→book→confirm→cancel on live Supabase) → `stage=full`
+  (`00028-xah` at 100%).
 - **Service URL:** `https://agentic-travel-booking-api-prod-rqyyasfwaa-el.a.run.app`
-- **Env bindings active:** `APP_ENV=production`, `UPSTASH_REDIS_URL`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `AVIASALES_API_KEY`, `AVIASALES_PARTNER_ID`, `AVIASALES_LIVE=true` — all bound. Live inventory active.
-- **Deploy method:** `workflow_dispatch stage=canary` (Gate 1) → human smoke test → `workflow_dispatch stage=full` (Gate 2 after GG approval)
+- **Database:** Supabase (shared **shopping-assistant** project, ref `zwvvuvaasbotamxbixny`),
+  dedicated **`dealhunter`** schema, **PostgreSQL 17.6**, connected as the least-privilege
+  **`dealhunter_app`** role (non-superuser, non-BYPASSRLS) via the **session pooler (5432,
+  `ssl=require`)**. `public` and the co-tenant project are untouched.
+- **Env/secret bindings active:** `APP_MODE=demo`, `APP_ENV=production`,
+  `LLM_ROUTING_PROFILE=demo`, `AVIASALES_LIVE=true`; secrets `DATABASE_URL=
+  supabase-dealhunter-url-prod:latest` (NOT `postgres`, NOT 6543), `DEMO_API_KEY`,
+  `AVIASALES_*`, `GROQ/OPENROUTER/ANTHROPIC`, `UPSTASH_REDIS_URL`, `LANGFUSE_*`.
+- **Boot behavior:** the startup guard (`assert_runtime_role_unprivileged`) runs first and
+  **refuses to boot** if the DB role can bypass RLS; then `seed_demo_tenant` runs **as
+  `dealhunter_app`** (idempotent), seeding exactly one `demo` tenant (`inventory_adapter=
+  'demo'`) into `dealhunter`. Verified live on `00028-xah`: `/health` 200, 1 demo tenant + 1
+  api_key.
+- **Deploy method:** `workflow_dispatch stage=canary` (Gate 1) → GG smoke → `workflow_dispatch
+  stage=full` (Gate 2 after GG prod-environment approval).
 
-See ADR-0023 for the full backend deploy narrative.
+See ADR-0023 for the backend deploy narrative; Phase 3.2-F.1 section above for the resolver/
+schema/guard design.
 
-### Frontend (Vercel)
+### Frontend (Vercel) — 4 commits behind main (apps/web/), NOT yet redeployed
+
+> **Drift flagged (2026-06-14):** after the 3.2-F backend promotion, the staleness check
+> reports **frontend = 4 commits behind `main` (`apps/web/`)** — the **3.2-E.2 booking UI**
+> (BookingPanel, useBookingStream, /book + /cancel proxy routes, event-map additions)
+> merged to `main` in PR #58's arc but has **not** been deployed to Vercel. Backend = 0
+> behind (current). Staleness issue **#60** opened for the frontend only. Deploying the
+> booking UI to Vercel (`vercel deploy --prod --archive=tgz`) is a **separate, GG-gated
+> frontend step** — out of scope for the backend deploy. The current Vercel deployment
+> still drives search/refine against the (now Postgres-backed) backend; the booking UI
+> panel is what's pending.
 
 - **Production URL:** `https://agentic-travel-booking-system.vercel.app`
-- **Deployment ID:** `dpl_F3DMy1YysATzBgWKBpd6RzoCvR85`
-- **Git commit:** `1cf0a07` (current `main` HEAD, includes PRs #22 and #32)
+- **Deployment ID (current live):** `dpl_F3DMy1YysATzBgWKBpd6RzoCvR85`
+- **Git commit (deployed):** `1cf0a07` — **4 `apps/web/` commits behind main** (booking UI pending)
 - **Deployed:** 2026-05-31 via `vercel deploy --prod --archive=tgz` (Vercel CLI, authenticated as `gaurav-gandhi-2411`)
 - **Env vars (Production scope):** `API_BASE_URL=https://agentic-travel-booking-api-prod-rqyyasfwaa-el.a.run.app`, `DEMO_API_KEY` — both set correctly; prior deployment had both as empty strings (root cause of broken searches)
 - **Post-deploy verified (orchestrator + GG browser visual):**
