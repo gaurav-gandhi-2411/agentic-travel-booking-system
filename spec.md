@@ -1,137 +1,124 @@
-# Project Spec: DealHunter — Phase 3.2-E.2 (Booking UI in the Demo)
+# Project Spec: DealHunter — Phase 3.2-G (Demo Last-Mile Fixes)
 
 ## Goal
 
-Make the booking loop **clickable**. Surface the full lifecycle — select an offer
-from search results → see it re-priced (revalidate) → confirm (book) → see the
-confirmation (PNR + hold expiry) → optionally cancel — in the existing Next.js
-demo UI, consuming the `/book` and `/cancel` SSE endpoints built in 3.2-E.1.
+Fix the demo-presentation-layer bugs found in the live /demo audit so a prospect
+can drive the full loop without hitting credibility-breaking or confusing states.
+Backend SSE is clean (audit found zero backend bugs); all fixes are frontend +
+demo-tenant config. No tenancy/RLS/resolver changes.
 
-This is what turns the product from "an API that books" into "a thing a prospect
-can drive in a browser." It is a **sandbox** experience end-to-end: the UI must
-make clear bookings are simulated (no payment, no real ticket).
+**Sandbox demo only. Frontend + config. No backend SSE/agent logic changes.**
+Prod backend is live (00032-cex); deploy frontend to Vercel + at most a demo-tenant
+config/catalog change to the backend if B1 requires it (gated).
 
-**Local/test only — no deploy** (blocked by the Cloud SQL gate regardless).
-Prod stays `00025-gaw`.
+## Current state
 
-## Current state (existing project)
-
-- Frontend: Next.js 15 / React 19 on Vercel (`apps/web`). Components under
-  `components/demo/` (DemoClient, ProfileToggle, ChatLog, ChatMessage); SSE
-  consumed via `hooks/useSearchStream`; `lib/event-map.ts`, `lib/chat-types.ts`.
-- The search + refine flow already works in the UI against the live backend.
-- Backend booking endpoints exist (3.2-E.1): `POST /book`, `POST /cancel`, SSE
-  events `booking_revalidating`, `booking_priced` (carries `price_changed` +
-  both prices), `booking_confirmed` (pnr, hold_expires_at), `booking_cancelled`,
-  `booking_error` (codes: `not_bookable`, `conflict`, `unavailable`,
-  `provider_error`, plus any `not_found` used by cancel). Every event carries
-  `sandbox: true`.
-- Booking requires a bookable-provider tenant (`mock_bookable`); a search-only
-  tenant (Aviasales) is gated out with `booking_error{not_bookable}`.
+- Live: backend 00032-cex (Groq planner), frontend on Vercel /demo, multi-tenant
+  on Supabase. Demo tenant uses DemoProvider (inventory_adapter="demo").
+- Audit (2026-06-15): backend SSE clean. 5 demo-layer issues: C1, B1, F1, F2, C2.
+- Per-tenant `affiliate_enabled` flag EXISTS (from 3.2-A) — it's just set true for
+  the demo tenant, which is wrong for a demo.
 
 ### Load-bearing — do NOT touch without escalating
-- Backend (all of `apps/api`) — this iteration is frontend-only
-- The existing search/refine UI flow — preserve its behavior exactly
-- `.github/workflows/deploy-*.yml`
+- Tenancy/RLS/resolver, llm_routing.yaml, optimizer.py prompt/thresholds, llm/ adapters
+- Backend SSE event contract and booking_streaming logic (audit confirmed clean)
 
-## Scope
+## Scope (in priority order)
 
-### In scope
-- **Read `/mnt/skills/public/frontend-design/SKILL.md` first** (and any frontend
-  conventions in the repo) before writing UI code.
-- A **"Book" affordance** on archetype/offer cards in the existing results view.
-  Selecting it starts the booking flow for that `offer_id`.
-- A **booking flow UI** consuming `/book` SSE: a re-pricing state
-  (`booking_revalidating`), a **price-confirmation step** when `price_changed=true`
-  (show old vs new price; require an explicit user confirm — never auto-book), a
-  confirmed state (`booking_confirmed`: PNR, hold-expiry countdown), and a
-  **Cancel** action calling `/cancel`.
-- A consumer hook (`hooks/useBookingStream` or equivalent) mirroring
-  `useSearchStream`'s pattern for the booking SSE.
-- **Sandbox labeling:** the UI clearly marks the booking as simulated (a visible
-  "Sandbox / demo booking — no payment taken" badge on the confirmation).
-- **Graceful error states:** `not_bookable` (this inventory source can't book),
-  `unavailable`, `conflict`, `not_found`, `provider_error` each render a clear,
-  non-crashing message.
-- An idempotency key generated client-side per booking attempt and reused on
-  retry of the *same* offer.
+### P0 — C1: suppress Aviasales affiliate button for the demo tenant
+- The demo tenant must be `affiliate_enabled=false` so DemoProvider offers carry
+  NO Aviasales deeplink. A prospect must never see a "Book on Aviasales" button
+  next to a ₹4,850 demo fare that opens real ₹40k+ Aviasales results.
+- Prefer the existing per-tenant `affiliate_enabled` mechanism: set the demo
+  tenant's config to affiliate_enabled=false (config/seed change), and confirm the
+  frontend hides the Aviasales CTA when an offer has no deeplink_url.
+- Frontend: when `deeplink_url` is absent/empty, do NOT render the "Book on
+  Aviasales" button at all (no broken/empty button).
 
-### Out of scope (do NOT build)
-- Any backend change (endpoints, events, agents) — frozen this iteration.
-- Payments UI, passenger-details forms, seat selection (no real booking data path yet).
-- Per-tenant admin/onboarding UI (later).
-- Cloud deploy / Vercel deploy / Cloud SQL.
+### P0 — B1: make the price-change trust moment reachable from the UI
+- The price-change flow is DealHunter's signature trust moment and is currently
+  unreachable (FLT-005 is never surfaced as an archetype; it's price-dominated by
+  FLT-001).
+- Fix at the DEMO CATALOG level, NOT by forcing the optimizer: restructure the
+  DemoProvider catalog so a SURFACED archetype demonstrates the re-price. Options
+  (orchestrator proposes, GG approves):
+  (a) Make the price-change trigger an offer the optimizer DOES surface (e.g. the
+      best-value or best-experience archetype's underlying offer returns
+      price_changed=true on revalidate), or
+  (b) Restructure the catalog so FLT-005 is the best-value pick (not dominated),
+      so it becomes an archetype and its Book triggers the price change.
+- Goal: clicking "Book this flight" on a visible archetype card can reach the
+  price-change confirm step. Keep at least one offer that books cleanly with NO
+  price change too (so both paths are demoable).
+- This may touch DemoProvider (backend) — that's allowed for the demo catalog
+  ONLY; do not change provider contracts or the optimizer.
 
-## Tech stack
-- Next.js 15 / React 19, existing styling system. No new UI framework. Escalate
-  before adding any dependency.
+### P1 — F2: disable ALL book buttons during an in-progress/confirmed booking
+- Clicking the other archetype card's "Book this flight" while a booking is
+  in-flight or confirmed currently aborts and silently destroys the confirmed PNR.
+- Fix: while `booking.status !== 'idle'`, disable "Book this flight" on ALL
+  archetype cards (not just the selected one), OR require the active booking to be
+  closed/cancelled first. No silent destruction of a confirmed booking.
 
-## Verification commands
+### P1 — F1: add a dismiss/close affordance to the confirmed state
+- The confirmed BookingPanel has only "Cancel this booking" — a viewer must cancel
+  to exit, so a confirmed booking can't be left on screen.
+- Add a "Done"/"Close" (dismiss) action in the confirmed state that closes the
+  panel WITHOUT cancelling the booking. Include `confirmed` in the showClose logic.
+
+### P2 — C2: audit_id (low, optional this pass)
+- audit_id is null because Sentry DSN is unset. Out of scope unless trivial;
+  acceptable to defer. Do NOT set a real SENTRY_DSN as a blocking step.
+
+### Out of scope
+- Backend SSE/agent/booking logic changes (audit clean), real inventory, payments,
+  tenancy/RLS/resolver, optimizer tuning, landing-page copy.
+
+## Verification
 ```yaml
 - name: web_build
-  cmd: "cd apps/web && npm run build"
+  cmd: "cd apps/web && npm run build && npm run lint && tsc --noEmit"
   required: true
-- name: web_lint
-  cmd: "cd apps/web && npm run lint"
+- name: api_tests
+  cmd: "pytest -q (if DemoProvider catalog changed)"
   required: true
-- name: web_typecheck
-  cmd: "cd apps/web && npm run typecheck (or tsc --noEmit)"
-  required: true
-- name: web_tests
-  cmd: "cd apps/web && npm test (if a test runner is configured)"
-  required: false
-- name: manual_flow
-  cmd: "run web locally against a mock_bookable tenant; click search -> book -> confirm -> cancel"
+- name: manual_browser
+  cmd: "live /demo: search -> see NO Aviasales button on demo offers; book clean offer -> confirm -> Done (dismiss, not cancel); reach price-change step from a visible card; other book buttons disabled mid-booking"
   required: true
 ```
 
-## Subagent usage rules
-- `executor` for code; `verifier` for build/lint/typecheck. Orchestrator does NOT write code.
-
-## Escalation rules (orchestrator must ask before doing)
-- At step 1, after reading the frontend skill + existing demo components, propose
-  the UI flow (where Book sits, the price-confirmation step, the states) and show
-  GG BEFORE building.
-- Escalate if surfacing booking requires changing the existing search/refine UI
-  behavior — additive only.
-- Escalate if the backend SSE contract appears insufficient for a clean UX (e.g. a
-  field the UI needs is missing) — report it; do NOT change the backend here.
-- Ask before installing any dependency or any deploy.
+## Escalation rules
+- Show GG the B1 catalog-restructure approach (a vs b) BEFORE implementing — it
+  affects what the demo shows.
+- Escalate before any backend change beyond the DemoProvider demo catalog / demo
+  tenant config.
+- Frontend deploy to Vercel = prod promotion → GG-gated (show what deploys, stop
+  for go). Any backend redeploy (if B1 touches DemoProvider) = canary→full, GG-gated.
+- Do NOT touch load-bearing files. Do NOT set ANTHROPIC_API_KEY.
 
 ## Hard rules
-- Frontend only. No backend edits.
-- Existing search/refine UI behavior preserved exactly.
-- Price-changed never auto-books — explicit user confirmation required, mirroring
-  the backend gate.
-- Sandbox booking is visibly labeled as simulated; never imply a real ticket/payment.
-- Do NOT deploy (no Vercel deploy, no backend deploy).
+- Sandbox only; sandbox:true preserved. Demo tenant affiliate_enabled=false.
+- No backend SSE/agent logic changes; existing tests stay green.
+- Frontend changes additive to existing search/refine UI behavior.
+- Deploys GG-gated (frontend Vercel; backend canary→full if touched).
 
-## Budget
-- Soft target: 1 CC session. Hard cap: stop and escalate after 18 executor invocations.
-- `/cost` at midpoint, reported.
-
-## Success criteria (verify ALL before declaring done)
-- From the demo UI against a `mock_bookable` tenant: a user can search, pick an
-  offer, see it re-priced, confirm, and see a PNR + hold-expiry confirmation —
-  end to end, in the browser.
-- Price-changed path shows old vs new price and requires explicit confirm (no auto-book).
-- Cancel works from the confirmation view and reflects the cancelled state.
-- A search-only (Aviasales) tenant shows a clear "this inventory source can't book"
-  state instead of a Book action that fails.
-- All `booking_error` codes render clean, non-crashing messages.
-- Sandbox/simulated labeling is visible on the booking confirmation.
-- Existing search/refine UI flow unchanged.
-- `npm run build`, lint, and typecheck pass clean. No deploy.
+## Success criteria
+- Demo offers show NO "Book on Aviasales" button (C1 fixed; demo tenant affiliate-off).
+- The price-change confirm step is reachable by booking a VISIBLE archetype card
+  (B1 fixed); a clean no-price-change booking is also still demoable.
+- During an in-progress/confirmed booking, book buttons on all cards are disabled;
+  a confirmed PNR cannot be silently destroyed (F2 fixed).
+- Confirmed state has a Done/Close that dismisses without cancelling (F1 fixed).
+- web build/lint/typecheck clean; backend tests green if DemoProvider touched.
+- Verified live in a browser on /demo.
 
 ## Build order
-1. Read `frontend-design/SKILL.md` + existing `components/demo/*`, `useSearchStream`,
-   `event-map.ts`, `chat-types.ts`. Propose the booking UI flow + states + where
-   the Book affordance sits. Show GG; no code yet.
-2. `useBookingStream` hook consuming `/book` SSE (mirror `useSearchStream`).
-3. Booking flow UI: Book affordance → revalidating → price-confirm (if changed) →
-   confirmed (PNR + hold countdown) → cancel. Sandbox badge.
-4. Capability + error states (not_bookable for Aviasales tenant; all error codes).
-5. Verify: build + lint + typecheck; manual click-through search→book→confirm→cancel
-   locally against a mock_bookable tenant.
-6. Report. No deploy. Note the product is now demonstrable end-to-end in a browser.
+1. C1: set demo tenant affiliate_enabled=false (config/seed) + frontend hide
+   Aviasales CTA when no deeplink_url. Verify offers show only "Book this flight".
+2. B1: propose catalog-restructure (a vs b), show GG, implement so a visible
+   archetype reaches the price-change step; keep one clean-booking offer.
+3. F2: disable all book buttons while booking.status !== 'idle'.
+4. F1: add Done/Close dismiss to confirmed state.
+5. Build + lint + typecheck; backend tests if DemoProvider changed.
+6. Deploy (frontend Vercel; backend canary→full if touched) — GG-gated; GG browser-smokes /demo.
 ```
