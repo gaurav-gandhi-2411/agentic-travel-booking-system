@@ -259,7 +259,7 @@ export default function DemoClient() {
                   key={a.label}
                   archetype={a}
                   onBook={() => handleBook(a)}
-                  isBookingActive={selectedArchetype?.label === a.label && booking.status !== 'idle'}
+                  isBookingActive={booking.status !== 'idle'}
                 />
               ))
               : [0, 1].map(i => <ArchetypeSkeleton key={i} />)}
