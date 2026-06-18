@@ -90,7 +90,7 @@ async function consumeStream(
       if (event.type === 'done') sawDone = true;
       if (event.type === 'no_data_for_route') {
         onEvent(event);
-        sawDone = true; // graceful end — not a stream error
+        onDone(); // treat as a clean end so status -> 'done' and the input re-enables
         return;
       }
       if (event.type === 'error') {

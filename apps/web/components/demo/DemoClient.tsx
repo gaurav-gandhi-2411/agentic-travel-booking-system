@@ -142,11 +142,13 @@ export default function DemoClient() {
   const isStreaming = status === 'streaming';
 
   const handleSearch = useCallback((query: string) => {
+    booking.reset();
+    setSelectedArchetype(null);
     setActiveProfile(profile);
     setChatMessages([]);
     lastProcessedIndex.current = 0;
     start(query, profile);
-  }, [start, profile]);
+  }, [start, profile, booking]);
 
   const handleRetry = useCallback(() => {
     reset();
