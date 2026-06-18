@@ -82,6 +82,7 @@ export interface SseEvent {
   hold_expires_at?: string;
   current_price_inr?: number;
   previous_price_inr?: number;
+  confirmed_price_inr?: number;
   is_available?: boolean;
   price_changed?: boolean;
   booking_ref?: string;

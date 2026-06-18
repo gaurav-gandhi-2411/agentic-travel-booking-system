@@ -30,6 +30,7 @@ class BookRequest(BaseModel):
     offer_id: str
     idempotency_key: str
     request_id: str | None = None  # links back to a prior /search for audit trail
+    accept_price_change: bool = False  # set True on confirm-call after price_changed halt
 
 
 class CancelRequest(BaseModel):
@@ -59,7 +60,9 @@ async def _sse_book_generator(
     if provider is None:
         yield f"data: {json.dumps(_not_bookable_event(inventory_adapter))}\n\n"
         return
-    async for event in stream_book(body.offer_id, body.idempotency_key, provider):
+    async for event in stream_book(
+        body.offer_id, body.idempotency_key, provider, body.accept_price_change
+    ):
         yield f"data: {json.dumps(event)}\n\n"
 
 

@@ -179,6 +179,91 @@ async def test_stream_book_price_changed_includes_previous_price() -> None:
 
 
 # ---------------------------------------------------------------------------
+# stream_book — accept_price_change flag (stateless price-confirm gate)
+# ---------------------------------------------------------------------------
+
+
+async def test_stream_book_accept_price_change_bypasses_halt() -> None:
+    """accept_price_change=True: price_changed offer proceeds past the gate to booking_confirmed."""
+    reval = _make_reval(price_changed=True, previous_price_inr=4_000, current_price_inr=4_500)
+    provider = _mock_provider(reval=reval)
+    events = await _collect(
+        stream_book("MOCK-OFFER-001", "key-accept-001", provider, accept_price_change=True)
+    )
+    types = _types(events)
+
+    assert BookingEventType.BOOKING_PRICED in types
+    assert BookingEventType.BOOKING_CONFIRMED in types
+    assert BookingEventType.BOOKING_ERROR not in types
+    provider.book.assert_awaited_once()
+
+
+async def test_stream_book_accept_flag_confirmed_carries_new_price() -> None:
+    """booking_confirmed.confirmed_price_inr is the new (accepted) price, not the original."""
+    reval = _make_reval(price_changed=True, previous_price_inr=4_000, current_price_inr=4_500)
+    provider = _mock_provider(reval=reval)
+    events = await _collect(
+        stream_book("MOCK-OFFER-001", "key-accept-002", provider, accept_price_change=True)
+    )
+    confirmed = next(e for e in events if e["type"] == BookingEventType.BOOKING_CONFIRMED)
+
+    assert confirmed["confirmed_price_inr"] == 4_500
+
+
+async def test_stream_book_clean_price_confirmed_carries_price() -> None:
+    """Clean-price offer: booking_confirmed.confirmed_price_inr reflects revalidated price."""
+    reval = _make_reval(price_changed=False, current_price_inr=4_200)
+    provider = _mock_provider(reval=reval)
+    events = await _collect(stream_book("MOCK-OFFER-001", "key-clean-001", provider))
+    confirmed = next(e for e in events if e["type"] == BookingEventType.BOOKING_CONFIRMED)
+
+    assert confirmed["confirmed_price_inr"] == 4_200
+
+
+async def test_stream_book_clean_price_no_halt_no_accept_flag() -> None:
+    """Non-trigger offer: books in one step without accept_price_change flag."""
+    reval = _make_reval(price_changed=False)
+    provider = _mock_provider(reval=reval)
+    events = await _collect(stream_book("MOCK-OFFER-001", "key-clean-002", provider))
+    types = _types(events)
+
+    assert BookingEventType.BOOKING_CONFIRMED in types
+    assert BookingEventType.BOOKING_ERROR not in types
+    provider.book.assert_awaited_once()
+
+
+async def test_stream_book_idempotency_on_confirm_path_demo_provider() -> None:
+    """Same idempotency_key on accept_price_change=True retry returns same PNR (no double-book)."""
+    from datetime import date
+
+    from travel_agent.coordinator.state import Window
+
+    provider_instance = __import__(
+        "travel_agent.providers.demo.provider", fromlist=["DemoProvider"]
+    ).DemoProvider()
+    window = Window(start_date=date(2025, 6, 15), end_date=date(2025, 6, 22))
+    provider_instance.get_flights("DEL", "DXB", window)  # register GEN offers
+
+    offer_id = "GEN-DELDXB-001-2025-06-15"
+    ikey = "confirm-idem-key-001"
+
+    # First confirm call — books successfully
+    events1 = await _collect(
+        stream_book(offer_id, ikey, provider_instance, accept_price_change=True)
+    )
+    confirmed1 = next(e for e in events1 if e["type"] == BookingEventType.BOOKING_CONFIRMED)
+
+    # Retry with same key — idempotent: same PNR, no double-book
+    events2 = await _collect(
+        stream_book(offer_id, ikey, provider_instance, accept_price_change=True)
+    )
+    confirmed2 = next(e for e in events2 if e["type"] == BookingEventType.BOOKING_CONFIRMED)
+
+    assert confirmed1["pnr"] == confirmed2["pnr"]
+    assert confirmed1["confirmed_price_inr"] == confirmed2["confirmed_price_inr"]
+
+
+# ---------------------------------------------------------------------------
 # stream_book — unavailable gate
 # ---------------------------------------------------------------------------
 
