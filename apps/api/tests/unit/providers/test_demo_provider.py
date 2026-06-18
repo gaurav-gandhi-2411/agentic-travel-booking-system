@@ -197,27 +197,29 @@ async def test_price_changed_first_revalidate() -> None:
 
 
 @pytest.mark.asyncio
-async def test_price_changed_second_revalidate_settles() -> None:
-    provider = DemoProvider()
-    offer_id = f"{PRICE_CHANGE_OFFER_ID}-2025-06-15"
-
-    await provider.revalidate(offer_id)
-    result2 = await provider.revalidate(offer_id)
-
-    assert result2.price_changed is False
-    assert result2.current_price_inr == PRICE_CHANGE_NEW_PRICE
-
-
-@pytest.mark.asyncio
-async def test_price_changed_second_attempt_books_successfully() -> None:
+async def test_price_changed_revalidate_always_returns_true_for_trigger() -> None:
+    """Stateless design: trigger offer always returns price_changed=True on every call."""
     provider = DemoProvider()
     offer_id = f"{PRICE_CHANGE_OFFER_ID}-2025-06-15"
 
     r1 = await provider.revalidate(offer_id)
     assert r1.price_changed is True
+    assert r1.current_price_inr == PRICE_CHANGE_NEW_PRICE
 
+    # Second call — still True; no per-instance state to settle
     r2 = await provider.revalidate(offer_id)
-    assert r2.price_changed is False
+    assert r2.price_changed is True
+    assert r2.current_price_inr == PRICE_CHANGE_NEW_PRICE
+
+
+@pytest.mark.asyncio
+async def test_price_changed_book_succeeds_after_revalidate() -> None:
+    """book() works regardless of price_changed state; accept logic is in the coordinator."""
+    provider = DemoProvider()
+    offer_id = f"{PRICE_CHANGE_OFFER_ID}-2025-06-15"
+
+    r1 = await provider.revalidate(offer_id)
+    assert r1.price_changed is True
 
     result = await provider.book(offer_id, "key-price-confirmed")
     assert result.pnr.startswith("DEMO-PNR-")
@@ -375,7 +377,7 @@ async def test_generated_route_full_lifecycle_with_price_change(window: Window) 
     assert cheapest.id.startswith("GEN-DELDXB-001")
     offer_id = cheapest.id
 
-    # 2. First revalidate → price change fires
+    # 2. First revalidate → price change fires (stateless: always True for trigger)
     rv1 = await provider.revalidate(offer_id)
     assert rv1.price_changed is True
     assert rv1.current_price_inr > rv1.previous_price_inr
@@ -383,12 +385,13 @@ async def test_generated_route_full_lifecycle_with_price_change(window: Window) 
     new_price = rv1.current_price_inr
     original_price = rv1.previous_price_inr
 
-    # 3. Second revalidate → settled, no more price change
+    # 3. Second revalidate → still price_changed=True (stateless design — coordinator
+    #    decides halt/proceed via accept_price_change flag, not provider state)
     rv2 = await provider.revalidate(offer_id)
-    assert rv2.price_changed is False
+    assert rv2.price_changed is True
     assert rv2.current_price_inr == new_price
 
-    # 4. Book succeeds at new price
+    # 4. Book succeeds at new price (book() is independent of price_changed state)
     booking = await provider.book(offer_id, "gen-booking-key-001")
     assert isinstance(booking, BookingResult)
     assert booking.pnr.startswith("DEMO-PNR-")
@@ -436,5 +439,5 @@ async def test_revalidate_works_without_prior_get_flights() -> None:
 
     assert rv.offer_id == offer_id
     assert rv.is_available is True
-    # First call on a fresh provider → triggers price change
+    # Stateless: trigger offer always returns price_changed=True on any instance
     assert rv.price_changed is True

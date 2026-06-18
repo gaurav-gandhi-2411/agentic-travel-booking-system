@@ -26,6 +26,7 @@ export interface BookingConfirmedData {
   hold_expires_at: string;
   idempotency_key: string;
   audit_id: string | null;
+  confirmed_price_inr?: number;
 }
 
 export interface BookingStream {
@@ -137,6 +138,7 @@ export function useBookingStream(): BookingStream {
     offerId: string,
     key: string,
     requestId?: string,
+    acceptPriceChange?: boolean,
   ) => {
     abortRef.current?.abort();
     const controller = new AbortController();
@@ -149,7 +151,12 @@ export function useBookingStream(): BookingStream {
     try {
       await consumeBookingStream(
         '/api/book',
-        { offer_id: offerId, idempotency_key: key, ...(requestId ? { request_id: requestId } : {}) },
+        {
+          offer_id: offerId,
+          idempotency_key: key,
+          ...(requestId ? { request_id: requestId } : {}),
+          ...(acceptPriceChange ? { accept_price_change: true } : {}),
+        },
         controller.signal,
         (event) => {
           if (event.type === 'booking_priced') {
@@ -161,7 +168,9 @@ export function useBookingStream(): BookingStream {
               is_available: event.is_available ?? true,
             };
             setPricedEvent(priced);
-            if (event.price_changed) {
+            // Only transition to price_confirm on the initial halt — not on the
+            // confirm call where acceptPriceChange=true (booking proceeds in same stream).
+            if (event.price_changed && !acceptPriceChange) {
               setStatus('price_confirm');
             }
           } else if (event.type === 'booking_confirmed') {
@@ -171,6 +180,7 @@ export function useBookingStream(): BookingStream {
               hold_expires_at: event.hold_expires_at ?? '',
               idempotency_key: event.idempotency_key ?? key,
               audit_id: event.audit_id ?? null,
+              confirmed_price_inr: event.confirmed_price_inr,
             };
             setConfirmedEvent(confirmed);
             setStatus('confirmed');
@@ -211,8 +221,9 @@ export function useBookingStream(): BookingStream {
   const confirmPriceChange = useCallback(() => {
     const offerId = currentOfferIdRef.current;
     if (!offerId) return;
-    const newKey = crypto.randomUUID();
-    void _runBookStream(offerId, newKey);
+    // New idempotency key; accept_price_change=true tells the backend to skip
+    // the halt and book at the new price the user just saw and confirmed.
+    void _runBookStream(offerId, crypto.randomUUID(), undefined, true);
   }, [_runBookStream]);
 
   const cancel = useCallback(async (bookingRef: string) => {

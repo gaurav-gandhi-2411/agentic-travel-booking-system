@@ -34,13 +34,19 @@ async def stream_book(
     offer_id: str,
     idempotency_key: str,
     provider: BookableInventoryProvider,
+    accept_price_change: bool = False,
 ) -> AsyncGenerator[dict[str, object], None]:
     """Async generator: revalidate → (price gate) → book → confirm.
 
-    Emits booking_revalidating, then booking_priced. If price_changed=True,
-    stops here — caller must re-issue /book at the new price. If
-    price_changed=False and offer is available, proceeds to book() and emits
-    booking_confirmed. Emits booking_error on any failure.
+    Emits booking_revalidating, then booking_priced. If price_changed=True and
+    accept_price_change=False, stops here — caller must re-issue /book with
+    accept_price_change=True (the price-confirm step). If price_changed=False, or
+    if the caller has already accepted the new price via accept_price_change=True,
+    proceeds to book() and emits booking_confirmed. Emits booking_error on failure.
+
+    The provider's revalidate() is stateless for price-change triggers (always
+    returns price_changed=True for the trigger offer). The halt/proceed decision
+    is made entirely from accept_price_change — no shared or per-instance state.
     """
     yield {"type": BookingEventType.BOOKING_REVALIDATING}
 
@@ -74,11 +80,14 @@ async def stream_book(
         }
         return
 
-    if reval.price_changed:
-        # Price changed — emit priced event and stop. Caller must re-confirm.
+    if reval.price_changed and not accept_price_change:
+        # Price changed — emit priced event and stop. Caller must re-issue /book
+        # with accept_price_change=True to proceed at the new price.
         yield priced
         return
 
+    # price_changed=False (clean offer), OR caller has explicitly accepted the
+    # new price — proceed to book. priced event is still emitted (informational).
     yield priced
 
     agent = BookingAgent(provider)
@@ -107,6 +116,8 @@ async def stream_book(
         "hold_expires_at": b.hold_expires_at,
         "idempotency_key": b.idempotency_key,
         "audit_id": str(b.audit_id) if b.audit_id is not None else None,
+        # confirmed_price_inr: the price the user saw and accepted before booking.
+        "confirmed_price_inr": reval.current_price_inr,
         "sandbox": True,
     }
 

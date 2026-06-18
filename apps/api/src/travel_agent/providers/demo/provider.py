@@ -365,17 +365,12 @@ class DemoProvider:
     def __init__(self) -> None:
         self._holds: dict[str, _HoldRecord] = {}
         self._idempotency_index: dict[str, str] = {}
-        # Tracks which base offer IDs have already shown the price-change trigger
-        # in this process instance. Instance-level so a fresh DemoProvider (tests)
-        # starts with a clean price-change slate.
-        self._price_changed_shown: set[str] = set()
 
     # ── InventoryProvider ──────────────────────────────────────────────────
 
     async def close(self) -> None:
         self._holds.clear()
         self._idempotency_index.clear()
-        self._price_changed_shown.clear()
 
     # ── Search ────────────────────────────────────────────────────────────
 
@@ -502,8 +497,11 @@ class DemoProvider:
 
         is_trigger = base == PRICE_CHANGE_OFFER_ID or base in _GENERATED_PRICE_CHANGE_OFFER_IDS
 
-        if is_trigger and base not in self._price_changed_shown:
-            self._price_changed_shown.add(base)
+        # Stateless: trigger offers always return price_changed=True with the settled
+        # (post-change) price. The halt-or-proceed decision lives in the coordinator,
+        # controlled by the accept_price_change flag on the /book request — no shared
+        # or per-instance state needed between Cloud Run instances.
+        if is_trigger:
             original = (
                 PRICE_CHANGE_ORIGINAL_PRICE
                 if base == PRICE_CHANGE_OFFER_ID
@@ -522,16 +520,9 @@ class DemoProvider:
                 previous_price_inr=original,
             )
 
-        if base == PRICE_CHANGE_OFFER_ID:
-            current = PRICE_CHANGE_NEW_PRICE
-        elif is_trigger:
-            current = _compute_settled_price(self._offer_price(base))
-        else:
-            current = self._offer_price(base)
-
         return RevalidationResult(
             offer_id=offer_id,
-            current_price_inr=current,
+            current_price_inr=self._offer_price(base),
             is_available=True,
             price_changed=False,
         )

@@ -270,14 +270,14 @@ GENERATE_ARCHETYPE_COMPARISONS = ToolDefinition(
         "2-3 sentence comparison for EACH explaining why you'd choose it over the other. "
         "Be specific: mention percentage price difference, stops saved/added, "
         "departure time impact. "
-        "Output must be 80-350 characters per comparison — plain text, no markdown."
+        "Output must be 40-350 characters per comparison — plain text, no markdown."
     ),
     input_schema={
         "type": "object",
         "properties": {
             "best_value_comparison": {
                 "type": "string",
-                "minLength": 60,
+                "minLength": 40,
                 "maxLength": 380,
                 "description": (
                     "Why pick best-value OVER best-experience. Lead with the price saving "
@@ -288,7 +288,7 @@ GENERATE_ARCHETYPE_COMPARISONS = ToolDefinition(
             },
             "best_experience_comparison": {
                 "type": "string",
-                "minLength": 60,
+                "minLength": 40,
                 "maxLength": 380,
                 "description": (
                     "Why pick best-experience OVER best-value. Lead with the comfort/time benefit "
