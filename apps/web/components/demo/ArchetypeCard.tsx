@@ -129,7 +129,7 @@ export default function ArchetypeCard({ archetype, onBook, isBookingActive = fal
       )}
 
       {/* Book button */}
-      {deeplink_url ? (
+      {deeplink_url && (
         <a
           href={deeplink_url}
           target="_blank"
@@ -143,10 +143,6 @@ export default function ArchetypeCard({ archetype, onBook, isBookingActive = fal
           Book on Aviasales
           <ExternalLink className="h-3.5 w-3.5" />
         </a>
-      ) : (
-        <div className="rounded-lg px-4 py-2.5 text-xs text-muted-foreground text-center border border-dashed border-muted-foreground/25">
-          Booking link unavailable
-        </div>
       )}
 
       {/* In-app booking button — only shown when parent wires up the handler */}

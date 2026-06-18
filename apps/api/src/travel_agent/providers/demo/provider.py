@@ -82,7 +82,7 @@ _FLIGHT_CATALOG: tuple[_DemoFlight, ...] = (
     _DemoFlight("DEMO-FLT-002", "DEL", "BOM", "6E", "6E-201", "business", 14_200, 10, 0, 135),
     _DemoFlight("DEMO-FLT-003", "BOM", "GOI", "SG", "SG-301", "economy", 3_200, 11, 30, 75),
     _DemoFlight("DEMO-FLT-004", "DEL", "BLR", "AI", "AI-401", "economy", 5_600, 14, 0, 150),
-    _DemoFlight("DEMO-FLT-005", "DEL", "BOM", "6E", "6E-501", "economy", 5_100, 19, 0, 135),
+    _DemoFlight("DEMO-FLT-005", "DEL", "BOM", "6E", "6E-501", "economy", 4_600, 19, 0, 135),
 )
 
 _HOTEL_CATALOG: tuple[_DemoHotel, ...] = (
@@ -96,7 +96,7 @@ _FLIGHT_INDEX: dict[str, _DemoFlight] = {f.offer_id: f for f in _FLIGHT_CATALOG}
 _HOTEL_INDEX: dict[str, _DemoHotel] = {h.offer_id: h for h in _HOTEL_CATALOG}
 
 PRICE_CHANGE_OFFER_ID = "DEMO-FLT-005"
-PRICE_CHANGE_ORIGINAL_PRICE = 5_100
+PRICE_CHANGE_ORIGINAL_PRICE = 4_600
 PRICE_CHANGE_NEW_PRICE = 7_200
 
 # DEMO offer IDs have the form DEMO-{TYPE}-{NNN}; the base ID is always 3 dash-separated parts.

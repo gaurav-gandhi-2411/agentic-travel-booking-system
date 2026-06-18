@@ -219,15 +219,26 @@ export default function BookingPanel({ booking, archetype, onClose }: BookingPan
               )}
             </div>
           )}
-          <button
-            onClick={() => booking.cancel(confirmedEvent.pnr)}
-            className={cn(
-              'inline-flex items-center justify-center rounded-lg border border-red-200 px-4 py-2',
-              'text-sm font-medium text-red-600 hover:bg-red-50 transition-colors duration-150',
-            )}
-          >
-            Cancel this booking
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onClose}
+              className={cn(
+                'inline-flex items-center justify-center rounded-lg border border-border px-4 py-2',
+                'text-sm font-medium text-foreground/70 hover:bg-muted/60 transition-colors duration-150',
+              )}
+            >
+              Done
+            </button>
+            <button
+              onClick={() => booking.cancel(confirmedEvent.pnr)}
+              className={cn(
+                'inline-flex items-center justify-center rounded-lg border border-red-200 px-4 py-2',
+                'text-sm font-medium text-red-600 hover:bg-red-50 transition-colors duration-150',
+              )}
+            >
+              Cancel this booking
+            </button>
+          </div>
         </div>
       )}
 

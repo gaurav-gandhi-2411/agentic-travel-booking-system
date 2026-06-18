@@ -158,6 +158,46 @@ async def create_tenant_with_key(  # noqa: PLR0913
                 # rollback resets SET LOCAL context automatically in that case.
 
 
+async def _ensure_demo_affiliate_disabled(session: AsyncSession, raw_key: str) -> None:
+    """Ensure the demo tenant's affiliate_enabled is False.
+
+    Uses the bootstrap resolver (not a bare context-less query) so the UPDATE
+    runs within the correct RLS tenant scope. Idempotent: skips the UPDATE if
+    affiliate_enabled is already False.
+    """
+    key_hash_val = hash_key(raw_key)
+    tenant_id: uuid.UUID | None = await session.scalar(
+        text("SELECT resolve_api_key_secure(:kh)"), {"kh": key_hash_val}
+    )
+    if tenant_id is None:
+        return
+
+    await set_rls_tenant(session, str(tenant_id))
+
+    current: bool | None = await session.scalar(
+        text("SELECT affiliate_enabled FROM tenants WHERE id = :tid"),
+        {"tid": str(tenant_id)},
+    )
+    if not current:
+        await session.commit()
+        return
+
+    await session.execute(
+        text("UPDATE tenants SET affiliate_enabled = false WHERE id = :tid"),
+        {"tid": str(tenant_id)},
+    )
+
+    after: bool | None = await session.scalar(
+        text("SELECT affiliate_enabled FROM tenants WHERE id = :tid"),
+        {"tid": str(tenant_id)},
+    )
+    if after is not False:
+        msg = f"affiliate_enabled update failed for demo tenant {tenant_id}"
+        raise RuntimeError(msg)
+
+    await session.commit()
+
+
 async def seed_demo_tenant(session: AsyncSession) -> None:
     """Idempotently ensure a demo tenant + the DEMO_API_KEY exist.
 
@@ -182,10 +222,12 @@ async def seed_demo_tenant(session: AsyncSession) -> None:
             raw_key=raw_key,
             description="Seeded demo tenant — backward compat with DEMO_API_KEY",
             inventory_adapter="demo",
+            affiliate_enabled=False,
         )
         await session.commit()
     except IntegrityError:
         await session.rollback()
+        await _ensure_demo_affiliate_disabled(session, raw_key)
     except ProgrammingError as exc:
         # Defensive: guard against RLS WITH CHECK rejection on INSERT. This path
         # fires when the DB schema predates the tightened WITH CHECK migration or
