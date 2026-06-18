@@ -5,8 +5,7 @@ import { cn } from '@/lib/utils';
 
 export type LLMProfile =
   | 'demo-llama'
-  | 'demo-gpt-oss-120b'
-  | 'demo-haiku';
+  | 'demo-gpt-oss-120b';
 
 const STORAGE_KEY = 'preferred_llm_profile';
 const DEFAULT_PROFILE: LLMProfile = 'demo-gpt-oss-120b';
@@ -17,11 +16,7 @@ export function useProfilePreference(): [LLMProfile, (p: LLMProfile) => void] {
   useEffect(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
-      if (
-        stored === 'demo-llama' ||
-        stored === 'demo-gpt-oss-120b' ||
-        stored === 'demo-haiku'
-      ) {
+      if (stored === 'demo-llama' || stored === 'demo-gpt-oss-120b') {
         setProfile(stored as LLMProfile);
       } else {
         // Stale (demo-qwen from before May 16, demo-deepseek-v4 removed June 12,
@@ -62,12 +57,6 @@ const OPTIONS: Array<{
     label: 'GPT-OSS',
     sublabel: 'OpenAI open-weight (Groq)',
     hint: 'Free',
-  },
-  {
-    value: 'demo-haiku',
-    label: 'Haiku',
-    sublabel: 'Anthropic Haiku',
-    hint: '≈ $0.005/query',
   },
 ];
 
