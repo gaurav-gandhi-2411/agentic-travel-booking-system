@@ -331,9 +331,7 @@ def test_generated_offers_cheapest_is_economy(provider: DemoProvider, window: Wi
     assert by_price[0].cabin_class.value == "economy"
 
 
-def test_different_routes_produce_different_prices(
-    provider: DemoProvider, window: Window
-) -> None:
+def test_different_routes_produce_different_prices(provider: DemoProvider, window: Window) -> None:
     """DEL→DXB and DEL→SIN are different routes so prices differ."""
     dxb = provider.get_flights("DEL", "DXB", window)
     sin = provider.get_flights("DEL", "SIN", window)

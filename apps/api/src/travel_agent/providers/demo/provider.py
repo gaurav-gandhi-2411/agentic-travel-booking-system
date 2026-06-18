@@ -122,10 +122,27 @@ _OFFER_ID_BASE_PARTS: int = 3
 
 # ── route classification ───────────────────────────────────────────────────────
 
-_INDIA_AIRPORTS: frozenset[str] = frozenset([
-    "DEL", "BOM", "BLR", "MAA", "HYD", "CCU", "AMD", "GOI", "COK", "PNQ",
-    "JAI", "LKO", "BBI", "GAU", "IXC", "ATQ", "SXR",
-])
+_INDIA_AIRPORTS: frozenset[str] = frozenset(
+    [
+        "DEL",
+        "BOM",
+        "BLR",
+        "MAA",
+        "HYD",
+        "CCU",
+        "AMD",
+        "GOI",
+        "COK",
+        "PNQ",
+        "JAI",
+        "LKO",
+        "BBI",
+        "GAU",
+        "IXC",
+        "ATQ",
+        "SXR",
+    ]
+)
 _GCC_AIRPORTS: frozenset[str] = frozenset(["DXB", "AUH", "DOH", "KWI", "BAH", "MCT", "RUH", "SHJ"])
 _SEA_AIRPORTS: frozenset[str] = frozenset(["SIN", "KUL", "BKK", "CGK", "MNL", "SGN"])
 _EUR_AIRPORTS: frozenset[str] = frozenset(["CDG", "LHR", "FRA", "AMS", "ZRH", "FCO", "BCN", "MUC"])
@@ -134,21 +151,30 @@ _AMER_AIRPORTS: frozenset[str] = frozenset(["JFK", "EWR", "ORD", "LAX", "YYZ", "
 
 # (airline_code, flight_number_prefix)
 _ECONOMY_AIRLINES: tuple[tuple[str, str], ...] = (
-    ("AI", "AI"), ("6E", "6E"), ("SG", "SG"), ("UK", "UK"),
-    ("EK", "EK"), ("QR", "QR"), ("G9", "G9"), ("SQ", "SQ"),
+    ("AI", "AI"),
+    ("6E", "6E"),
+    ("SG", "SG"),
+    ("UK", "UK"),
+    ("EK", "EK"),
+    ("QR", "QR"),
+    ("G9", "G9"),
+    ("SQ", "SQ"),
 )
 _BUSINESS_AIRLINES: tuple[tuple[str, str], ...] = (
-    ("AI", "AI"), ("EK", "EK"), ("QR", "QR"), ("SQ", "SQ"),
+    ("AI", "AI"),
+    ("EK", "EK"),
+    ("QR", "QR"),
+    ("SQ", "SQ"),
 )
 _DEP_MINUTES: tuple[int, ...] = (0, 15, 30, 45)
 
 
 _ROUTE_RANGE_TABLE: tuple[tuple[frozenset[str], tuple[int, int, int]], ...] = (
-    (_GCC_AIRPORTS,   (7_000,  22_000, 210)),
-    (_SEA_AIRPORTS,   (10_000, 30_000, 360)),
+    (_GCC_AIRPORTS, (7_000, 22_000, 210)),
+    (_SEA_AIRPORTS, (10_000, 30_000, 360)),
     (_EASIA_AIRPORTS, (18_000, 60_000, 420)),
-    (_EUR_AIRPORTS,   (28_000, 85_000, 540)),
-    (_AMER_AIRPORTS,  (45_000, 120_000, 900)),
+    (_EUR_AIRPORTS, (28_000, 85_000, 540)),
+    (_AMER_AIRPORTS, (45_000, 120_000, 900)),
 )
 _DOMESTIC_RANGE: tuple[int, int, int] = (2_500, 9_000, 120)
 _FALLBACK_RANGE: tuple[int, int, int] = (12_000, 40_000, 300)
@@ -202,11 +228,11 @@ def _generate_route_offers(origin: str, destination: str) -> tuple[_DemoFlight, 
     biz_al = _BUSINESS_AIRLINES[r % len(_BUSINESS_AIRLINES)]
 
     seed, r = _lcg(seed)
-    eco1_dh = 6 + r % 13       # 06-18
+    eco1_dh = 6 + r % 13  # 06-18
     seed, r = _lcg(seed)
     eco2_dh = (eco1_dh + 3 + r % 8) % 24
     seed, r = _lcg(seed)
-    biz_dh = 8 + r % 12        # 08-19
+    biz_dh = 8 + r % 12  # 08-19
 
     seed, r = _lcg(seed)
     eco1_dm = _DEP_MINUTES[r % 4]
@@ -226,19 +252,43 @@ def _generate_route_offers(origin: str, destination: str) -> tuple[_DemoFlight, 
     return_dur = max(duration - 15, 60)
     return (
         _DemoFlight(
-            f"GEN-{rk}-001", origin, destination,
-            eco1_al[0], f"{eco1_al[1]}-{eco1_fn}",
-            "economy", eco1_price, eco1_dh, eco1_dm, duration, return_dur,
+            f"GEN-{rk}-001",
+            origin,
+            destination,
+            eco1_al[0],
+            f"{eco1_al[1]}-{eco1_fn}",
+            "economy",
+            eco1_price,
+            eco1_dh,
+            eco1_dm,
+            duration,
+            return_dur,
         ),
         _DemoFlight(
-            f"GEN-{rk}-002", origin, destination,
-            eco2_al[0], f"{eco2_al[1]}-{eco2_fn}",
-            "economy", eco2_price, eco2_dh, eco2_dm, duration, return_dur,
+            f"GEN-{rk}-002",
+            origin,
+            destination,
+            eco2_al[0],
+            f"{eco2_al[1]}-{eco2_fn}",
+            "economy",
+            eco2_price,
+            eco2_dh,
+            eco2_dm,
+            duration,
+            return_dur,
         ),
         _DemoFlight(
-            f"GEN-{rk}-003", origin, destination,
-            biz_al[0], f"{biz_al[1]}-{biz_fn}",
-            "business", biz_price, biz_dh, biz_dm, duration, return_dur,
+            f"GEN-{rk}-003",
+            origin,
+            destination,
+            biz_al[0],
+            f"{biz_al[1]}-{biz_fn}",
+            "business",
+            biz_price,
+            biz_dh,
+            biz_dm,
+            duration,
+            return_dur,
         ),
     )
 
@@ -346,13 +396,15 @@ class DemoProvider:
         is_one_way = trip_type == TripType.ONE_WAY
 
         catalog = [
-            f for f in _FLIGHT_CATALOG
+            f
+            for f in _FLIGHT_CATALOG
             if f.origin_iata == origin and f.destination_iata == destination
         ]
         if not catalog:
             _register_generated_route(origin, destination)
             catalog = [
-                f for f in _GENERATED_FLIGHT_INDEX.values()
+                f
+                for f in _GENERATED_FLIGHT_INDEX.values()
                 if f.origin_iata == origin and f.destination_iata == destination
             ]
 
