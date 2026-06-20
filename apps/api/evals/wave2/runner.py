@@ -1,8 +1,8 @@
-"""Wave 2 Tier-1 eval runner — generates agent outputs and caches to JSONL.
+"""Wave 2 eval runner — generates and caches planner, refine, and optimizer outputs.
 
-Calls PlannerAgent (and ConversationManagerAgent for refine cases) against the
-Wave 2 golden dataset. Outputs are cached to evals/wave2/runs/ so the scorer can
-re-run without spending Groq tokens.
+Calls PlannerAgent, ConversationManagerAgent, and OptimizerAgent against the
+Wave 2 golden dataset. Outputs are cached to evals/wave2/runs/ so the Tier-1
+scorer and Tier-2 judge can re-run without spending Groq tokens.
 
 Usage:
     # Generate all cases with the demo-llama profile
@@ -11,8 +11,8 @@ Usage:
     # Generate with alternate profile (separate Groq bucket from Llama)
     python -m evals.wave2.runner --profile demo-gpt-oss-120b
 
-    # Frugal: first N cases only
-    python -m evals.wave2.runner --limit 10
+    # Frugal: first N cases only, planner + refine only (skip optimizer)
+    python -m evals.wave2.runner --limit 10 --no-optimizer
 
 Output: evals/wave2/runs/<ISO-timestamp>_<profile>.jsonl
 """
@@ -24,6 +24,7 @@ import asyncio
 import json
 import sys
 import time
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
@@ -33,6 +34,7 @@ import structlog
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 from travel_agent.agents.conversation_manager import ConversationManagerAgent
+from travel_agent.agents.optimizer import OptimizerAgent
 from travel_agent.agents.planner import PlannerAgent
 from travel_agent.coordinator.state import (
     CabinClass,
@@ -52,7 +54,7 @@ _RUNS_DIR = Path(__file__).parent / "runs"
 # demo-gpt-oss-120b uses a separate Groq token bucket — use as TPD fallback.
 _DEFAULT_PROFILE = "demo-llama"
 
-# Synthetic flight pool for ConversationManagerAgent context in refine cases.
+# Synthetic flight pool for ConversationManagerAgent and OptimizerAgent context.
 # Route/dates are arbitrary — only stop counts, prices, and departure hours matter
 # for the three constraint types: direct_only, price_sort, morning_departure.
 _POOL_WINDOW = Window(start_date=date(2026, 9, 15), end_date=date(2026, 9, 21))
@@ -114,14 +116,19 @@ SYNTHETIC_REFINE_POOL: list[FlightOption] = [
 ]
 
 
+@dataclass
+class _Agents:
+    planner: PlannerAgent
+    conv: ConversationManagerAgent
+    opt: OptimizerAgent
+
+
 def _load_golden() -> list[dict[str, Any]]:
     return json.loads(_GOLDEN_FILE.read_text(encoding="utf-8"))
 
 
-def _resolve_clients(
-    profile: str,
-) -> tuple[Any, str, Any, str, dict[str, Any] | None]:
-    """Return (planner_client, planner_model, conv_client, conv_model, extra_params)."""
+def _resolve_agents(profile: str) -> _Agents:
+    """Instantiate the three agents for the given routing profile."""
     from travel_agent.llm import (  # noqa: PLC0415
         get_llm_client_and_model,
         get_llm_client_for_provider,
@@ -137,24 +144,35 @@ def _resolve_clients(
     extra_params: dict[str, Any] | None = cfg.get("extra_params") or None
 
     if "model" in cfg:
-        # Flat profile — same model for every agent
+        # Flat profile — same client + model for every agent
         client = get_llm_client_for_provider(cfg["provider"])
-        model = cfg["model"]
-        return client, model, client, model, extra_params
+        model: str = cfg["model"]
+        return _Agents(
+            planner=PlannerAgent(client=client, model=model),
+            conv=ConversationManagerAgent(client=client, model=model, extra_params=extra_params),
+            opt=OptimizerAgent(client=client, model=model),
+        )
 
     planner_client, planner_model = get_llm_client_and_model("planner", profile)
     conv_client, conv_model = get_llm_client_and_model("conversation", profile)
-    return planner_client, planner_model, conv_client, conv_model, extra_params
+    opt_client, opt_model = get_llm_client_and_model("optimizer", profile)
+    return _Agents(
+        planner=PlannerAgent(client=planner_client, model=planner_model),
+        conv=ConversationManagerAgent(client=conv_client, model=conv_model),
+        opt=OptimizerAgent(client=opt_client, model=opt_model),
+    )
 
 
 async def _generate_one(
     case: dict[str, Any],
-    planner: PlannerAgent,
-    conv_agent: ConversationManagerAgent,
+    agents: _Agents,
     profile: str,
+    *,
+    run_optimizer: bool,
 ) -> dict[str, Any]:
-    planner_model: str = planner._model  # type: ignore[attr-defined]
-    conv_model: str = conv_agent._model  # type: ignore[attr-defined]
+    planner_model: str = agents.planner._model  # type: ignore[attr-defined]
+    conv_model: str = agents.conv._model  # type: ignore[attr-defined]
+    opt_model: str = agents.opt._model  # type: ignore[attr-defined]
     record: dict[str, Any] = {
         "id": case["id"],
         "category": case["category"],
@@ -163,20 +181,24 @@ async def _generate_one(
         "profile": profile,
         "model_planner": planner_model,
         "model_conversation": conv_model if case.get("refine") else None,
+        "model_optimizer": opt_model if run_optimizer else None,
         "generated_at": datetime.now(tz=UTC).isoformat(),
         "latency_ms_planner": None,
         "latency_ms_conversation": None,
+        "latency_ms_optimizer": None,
         "intent": None,
         "intent_error": None,
         "refine_classified": None,
         "refine_error": None,
+        "optimizer_archetypes": None,
+        "optimizer_error": None,
     }
 
-    # Planner call
+    # --- Planner ---
     t0 = time.monotonic()
     try:
         state = RequestState(raw_input=case["query"])
-        result = await planner.run(state, today=date.fromisoformat(case["today"]))
+        result = await agents.planner.run(state, today=date.fromisoformat(case["today"]))
         record["latency_ms_planner"] = round((time.monotonic() - t0) * 1000, 1)
         if result.intent is None:
             record["intent_error"] = "planner returned None intent"
@@ -187,7 +209,7 @@ async def _generate_one(
         record["intent_error"] = str(exc)
         _logger.warning("planner_error", case_id=case["id"], error=str(exc))
 
-    # ConversationManagerAgent call (refine cases only, requires successful planner intent)
+    # --- ConversationManagerAgent (refine cases only) ---
     if case.get("refine") and record["intent"] is not None:
         intent = TravelIntent.model_validate(record["intent"])
         refine_state = RequestState(
@@ -197,13 +219,33 @@ async def _generate_one(
         )
         t0 = time.monotonic()
         try:
-            classified = await conv_agent.understand(case["refine"]["message"], refine_state)
+            classified = await agents.conv.understand(case["refine"]["message"], refine_state)
             record["latency_ms_conversation"] = round((time.monotonic() - t0) * 1000, 1)
             record["refine_classified"] = classified.model_dump(mode="json")
         except Exception as exc:
             record["latency_ms_conversation"] = round((time.monotonic() - t0) * 1000, 1)
             record["refine_error"] = str(exc)
             _logger.warning("refine_error", case_id=case["id"], error=str(exc))
+
+    # --- OptimizerAgent (Tier-2 input; skipped if --no-optimizer or planner failed) ---
+    if run_optimizer and record["intent"] is not None:
+        intent = TravelIntent.model_validate(record["intent"])
+        opt_state = RequestState(
+            raw_input=case["query"],
+            intent=intent,
+            flight_options=SYNTHETIC_REFINE_POOL,
+        )
+        t0 = time.monotonic()
+        try:
+            opt_result = await agents.opt.run(opt_state, today=date.fromisoformat(case["today"]))
+            record["latency_ms_optimizer"] = round((time.monotonic() - t0) * 1000, 1)
+            record["optimizer_archetypes"] = [
+                a.model_dump(mode="json") for a in opt_result.archetypes
+            ]
+        except Exception as exc:
+            record["latency_ms_optimizer"] = round((time.monotonic() - t0) * 1000, 1)
+            record["optimizer_error"] = str(exc)
+            _logger.warning("optimizer_error", case_id=case["id"], error=str(exc))
 
     return record
 
@@ -212,22 +254,22 @@ async def generate_all(
     cases: list[dict[str, Any]],
     profile: str,
     limit: int | None,
+    *,
+    run_optimizer: bool,
 ) -> list[dict[str, Any]]:
-    planner_client, planner_model, conv_client, conv_model, extra_params = _resolve_clients(profile)
-    planner = PlannerAgent(client=planner_client, model=planner_model)
-    conv_agent = ConversationManagerAgent(
-        client=conv_client, model=conv_model, extra_params=extra_params
-    )
+    agents = _resolve_agents(profile)
+    planner_model: str = agents.planner._model  # type: ignore[attr-defined]
 
     if limit is not None:
         cases = cases[:limit]
 
-    print(f"Generating {len(cases)} cases with profile={profile} (planner: {planner_model})")
+    opt_tag = " + optimizer" if run_optimizer else " (no optimizer)"
+    print(f"Generating {len(cases)} cases — profile={profile}, planner={planner_model}{opt_tag}")
 
     records: list[dict[str, Any]] = []
     for i, case in enumerate(cases, 1):
         print(f"  [{i:>2}/{len(cases)}] {case['id']}  {case['query'][:55]}")
-        record = await _generate_one(case, planner, conv_agent, profile)
+        record = await _generate_one(case, agents, profile, run_optimizer=run_optimizer)
         records.append(record)
 
         p_status = (
@@ -245,6 +287,15 @@ async def generate_all(
             )
             print(f"         refine:  {c_status}")
 
+        if run_optimizer and record["intent"] is not None:
+            n_arch = len(record["optimizer_archetypes"]) if record["optimizer_archetypes"] else 0
+            o_status = (
+                f"{record['latency_ms_optimizer']}ms OK ({n_arch} archetypes)"
+                if record["optimizer_archetypes"] is not None
+                else f"ERR: {(record.get('optimizer_error') or '?')[:60]}"
+            )
+            print(f"         optimizer: {o_status}")
+
     return records
 
 
@@ -260,7 +311,7 @@ def save_run(profile: str, records: list[dict[str, Any]]) -> Path:
 
 
 async def main() -> int:
-    parser = argparse.ArgumentParser(description="Wave 2 Tier-1 eval runner — generate outputs")
+    parser = argparse.ArgumentParser(description="Wave 2 eval runner — generate outputs")
     parser.add_argument(
         "--profile", default=_DEFAULT_PROFILE,
         help=f"LLM routing profile (default: {_DEFAULT_PROFILE})",
@@ -269,12 +320,18 @@ async def main() -> int:
         "--limit", type=int, default=None,
         help="Generate only first N cases (frugal mode)",
     )
+    parser.add_argument(
+        "--no-optimizer", action="store_true",
+        help="Skip optimizer call (faster; Tier-1 only run)",
+    )
     args = parser.parse_args()
 
     cases = _load_golden()
     print(f"Loaded {len(cases)} cases from {_GOLDEN_FILE.name}")
 
-    records = await generate_all(cases, args.profile, args.limit)
+    records = await generate_all(
+        cases, args.profile, args.limit, run_optimizer=not args.no_optimizer
+    )
     save_run(args.profile, records)
     return 0
 
