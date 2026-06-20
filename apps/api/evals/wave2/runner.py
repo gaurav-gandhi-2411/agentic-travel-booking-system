@@ -207,7 +207,8 @@ async def _generate_one(
     except Exception as exc:
         record["latency_ms_planner"] = round((time.monotonic() - t0) * 1000, 1)
         record["intent_error"] = str(exc)
-        _logger.warning("planner_error", case_id=case["id"], error=str(exc))
+        _safe = str(exc).encode("ascii", "replace").decode()
+        _logger.warning("planner_error", case_id=case["id"], error=_safe)
 
     # --- ConversationManagerAgent (refine cases only) ---
     if case.get("refine") and record["intent"] is not None:
@@ -225,7 +226,8 @@ async def _generate_one(
         except Exception as exc:
             record["latency_ms_conversation"] = round((time.monotonic() - t0) * 1000, 1)
             record["refine_error"] = str(exc)
-            _logger.warning("refine_error", case_id=case["id"], error=str(exc))
+            _safe = str(exc).encode("ascii", "replace").decode()
+            _logger.warning("refine_error", case_id=case["id"], error=_safe)
 
     # --- OptimizerAgent (Tier-2 input; skipped if --no-optimizer or planner failed) ---
     if run_optimizer and record["intent"] is not None:
@@ -245,7 +247,9 @@ async def _generate_one(
         except Exception as exc:
             record["latency_ms_optimizer"] = round((time.monotonic() - t0) * 1000, 1)
             record["optimizer_error"] = str(exc)
-            _logger.warning("optimizer_error", case_id=case["id"], error=str(exc))
+            # Sanitize for terminals that can't encode full Unicode (e.g. Windows cp1252)
+            safe_err = str(exc).encode("ascii", "replace").decode()
+            _logger.warning("optimizer_error", case_id=case["id"], error=safe_err)
 
     return record
 

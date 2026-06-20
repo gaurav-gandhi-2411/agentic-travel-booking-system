@@ -8,9 +8,9 @@ Graceful skips:
 - Ollama not running: prints "judge skipped — Ollama unavailable" and exits 0
 - Record has no optimizer_archetypes: skipped (Tier-1-only run or planner failed)
 
-Judge model: qwen3:8b (different family from Groq Llama generator; no self-grading
-bias). qwen3 separates chain-of-thought into message.thinking; message.content is
-clean JSON.
+Judge model: qwen3:8b (Alibaba family — different from Groq Llama generator; no
+self-grading bias). Ollama's API puts qwen3 chain-of-thought in message.thinking
+(separate field); message.content is clean JSON output. No stripping needed.
 
 Usage:
     # Judge latest run file with default model
@@ -40,20 +40,25 @@ _OLLAMA_BASE = "http://localhost:11434"
 _DEFAULT_JUDGE_MODEL = "qwen3:8b"
 _QUALITY_WARN = 3.0
 
-# Criteria scored 1-5 per archetype.
-# Each key maps to the JSON field name returned by the judge.
+# Approved 4-criterion rubric. Each key maps to the JSON field returned by the judge.
+# overall_pass is NOT computed here — the scorer computes it from these scores.
 _CRITERIA = {
-    "explanation_accuracy": (
-        "Does the explanation accurately describe the actual flight? "
-        "(5=all facts correct: airline, stops, price tier, time period; 1=contains errors)"
+    "factual_accuracy": (
+        "Does the explanation accurately describe the actual flight shown above? "
+        "(5=all facts correct: airline, stop count, price, departure time; 1=contains errors)"
     ),
-    "explanation_relevance": (
-        "Is the explanation specific to this user's query? "
-        "(5=directly addresses query intent; 1=generic filler with no query-specific detail)"
+    "value_defensibility": (
+        "Does the explanation make a defensible case that this archetype is the best "
+        "value for the traveler's query? For best_value: does it justify the price trade-off? "
+        "(5=clear, grounded argument; 1=assertion with no evidence or contradicts the data)"
     ),
-    "comparison_coherence": (
-        "Does 'why this over the other?' make a logical case given the two actual archetypes? "
-        "(5=coherent trade-off, grounded in real differences; 1=incoherent or contradicts data)"
+    "specificity": (
+        "Is the explanation specific to this query and flight, not generic filler? "
+        "(5=mentions actual details — price, airline, route benefit; 1=could apply to any flight)"
+    ),
+    "traveler_framing": (
+        "Is the explanation framed from the traveler's perspective — benefits and outcomes, "
+        "not raw features? (5=traveler-benefit language throughout; 1=dry feature list)"
     ),
 }
 
@@ -122,7 +127,7 @@ async def _call_judge(
             {"role": "user", "content": prompt},
         ],
         "stream": False,
-        "options": {"temperature": 0, "num_predict": 600},
+        "options": {"temperature": 0, "num_predict": 800},
     }
     try:
         resp = await client.post(f"{_OLLAMA_BASE}/api/chat", json=payload, timeout=120.0)
@@ -327,7 +332,11 @@ async def main() -> int:
     )
     args = parser.parse_args()
 
-    run_path_arg = Path(args.run) if args.run else None
+    if args.run:
+        p = Path(args.run)
+        run_path_arg = p.resolve() if (p.is_absolute() or p.exists()) else _RUNS_DIR / p.name
+    else:
+        run_path_arg = None
     run_path, records = _load_run(run_path_arg)
 
     if not records:

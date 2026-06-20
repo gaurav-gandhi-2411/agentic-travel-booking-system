@@ -450,7 +450,8 @@ def main() -> int:
 
     # Resolve run file
     if args.run:
-        run_path = Path(args.run) if Path(args.run).is_absolute() else _RUNS_DIR / args.run
+        p = Path(args.run)
+        run_path = p.resolve() if p.is_absolute() or p.exists() else _RUNS_DIR / p.name
     else:
         all_runs = sorted(_RUNS_DIR.glob("*.jsonl"))
         if not all_runs:
