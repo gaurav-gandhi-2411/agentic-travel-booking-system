@@ -169,27 +169,42 @@ The bookable-inventory proof (TBO / GDS) is a separate iteration, gated on GG's 
 
 ---
 
-## Production state (Phase 3.2-F deployed — 2026-06-14) — FIRST POSTGRES-BACKED MULTI-TENANT REVISION
+## Production state — Wave 1 COMPLETE (2026-06-20)
 
-Backend now runs the **multi-tenant, Postgres-backed** stack on **free managed Supabase**
-(tenancy + RLS + bootstrap-auth resolver + booking loop + DemoProvider). Live Aviasales
-inventory stays on (`AVIASALES_LIVE=true`). Demo tenant served via DemoProvider. Sandbox
-bookings only (no payment/real PNR).
+### Wave 1 workstreams — verified live
+
+**WS1 — Reliability (COMPLETE):** 10/10 booking smoke runs passed on generated route
+`GEN-DELDXB-001-2026-06-20` (search → price-change halt → accept → HMAC-signed PNR →
+cancel). HMAC cross-instance cancel verified: fresh PNR not in `_holds` cancelled via
+stateless HMAC verification; tampered PNR and garbage ref correctly rejected.
+
+**WS2 — Sentry observability (COMPLETE, verified live):**
+- `SENTRY_DSN` mounted via `secretKeyRef: sentry-dsn:latest` on the running revision —
+  `init_sentry()` is NOT a no-op.
+- `capture_exception(exc)` wired on all four caught-exception paths (3× in `stream_book`,
+  1× in `stream_cancel`) — booking errors reach Sentry AND still emit clean SSE events.
+- Scope tags at capture: `offer_id` + `request_id` + `audit_id="pending"` (all set before
+  first `try` block; `audit_id` upgraded to real UUID on `booking_confirmed` path).
+- Live Sentry event confirmed on `00042-cit`: `offer_id`, `request_id`, `release`,
+  `environment=production` tags all present.
+- Scrub verified live: `X-API-Key` header → `[Scrubbed]`; no `token=` value in any URL or
+  breadcrumb; raw key string absent from event payload.
+- Quota-safe: `traces_sample_rate=0.1`, `profiles_sample_rate=0.0`, `send_default_pii=False`.
+
+**WS3 — Inventory (deferred):** out of scope for Wave 1; no changes.
 
 ### Backend (Cloud Run)
 
-- **Running revision:** `agentic-travel-booking-api-prod-00032-cex` at **100% traffic**;
-  prior `00028-xah` **drained to 0%**. Staleness check: backend current (2026-06-14).
-- **Image:** built from `main` HEAD commit `ad6404a` (PR #63 memory bump; PR #62 routing fix
-  also included — both squash-merged 2026-06-14).
-- **Deploy history (2026-06-14):**
-  - 3.2-F initial: `00028-xah` (PR #58/#59 Supabase multi-tenant stack) → 100%.
-  - Hot-fix arc: `/demo` 401s traced to `LLM_ROUTING_PROFILE=demo` routing the planner to
-    `provider: anthropic` (claude-haiku); `ANTHROPIC_API_KEY` is a placeholder by design
-    (double-billing rule). Fix: PR #62 (`LLM_ROUTING_PROFILE=demo` → `demo-llama`). PR #63
-    bumped `--memory=512Mi` → `--memory=1Gi` after `00031-yub` OOM'd at startup (525 MiB
-    used). `00032-cex` canary smoke confirmed `model: llama-3.3-70b-versatile` in structured
-    logs, no 401, full SSE stream → promoted to 100%.
+- **Running revision:** `agentic-travel-booking-api-prod-00042-cit` at **100% traffic**;
+  prior `00041-yud` (WS2 Sentry DSN) and `00038-sus` **drained**. Staleness: current (2026-06-20).
+- **Image:** built from `main` HEAD commit `8fcf894` (PR #71 — WS2 `capture_exception` fix;
+  PR #70 Sentry DSN + tags; PR #68 Wave 1 WS1/WS2/WS3 code; all squash-merged).
+- **Deploy arc (2026-06-20):**
+  - PR #68 (WS1/WS2/WS3 code) → PR #69 (spec.md) → PR #70 (Sentry DSN + tags) → all merged.
+  - `00041-yud` canary: WS1 10/10 smoke passed; WS2(b) gap identified (no `capture_exception`).
+  - PR #71 (`capture_exception` on all error paths, `audit_id="pending"` placeholder) → merged.
+  - `00042-cit` canary: booking sanity PASS; WS2(b) live Sentry event confirmed; WS2(c) scrub
+    verified live → promoted to 100%.
 - **Service URL:** `https://agentic-travel-booking-api-prod-rqyyasfwaa-el.a.run.app`
 - **Database:** Supabase (shared **shopping-assistant** project, ref `zwvvuvaasbotamxbixny`),
   dedicated **`dealhunter`** schema, **PostgreSQL 17.6**, connected as the least-privilege
@@ -197,21 +212,15 @@ bookings only (no payment/real PNR).
   `ssl=require`)**. `public` and the co-tenant project are untouched.
 - **Env/secret bindings active:** `APP_MODE=demo`, `APP_ENV=production`,
   `LLM_ROUTING_PROFILE=demo-llama`, `AVIASALES_LIVE=true`; secrets `DATABASE_URL=
-  supabase-dealhunter-url-prod:latest` (NOT `postgres`, NOT 6543), `DEMO_API_KEY`,
-  `AVIASALES_*`, `GROQ/OPENROUTER/ANTHROPIC`, `UPSTASH_REDIS_URL`, `LANGFUSE_*`.
+  supabase-dealhunter-url-prod:latest`, `DEMO_API_KEY`, `AVIASALES_*`,
+  `GROQ/OPENROUTER/ANTHROPIC`, `UPSTASH_REDIS_URL`, `LANGFUSE_*`, `SENTRY_DSN=sentry-dsn:latest`.
 - **LLM routing (live):** `demo-llama` profile — planner on `llama-3.3-70b-versatile` (Groq),
   all agents on Groq Llama. `ANTHROPIC_API_KEY` secret is a placeholder; Anthropic is never
-  called on the demo path. `demo` and `demo-haiku` profiles remain in `llm_routing.yaml` as
-  the Anthropic premium track (B2B tenant opt-in) — do NOT set `LLM_ROUTING_PROFILE=demo`
-  on the prod deployment without a real `ANTHROPIC_API_KEY`.
-- **Memory:** `--memory=1Gi` (bumped from 512Mi — revision `00031-yub` OOM'd at 525 MiB).
-- **Boot behavior:** the startup guard (`assert_runtime_role_unprivileged`) runs first and
-  **refuses to boot** if the DB role can bypass RLS; then `seed_demo_tenant` runs **as
-  `dealhunter_app`** (idempotent), seeding exactly one `demo` tenant (`inventory_adapter=
-  'demo'`) into `dealhunter`. Verified live on `00028-xah`: `/health` 200, 1 demo tenant + 1
-  api_key.
-- **Deploy method:** `workflow_dispatch stage=canary` (Gate 1) → GG smoke → `workflow_dispatch
-  stage=full` (Gate 2 after GG prod-environment approval).
+  called on the demo path.
+- **Memory:** `--memory=1Gi`.
+- **Boot behavior:** startup guard (`assert_runtime_role_unprivileged`) + `seed_demo_tenant`
+  (idempotent) + `init_sentry()` (DSN from env, no-op if absent).
+- **Deploy method:** `workflow_dispatch stage=canary` → smoke → `workflow_dispatch stage=full`.
 
 See ADR-0023 for the backend deploy narrative; Phase 3.2-F.1 section above for the resolver/
 schema/guard design.
@@ -462,7 +471,7 @@ No application logic changed. Four CI/process-hygiene items:
 ### Production backend (Cloud Run)
 - **Service name:** `agentic-travel-booking-api-prod`
 - **Service URL:** `https://agentic-travel-booking-api-prod-rqyyasfwaa-el.a.run.app`
-- **Running revision:** `agentic-travel-booking-api-prod-00032-cex` at 100% traffic
+- **Running revision:** `agentic-travel-booking-api-prod-00042-cit` at 100% traffic
 - **GCP project:** `agentic-travel-booking-system`
 - **Region:** `asia-south1`
 - **Artifact Registry:** `asia-south1-docker.pkg.dev/agentic-travel-booking-system/travel-agent/api`
