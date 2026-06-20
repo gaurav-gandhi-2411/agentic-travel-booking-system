@@ -77,7 +77,7 @@ jobs:
           flags: |
             --min-instances=0
             --max-instances=5
-            --memory=512Mi
+            --memory=1Gi
             --cpu=1
             --timeout=300
 
