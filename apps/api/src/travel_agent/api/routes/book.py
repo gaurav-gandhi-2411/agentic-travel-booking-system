@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 from collections.abc import AsyncGenerator
 
+import structlog
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -56,6 +57,7 @@ async def _sse_book_generator(
     body: BookRequest,
     inventory_adapter: str,
 ) -> AsyncGenerator[str, None]:
+    structlog.contextvars.bind_contextvars(offer_id=body.offer_id)
     provider = get_bookable_provider(inventory_adapter)
     if provider is None:
         yield f"data: {json.dumps(_not_bookable_event(inventory_adapter))}\n\n"

@@ -17,21 +17,26 @@ The base offer ID is always 3 dash-separated parts:
 
 _base_offer_id() strips the date suffix for all ID shapes.
 
-PRICE-CHANGED TRIGGER (stateful per DemoProvider instance):
-  The cheapest economy offer on every route is the price-change trigger.
+PRICE-CHANGED TRIGGER (stateless):
+  The cheapest NON-STOP economy offer on every route is the price-change trigger.
   - Hardcoded routes: DEMO-FLT-005 (DEL→BOM economy at ₹4,600 → ₹7,200).
-  - Generated routes: GEN-{ORIGINDEST}-001 (cheapest economy, 15% increase).
-  First revalidate of the trigger offer → price_changed=True.
-  Subsequent revalidates → price_changed=False at the settled price.
-  First /book attempt stops at the price-confirm step; second /book proceeds.
+  - Generated routes: the cheapest non-stop economy GEN-*-001 (15% increase).
+  revalidate() always returns price_changed=True for trigger offers — no per-
+  instance state. The halt/proceed decision lives in the coordinator via the
+  accept_price_change flag on /book.
 
 GENERATED ROUTES — STATELESS BY DESIGN:
-  Any origin→destination not in the hardcoded catalog gets 3 deterministic
+  Any origin→destination not in the hardcoded catalog gets 3–4 deterministic
   offers from _generate_route_offers(), which derives all values from
   md5(origin+destination). Identical input → identical output on every Cloud
-  Run instance. When revalidate()/book() arrive with a GEN-* offer_id,
-  _ensure_gen_offer() reconstructs the offer from the ID itself — no shared
-  state or prior get_flights() call required.
+  Run instance. Corridor-appropriate airlines, departure times, and fare spreads.
+  Routes >5h also get a 4th 1-stop economy option at a modest discount.
+
+CANCEL — CROSS-INSTANCE SAFE:
+  cancel() first checks the local _holds dict (same-instance, exact). On a
+  cross-instance miss it verifies the PNR matches the format DemoProvider.book()
+  issues (DEMO-PNR-{8 uppercase hex}) and returns cancelled=True. A random or
+  misformatted ref returns cancelled=False.
 
 THIS IS A SANDBOX MOCK. No real inventory, no real PNR, no payments.
 """
@@ -41,6 +46,7 @@ from __future__ import annotations
 import dataclasses
 import functools
 import hashlib
+import re
 import uuid
 from datetime import UTC, timedelta
 from datetime import datetime as _datetime
@@ -61,7 +67,7 @@ from travel_agent.providers.base import (
 )
 
 HOLD_TTL_MINUTES: int = 15
-# 15% price increase on the first revalidation of the cheapest offer per route.
+# 15% price increase on the first revalidation of the cheapest non-stop offer.
 PRICE_CHANGE_MULTIPLIER: float = 1.15
 
 # ── hardcoded catalog ──────────────────────────────────────────────────────────
@@ -149,25 +155,106 @@ _EUR_AIRPORTS: frozenset[str] = frozenset(["CDG", "LHR", "FRA", "AMS", "ZRH", "F
 _EASIA_AIRPORTS: frozenset[str] = frozenset(["NRT", "HND", "ICN", "PEK", "PVG", "HKG", "TPE"])
 _AMER_AIRPORTS: frozenset[str] = frozenset(["JFK", "EWR", "ORD", "LAX", "YYZ", "GRU"])
 
-# (airline_code, flight_number_prefix)
-_ECONOMY_AIRLINES: tuple[tuple[str, str], ...] = (
-    ("AI", "AI"),
-    ("6E", "6E"),
-    ("SG", "SG"),
-    ("UK", "UK"),
-    ("EK", "EK"),
-    ("QR", "QR"),
-    ("G9", "G9"),
-    ("SQ", "SQ"),
-)
-_BUSINESS_AIRLINES: tuple[tuple[str, str], ...] = (
-    ("AI", "AI"),
-    ("EK", "EK"),
-    ("QR", "QR"),
-    ("SQ", "SQ"),
-)
 _DEP_MINUTES: tuple[int, ...] = (0, 15, 30, 45)
 
+# ── corridor profiles ──────────────────────────────────────────────────────────
+# Realistic airline pools, departure-hour ranges, and business-class multipliers
+# keyed by route corridor. The md5 seed picks within each pool deterministically.
+
+
+@dataclasses.dataclass(frozen=True)
+class _CorridorProfile:
+    eco_airlines: tuple[tuple[str, str], ...]   # (IATA code, flight-number prefix)
+    biz_airlines: tuple[tuple[str, str], ...]
+    dep_hours: tuple[int, ...]                   # realistic departure hours
+    biz_mult_min_x10: int                        # min business multiplier ×10
+    biz_mult_range_x10: int                      # LCG range (max = min + range - 1)
+    has_stopover: bool                           # generate 4th 1-stop economy option
+    stopover_airlines: tuple[tuple[str, str], ...] = ()
+
+
+# Domestic Indian routes: Indian carriers only, daytime spread, lower biz premium.
+_DOMESTIC_INDIA_PROFILE = _CorridorProfile(
+    eco_airlines=(("AI", "AI"), ("6E", "6E"), ("SG", "SG"), ("UK", "UK"), ("IX", "IX")),
+    biz_airlines=(("AI", "AI"), ("UK", "UK"), ("6E", "6E")),
+    dep_hours=(6, 7, 8, 9, 10, 11, 12, 14, 15, 16, 17, 18, 19, 20, 21),
+    biz_mult_min_x10=18,
+    biz_mult_range_x10=8,   # 1.8× – 2.5×
+    has_stopover=False,
+)
+
+# Gulf corridor: overnight and red-eye popular; Indian + Gulf carriers.
+_GULF_PROFILE = _CorridorProfile(
+    eco_airlines=(("6E", "6E"), ("AI", "AI"), ("G9", "G9"), ("EK", "EK"), ("QR", "QR")),
+    biz_airlines=(("EK", "EK"), ("QR", "QR"), ("EY", "EY"), ("AI", "AI")),
+    dep_hours=(1, 2, 3, 6, 8, 10, 14, 18, 20, 23),
+    biz_mult_min_x10=25,
+    biz_mult_range_x10=16,  # 2.5× – 4.0×
+    has_stopover=False,     # 3–4 h; no stopover needed
+)
+
+# Southeast Asia: hub carriers + Indian; mix of overnight and daytime.
+_SEA_PROFILE = _CorridorProfile(
+    eco_airlines=(("AI", "AI"), ("SQ", "SQ"), ("MH", "MH"), ("TG", "TG"), ("6E", "6E")),
+    biz_airlines=(("SQ", "SQ"), ("MH", "MH"), ("TG", "TG"), ("AI", "AI")),
+    dep_hours=(0, 1, 8, 10, 12, 14, 20, 22),
+    biz_mult_min_x10=25,
+    biz_mult_range_x10=21,  # 2.5× – 4.5×
+    has_stopover=True,
+    stopover_airlines=(("SQ", "SQ"), ("MH", "MH")),
+)
+
+# Europe: longhaul; Gulf hubs popular; red-eye and early-morning dominant.
+_EUROPE_PROFILE = _CorridorProfile(
+    eco_airlines=(("AI", "AI"), ("EK", "EK"), ("QR", "QR"), ("LH", "LH")),
+    biz_airlines=(("AI", "AI"), ("EK", "EK"), ("QR", "QR"), ("LH", "LH")),
+    dep_hours=(1, 2, 3, 8, 14, 22, 23),
+    biz_mult_min_x10=30,
+    biz_mult_range_x10=21,  # 3.0× – 5.0×
+    has_stopover=True,
+    stopover_airlines=(("EK", "EK"), ("QR", "QR")),
+)
+
+# East Asia: longhaul via Gulf or SEA hubs; overnight popular.
+_EASIA_PROFILE = _CorridorProfile(
+    eco_airlines=(("AI", "AI"), ("EK", "EK"), ("SQ", "SQ"), ("CX", "CX"), ("MH", "MH")),
+    biz_airlines=(("AI", "AI"), ("EK", "EK"), ("SQ", "SQ"), ("CX", "CX")),
+    dep_hours=(0, 1, 9, 11, 22, 23),
+    biz_mult_min_x10=30,
+    biz_mult_range_x10=21,  # 3.0× – 5.0×
+    has_stopover=True,
+    stopover_airlines=(("SQ", "SQ"), ("CX", "CX")),
+)
+
+# Americas: ultra-longhaul; Gulf-hub connections dominate; high biz premium.
+_AMER_PROFILE = _CorridorProfile(
+    eco_airlines=(("AI", "AI"), ("EK", "EK"), ("QR", "QR"), ("UA", "UA")),
+    biz_airlines=(("AI", "AI"), ("EK", "EK"), ("QR", "QR")),
+    dep_hours=(1, 2, 22, 23, 8),
+    biz_mult_min_x10=35,
+    biz_mult_range_x10=26,  # 3.5× – 6.0×
+    has_stopover=True,
+    stopover_airlines=(("EK", "EK"), ("QR", "QR")),
+)
+
+# Fallback for routes that don't match any known corridor.
+_FALLBACK_PROFILE = _CorridorProfile(
+    eco_airlines=(("AI", "AI"), ("EK", "EK"), ("QR", "QR"), ("SQ", "SQ")),
+    biz_airlines=(("AI", "AI"), ("EK", "EK"), ("QR", "QR")),
+    dep_hours=(1, 6, 8, 10, 14, 20, 22),
+    biz_mult_min_x10=25,
+    biz_mult_range_x10=21,  # 2.5× – 4.5×
+    has_stopover=True,
+    stopover_airlines=(("EK", "EK"), ("QR", "QR")),
+)
+
+_CORRIDOR_TABLE: tuple[tuple[frozenset[str], _CorridorProfile], ...] = (
+    (_GCC_AIRPORTS, _GULF_PROFILE),
+    (_SEA_AIRPORTS, _SEA_PROFILE),
+    (_EASIA_AIRPORTS, _EASIA_PROFILE),
+    (_EUR_AIRPORTS, _EUROPE_PROFILE),
+    (_AMER_AIRPORTS, _AMER_PROFILE),
+)
 
 _ROUTE_RANGE_TABLE: tuple[tuple[frozenset[str], tuple[int, int, int]], ...] = (
     (_GCC_AIRPORTS, (7_000, 22_000, 210)),
@@ -178,6 +265,10 @@ _ROUTE_RANGE_TABLE: tuple[tuple[frozenset[str], tuple[int, int, int]], ...] = (
 )
 _DOMESTIC_RANGE: tuple[int, int, int] = (2_500, 9_000, 120)
 _FALLBACK_RANGE: tuple[int, int, int] = (12_000, 40_000, 300)
+
+# Routes longer than this get a 4th 1-stop economy option at a modest discount.
+_STOPOVER_THRESHOLD_MINUTES: int = 300
+_STOPOVER_PRICE_FACTOR: float = 0.82  # 18% cheaper than cheapest non-stop
 
 
 def _route_range(origin: str, destination: str) -> tuple[int, int, int]:
@@ -191,6 +282,17 @@ def _route_range(origin: str, destination: str) -> tuple[int, int, int]:
     return _FALLBACK_RANGE
 
 
+def _route_corridor(origin: str, destination: str) -> _CorridorProfile:
+    """Return the corridor profile for route-appropriate airline/timing selection."""
+    if origin in _INDIA_AIRPORTS and destination in _INDIA_AIRPORTS:
+        return _DOMESTIC_INDIA_PROFILE
+    pair = {origin, destination}
+    for airport_set, profile in _CORRIDOR_TABLE:
+        if pair & airport_set:
+            return profile
+    return _FALLBACK_PROFILE
+
+
 def _lcg(seed: int) -> tuple[int, int]:
     """Minimal LCG. Returns (next_seed, value)."""
     s = (seed * 1_664_525 + 1_013_904_223) & 0xFFFF_FFFF
@@ -199,40 +301,51 @@ def _lcg(seed: int) -> tuple[int, int]:
 
 @functools.lru_cache(maxsize=512)
 def _generate_route_offers(origin: str, destination: str) -> tuple[_DemoFlight, ...]:
-    """Return 3 deterministic offers for any origin→destination.
+    """Return 3–4 deterministic offers for any origin→destination.
 
-    Derives all values from md5(origin+destination) — identical on every
-    process/instance, so booking never fails when Cloud Run routes /book to
-    a different instance than /search.
+    Uses corridor-appropriate airlines, departure times, and business-class
+    premiums. Routes >5 h also generate a 4th 1-stop economy option priced
+    at 18% below the cheapest non-stop economy (hub connections are cheaper
+    but less convenient).
+
+    The price-change trigger is the cheapest NON-STOP economy offer only —
+    the stopover option is excluded from the trigger set.
+
+    Identical origin+destination always produces identical output on every
+    Cloud Run instance (deterministic from md5 seed).
     """
     seed = int.from_bytes(
         hashlib.md5(f"{origin}{destination}".encode(), usedforsecurity=False).digest()[:4],
         "big",
     )
     eco_min, eco_max, duration = _route_range(origin, destination)
+    corridor = _route_corridor(origin, destination)
 
+    # Economy prices (non-stop)
     seed, r = _lcg(seed)
     eco1_price = round((eco_min + r % (eco_max - eco_min)) / 100) * 100
     seed, r = _lcg(seed)
     eco2_price = round((eco1_price + 1_000 + r % 3_000) / 100) * 100
     seed, r = _lcg(seed)
-    biz_mult_x10 = 25 + r % 16  # 2.5x - 4.0x economy multiplier
+    biz_mult_x10 = corridor.biz_mult_min_x10 + r % corridor.biz_mult_range_x10
     biz_price = round(eco1_price * biz_mult_x10 / 10 / 100) * 100
 
+    # Airlines from corridor-appropriate pools
     seed, r = _lcg(seed)
-    eco1_al = _ECONOMY_AIRLINES[r % len(_ECONOMY_AIRLINES)]
+    eco1_al = corridor.eco_airlines[r % len(corridor.eco_airlines)]
     seed, r = _lcg(seed)
-    eco2_pool = [a for a in _ECONOMY_AIRLINES if a != eco1_al]
+    eco2_pool = [a for a in corridor.eco_airlines if a != eco1_al]
     eco2_al = eco2_pool[r % len(eco2_pool)]
     seed, r = _lcg(seed)
-    biz_al = _BUSINESS_AIRLINES[r % len(_BUSINESS_AIRLINES)]
+    biz_al = corridor.biz_airlines[r % len(corridor.biz_airlines)]
 
+    # Departure hours from corridor-appropriate range
     seed, r = _lcg(seed)
-    eco1_dh = 6 + r % 13  # 06-18
+    eco1_dh = corridor.dep_hours[r % len(corridor.dep_hours)]
     seed, r = _lcg(seed)
-    eco2_dh = (eco1_dh + 3 + r % 8) % 24
+    eco2_dh = corridor.dep_hours[r % len(corridor.dep_hours)]
     seed, r = _lcg(seed)
-    biz_dh = 8 + r % 12  # 08-19
+    biz_dh = corridor.dep_hours[r % len(corridor.dep_hours)]
 
     seed, r = _lcg(seed)
     eco1_dm = _DEP_MINUTES[r % 4]
@@ -250,7 +363,8 @@ def _generate_route_offers(origin: str, destination: str) -> tuple[_DemoFlight, 
 
     rk = f"{origin}{destination}"
     return_dur = max(duration - 15, 60)
-    return (
+
+    offers: list[_DemoFlight] = [
         _DemoFlight(
             f"GEN-{rk}-001",
             origin,
@@ -290,13 +404,49 @@ def _generate_route_offers(origin: str, destination: str) -> tuple[_DemoFlight, 
             duration,
             return_dur,
         ),
-    )
+    ]
+
+    # 4th 1-stop economy option for routes >5 h with a known hub carrier.
+    if (
+        corridor.has_stopover
+        and duration > _STOPOVER_THRESHOLD_MINUTES
+        and corridor.stopover_airlines
+    ):
+        seed, r = _lcg(seed)
+        stop_al = corridor.stopover_airlines[r % len(corridor.stopover_airlines)]
+        seed, r = _lcg(seed)
+        stop_fn = 100 + r % 900
+        seed, r = _lcg(seed)
+        stop_dh = corridor.dep_hours[r % len(corridor.dep_hours)]
+        seed, r = _lcg(seed)
+        stop_dm = _DEP_MINUTES[r % 4]
+        stop_price = round(eco1_price * _STOPOVER_PRICE_FACTOR / 100) * 100
+        stop_duration = duration + 90  # +90 min for the hub connection
+        offers.append(
+            _DemoFlight(
+                f"GEN-{rk}-004",
+                origin,
+                destination,
+                stop_al[0],
+                f"{stop_al[1]}-{stop_fn}",
+                "economy",
+                stop_price,
+                stop_dh,
+                stop_dm,
+                stop_duration,
+                return_dur + 90,
+                layover_count=1,
+            )
+        )
+
+    return tuple(offers)
 
 
 # Module-level index for generated offers — populated lazily, persistent per process.
 # Stateless reconstruction is always available via _ensure_gen_offer().
 _GENERATED_FLIGHT_INDEX: dict[str, _DemoFlight] = {}
-# Cheapest economy base IDs per generated route — the price-change triggers.
+# Cheapest NON-STOP economy base IDs per generated route — the price-change triggers.
+# Stopover (layover_count > 0) offers are excluded so the trigger is predictable.
 _GENERATED_PRICE_CHANGE_OFFER_IDS: set[str] = set()
 
 
@@ -305,9 +455,10 @@ def _register_generated_route(origin: str, destination: str) -> None:
     offers = _generate_route_offers(origin, destination)
     for f in offers:
         _GENERATED_FLIGHT_INDEX[f.offer_id] = f
-    eco = [f for f in offers if f.cabin_class == "economy"]
-    if eco:
-        _GENERATED_PRICE_CHANGE_OFFER_IDS.add(min(eco, key=lambda f: f.price_inr).offer_id)
+    # Trigger is cheapest non-stop economy only — excludes the 1-stop discount option.
+    non_stop_eco = [f for f in offers if f.cabin_class == "economy" and f.layover_count == 0]
+    if non_stop_eco:
+        _GENERATED_PRICE_CHANGE_OFFER_IDS.add(min(non_stop_eco, key=lambda f: f.price_inr).offer_id)
 
 
 def _ensure_gen_offer(base_id: str) -> None:
@@ -327,6 +478,13 @@ def _ensure_gen_offer(base_id: str) -> None:
 def _compute_settled_price(original_price: int) -> int:
     """Settled (post-change) price: 15% increase, rounded to nearest ₹100."""
     return round(original_price * PRICE_CHANGE_MULTIPLIER / 100) * 100
+
+
+# ── PNR format verification ────────────────────────────────────────────────────
+# DemoProvider.book() issues PNRs in exactly this format: DEMO-PNR- + 8 uppercase
+# hex chars from uuid4().hex[:8].upper(). _DEMO_PNR_RE verifies the format without
+# needing the in-memory _holds dict — used for cross-instance stateless cancel.
+_DEMO_PNR_RE: re.Pattern[str] = re.compile(r"^DEMO-PNR-[0-9A-F]{8}$")
 
 
 # ── internal hold state ────────────────────────────────────────────────────────
@@ -386,7 +544,7 @@ class DemoProvider:
         """Return demo flights for any origin→destination.
 
         Uses the hardcoded catalog when a route is listed there; otherwise
-        generates 3 deterministic offers from _generate_route_offers().
+        generates 3–4 deterministic offers from _generate_route_offers().
         """
         is_one_way = trip_type == TripType.ONE_WAY
 
@@ -487,9 +645,10 @@ class DemoProvider:
     async def revalidate(self, offer_id: str) -> RevalidationResult:
         """Re-confirm price and availability.
 
-        The cheapest economy offer on every route is the price-change trigger:
-        first call returns price_changed=True; subsequent calls settle at the
-        new price. Works on both hardcoded and generated offer IDs.
+        The cheapest NON-STOP economy offer on every route is the price-change
+        trigger: revalidate() always returns price_changed=True for those offers
+        (stateless — no per-instance _price_changed_shown state). The
+        halt/proceed decision lives in the coordinator via accept_price_change.
         """
         base = _base_offer_id(offer_id)
         _ensure_gen_offer(base)
@@ -497,10 +656,6 @@ class DemoProvider:
 
         is_trigger = base == PRICE_CHANGE_OFFER_ID or base in _GENERATED_PRICE_CHANGE_OFFER_IDS
 
-        # Stateless: trigger offers always return price_changed=True with the settled
-        # (post-change) price. The halt-or-proceed decision lives in the coordinator,
-        # controlled by the accept_price_change flag on the /book request — no shared
-        # or per-instance state needed between Cloud Run instances.
         if is_trigger:
             original = (
                 PRICE_CHANGE_ORIGINAL_PRICE
@@ -553,6 +708,7 @@ class DemoProvider:
             offer_lock_id=offer_lock_id,
             hold_expires_at=hold_expires_at,
             idempotency_key=idempotency_key,
+            audit_id=uuid.uuid4(),
         )
         record = _HoldRecord(offer_id=offer_id, idempotency_key=idempotency_key, result=result)
         self._holds[pnr] = record
@@ -560,11 +716,23 @@ class DemoProvider:
         return result
 
     async def cancel(self, booking_ref: str) -> CancellationResult:
-        """Release a hold. Returns cancelled=False if booking_ref is unknown."""
-        if booking_ref not in self._holds:
-            return CancellationResult(booking_ref=booking_ref, cancelled=False)
-        self._holds[booking_ref].cancelled = True
-        return CancellationResult(booking_ref=booking_ref, cancelled=True)
+        """Release a hold. Idempotent; cross-instance safe.
+
+        Same-instance path: verified against _holds (exact knowledge of PNR).
+        Cross-instance fallback: verifies format matches DEMO-PNR-{8 uppercase
+        hex} — the only format DemoProvider.book() issues. A legitimately issued
+        PNR always succeeds; a fabricated or mistyped ref fails cleanly.
+        """
+        if booking_ref in self._holds:
+            self._holds[booking_ref].cancelled = True
+            return CancellationResult(booking_ref=booking_ref, cancelled=True)
+
+        # Cross-instance fallback: the PNR was booked on a different Cloud Run
+        # instance. Verify the format rather than the hold state.
+        if _DEMO_PNR_RE.match(booking_ref):
+            return CancellationResult(booking_ref=booking_ref, cancelled=True)
+
+        return CancellationResult(booking_ref=booking_ref, cancelled=False)
 
     # ── Internal helpers ───────────────────────────────────────────────────
 

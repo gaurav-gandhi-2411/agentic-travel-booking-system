@@ -12,6 +12,7 @@ Groups:
   9. Generated routes: any-route generation (5 tests)
  10. Generated routes: full booking lifecycle (1 test)
  11. Generated routes: stateless reconstruction from offer_id (1 test)
+ 12. Cross-instance cancel + audit_id (3 tests)
 """
 
 from __future__ import annotations
@@ -29,6 +30,7 @@ from travel_agent.providers.base import (
     InventoryProvider,
 )
 from travel_agent.providers.demo.provider import (
+    _DEMO_PNR_RE,
     _GENERATED_FLIGHT_INDEX,
     _GENERATED_PRICE_CHANGE_OFFER_IDS,
     PRICE_CHANGE_NEW_PRICE,
@@ -289,8 +291,10 @@ async def test_close_clears_state(provider: DemoProvider, window: Window) -> Non
 
     assert len(provider._holds) == 0
 
+    # Stateless cancel: _holds is gone (cross-instance simulation) but PNR format is
+    # valid (DEMO-PNR-{8 hex}), so cancel succeeds via format-based fallback.
     cancel_result = await provider.cancel(pnr)
-    assert cancel_result.cancelled is False
+    assert cancel_result.cancelled is True
 
 
 # ---------------------------------------------------------------------------
@@ -423,12 +427,14 @@ async def test_revalidate_works_without_prior_get_flights() -> None:
     (get_flights called), /book hits instance B (no prior get_flights).
     A fresh DemoProvider + cleared module index simulates instance B.
     """
-    # Directly compute expected offer data without calling get_flights first
+    # The trigger is the cheapest NON-STOP economy offer. BOM→SIN (SEA, 360 min)
+    # generates a 4th 1-stop option (0.82× cheapest non-stop) that is excluded from
+    # the trigger set — filter layover_count==0 to find the actual trigger.
     offers_tuple = _generate_route_offers("BOM", "SIN")
     cheapest_base = min(
-        (f for f in offers_tuple if f.cabin_class == "economy"),
+        (f for f in offers_tuple if f.cabin_class == "economy" and f.layover_count == 0),
         key=lambda f: f.price_inr,
-    ).offer_id  # e.g. "GEN-BOMSIN-001"
+    ).offer_id  # always "GEN-BOMSIN-001" (non-stop economy)
 
     provider = DemoProvider()
     window = Window(start_date=date(2025, 7, 1), end_date=date(2025, 7, 8))
@@ -441,3 +447,47 @@ async def test_revalidate_works_without_prior_get_flights() -> None:
     assert rv.is_available is True
     # Stateless: trigger offer always returns price_changed=True on any instance
     assert rv.price_changed is True
+
+
+# ---------------------------------------------------------------------------
+# Group 12 — Cross-instance cancel + audit_id
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_cancel_cross_instance_valid_pnr_format_succeeds() -> None:
+    """PNR in DEMO-PNR-{8HEX} format succeeds on a fresh (cross-instance) provider.
+
+    Simulates: /book hit instance A, /cancel hits instance B with empty _holds.
+    The cancel must succeed because the format proves DemoProvider issued the PNR.
+    """
+    provider_b = DemoProvider()  # fresh instance — no _holds
+
+    pnr = "DEMO-PNR-A1B2C3D4"
+    assert _DEMO_PNR_RE.match(pnr), "test PNR must match the format regex"
+
+    result = await provider_b.cancel(pnr)
+    assert result.cancelled is True
+    assert result.booking_ref == pnr
+
+
+@pytest.mark.asyncio
+async def test_cancel_cross_instance_invalid_format_fails() -> None:
+    """A ref that doesn't match DEMO-PNR-{8HEX} returns cancelled=False on fresh instance."""
+    provider_b = DemoProvider()
+
+    for bad_ref in ["DEMO-PNR-ZZZZZZZZ", "REAL-PNR-12345678", "DEMO-PNR-A1B2"]:
+        result = await provider_b.cancel(bad_ref)
+        assert result.cancelled is False, f"{bad_ref!r} should fail format check"
+
+
+@pytest.mark.asyncio
+async def test_book_populates_audit_id(provider: DemoProvider, window: Window) -> None:
+    """book() must set audit_id to a non-None UUID (WS2 correlation handle)."""
+    offer_id = f"DEMO-FLT-001-{window.start_date.isoformat()}"
+    result = await provider.book(offer_id, "audit-id-test-key")
+
+    assert result.audit_id is not None, "audit_id must be populated"
+    # uuid.UUID constructor validates format; raises ValueError on bad input
+    import uuid as _uuid
+    _uuid.UUID(str(result.audit_id))

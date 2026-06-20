@@ -14,12 +14,16 @@ from __future__ import annotations
 from collections.abc import AsyncGenerator
 from enum import StrEnum
 
+import structlog
+
 from travel_agent.agents.booking import BookingAgent
 from travel_agent.coordinator.state import RequestState
 from travel_agent.providers.base import (
     BookableInventoryProvider,
     BookingConflictError,
 )
+
+log = structlog.get_logger(__name__)
 
 
 class BookingEventType(StrEnum):
@@ -48,11 +52,13 @@ async def stream_book(
     returns price_changed=True for the trigger offer). The halt/proceed decision
     is made entirely from accept_price_change — no shared or per-instance state.
     """
+    log.info("booking_start", offer_id=offer_id, accept_price_change=accept_price_change)
     yield {"type": BookingEventType.BOOKING_REVALIDATING}
 
     try:
         reval = await provider.revalidate(offer_id)
     except Exception as exc:
+        log.warning("booking_error_emitted", offer_id=offer_id, code="provider_error", error=str(exc))
         yield {
             "type": BookingEventType.BOOKING_ERROR,
             "message": str(exc),
@@ -73,6 +79,7 @@ async def stream_book(
 
     if not reval.is_available:
         yield priced
+        log.warning("booking_error_emitted", offer_id=offer_id, code="unavailable")
         yield {
             "type": BookingEventType.BOOKING_ERROR,
             "message": "Offer is no longer available.",
@@ -83,6 +90,12 @@ async def stream_book(
     if reval.price_changed and not accept_price_change:
         # Price changed — emit priced event and stop. Caller must re-issue /book
         # with accept_price_change=True to proceed at the new price.
+        log.info(
+            "booking_price_change_halt",
+            offer_id=offer_id,
+            previous_price=reval.previous_price_inr,
+            new_price=reval.current_price_inr,
+        )
         yield priced
         return
 
@@ -94,6 +107,7 @@ async def stream_book(
     try:
         state = await agent.run(RequestState(), offer_id, idempotency_key)
     except BookingConflictError as exc:
+        log.warning("booking_error_emitted", offer_id=offer_id, code="conflict", error=str(exc))
         yield {
             "type": BookingEventType.BOOKING_ERROR,
             "message": str(exc),
@@ -101,6 +115,7 @@ async def stream_book(
         }
         return
     except Exception as exc:
+        log.warning("booking_error_emitted", offer_id=offer_id, code="provider_error", error=str(exc))
         yield {
             "type": BookingEventType.BOOKING_ERROR,
             "message": str(exc),
@@ -109,6 +124,13 @@ async def stream_book(
         return
 
     b = state.booking
+    log.info(
+        "booking_confirmed",
+        offer_id=offer_id,
+        pnr=b.pnr,
+        audit_id=str(b.audit_id) if b.audit_id is not None else None,
+        confirmed_price_inr=reval.current_price_inr,
+    )
     yield {
         "type": BookingEventType.BOOKING_CONFIRMED,
         "pnr": b.pnr,
@@ -131,9 +153,11 @@ async def stream_cancel(
     If the booking_ref is unknown or already cancelled, the provider returns
     cancelled=False and we emit booking_error {code: "not_found"}.
     """
+    log.info("cancel_start", booking_ref=booking_ref)
     try:
         result = await provider.cancel(booking_ref)
     except Exception as exc:
+        log.warning("booking_error_emitted", booking_ref=booking_ref, code="provider_error", error=str(exc))
         yield {
             "type": BookingEventType.BOOKING_ERROR,
             "message": str(exc),
@@ -142,6 +166,7 @@ async def stream_cancel(
         return
 
     if not result.cancelled:
+        log.warning("booking_error_emitted", booking_ref=booking_ref, code="not_found")
         yield {
             "type": BookingEventType.BOOKING_ERROR,
             "message": f"Booking ref {booking_ref!r} not found or already cancelled.",
@@ -149,6 +174,7 @@ async def stream_cancel(
         }
         return
 
+    log.info("cancel_result", booking_ref=booking_ref, cancelled=True)
     yield {
         "type": BookingEventType.BOOKING_CANCELLED,
         "booking_ref": result.booking_ref,
