@@ -14,6 +14,7 @@ from __future__ import annotations
 from collections.abc import AsyncGenerator
 from enum import StrEnum
 
+import sentry_sdk
 import structlog
 
 from travel_agent.agents.booking import BookingAgent
@@ -53,6 +54,9 @@ async def stream_book(
     is made entirely from accept_price_change — no shared or per-instance state.
     """
     log.info("booking_start", offer_id=offer_id, accept_price_change=accept_price_change)
+    sentry_sdk.set_tag("offer_id", offer_id)
+    if rid := structlog.contextvars.get_contextvars().get("request_id"):
+        sentry_sdk.set_tag("request_id", rid)
     yield {"type": BookingEventType.BOOKING_REVALIDATING}
 
     try:
@@ -128,6 +132,7 @@ async def stream_book(
         return
 
     b = state.booking
+    sentry_sdk.set_tag("audit_id", str(b.audit_id) if b.audit_id is not None else "none")
     log.info(
         "booking_confirmed",
         offer_id=offer_id,
