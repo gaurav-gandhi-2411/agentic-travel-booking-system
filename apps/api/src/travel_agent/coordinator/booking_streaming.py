@@ -57,6 +57,7 @@ async def stream_book(
     sentry_sdk.set_tag("offer_id", offer_id)
     if rid := structlog.contextvars.get_contextvars().get("request_id"):
         sentry_sdk.set_tag("request_id", rid)
+    sentry_sdk.set_tag("audit_id", "pending")  # overwritten to real UUID on booking_confirmed
     yield {"type": BookingEventType.BOOKING_REVALIDATING}
 
     try:
@@ -65,6 +66,7 @@ async def stream_book(
         log.warning(
             "booking_error_emitted", offer_id=offer_id, code="provider_error", error=str(exc)
         )
+        sentry_sdk.capture_exception(exc)
         yield {
             "type": BookingEventType.BOOKING_ERROR,
             "message": str(exc),
@@ -114,6 +116,7 @@ async def stream_book(
         state = await agent.run(RequestState(), offer_id, idempotency_key)
     except BookingConflictError as exc:
         log.warning("booking_error_emitted", offer_id=offer_id, code="conflict", error=str(exc))
+        sentry_sdk.capture_exception(exc)
         yield {
             "type": BookingEventType.BOOKING_ERROR,
             "message": str(exc),
@@ -124,6 +127,7 @@ async def stream_book(
         log.warning(
             "booking_error_emitted", offer_id=offer_id, code="provider_error", error=str(exc)
         )
+        sentry_sdk.capture_exception(exc)
         yield {
             "type": BookingEventType.BOOKING_ERROR,
             "message": str(exc),
@@ -163,12 +167,15 @@ async def stream_cancel(
     cancelled=False and we emit booking_error {code: "not_found"}.
     """
     log.info("cancel_start", booking_ref=booking_ref)
+    if rid := structlog.contextvars.get_contextvars().get("request_id"):
+        sentry_sdk.set_tag("request_id", rid)
     try:
         result = await provider.cancel(booking_ref)
     except Exception as exc:
         log.warning(
             "booking_error_emitted", booking_ref=booking_ref, code="provider_error", error=str(exc)
         )
+        sentry_sdk.capture_exception(exc)
         yield {
             "type": BookingEventType.BOOKING_ERROR,
             "message": str(exc),
