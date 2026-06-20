@@ -1,0 +1,702 @@
+[
+  {
+    "id": "w2-p-001",
+    "category": "planner",
+    "query": "fly from Delhi to Dubai next month",
+    "today": "2026-07-01",
+    "expected_planner": {
+      "origin_iata": "DEL",
+      "destination_iata": "DXB",
+      "trip_type": "round_trip",
+      "cabin_class": "economy",
+      "traveler_count": 1,
+      "budget_inr": null,
+      "airline_preference": null,
+      "departure_time_constraint": null,
+      "departure_window": {
+        "earliest_not_before": "2026-08-01",
+        "earliest_not_after": "2026-08-01",
+        "latest_not_before": "2026-08-31",
+        "latest_not_after": "2026-08-31"
+      }
+    },
+    "refine": null,
+    "tier2": true,
+    "notes": "'next month' full-window rule; round_trip + economy defaults (both documented)"
+  },
+  {
+    "id": "w2-p-002",
+    "category": "planner",
+    "query": "2 business class tickets from BOM to NRT in October 2026",
+    "today": "2026-07-01",
+    "expected_planner": {
+      "origin_iata": "BOM",
+      "destination_iata": "NRT",
+      "trip_type": "round_trip",
+      "cabin_class": "business",
+      "traveler_count": 2,
+      "departure_window": {
+        "earliest_not_before": "2026-10-01",
+        "earliest_not_after": "2026-10-01",
+        "latest_not_before": "2026-10-31",
+        "latest_not_after": "2026-10-31"
+      }
+    },
+    "refine": null,
+    "tier2": true,
+    "notes": "'in [Month Year]' full-window; explicit business + 2 pax; IATA codes in query"
+  },
+  {
+    "id": "w2-p-003",
+    "category": "planner",
+    "query": "one-way from Delhi to London next week, economy",
+    "today": "2026-07-01",
+    "expected_planner": {
+      "origin_iata": "DEL",
+      "destination_iata": "LHR",
+      "trip_type": "one_way",
+      "cabin_class": "economy",
+      "departure_window": {
+        "earliest_not_before": "2026-07-06",
+        "earliest_not_after": "2026-07-07",
+        "latest_not_before": null,
+        "latest_not_after": null
+      }
+    },
+    "refine": null,
+    "tier2": true,
+    "notes": "'next week' from Wed Jul 1 = Mon Jul 6; narrow (7 days) -> +30 on latest; skip latest check"
+  },
+  {
+    "id": "w2-p-004",
+    "category": "planner",
+    "query": "quick trip from Mumbai to Singapore this weekend",
+    "today": "2026-07-01",
+    "expected_planner": {
+      "origin_iata": "BOM",
+      "destination_iata": "SIN",
+      "trip_type": "round_trip",
+      "cabin_class": "economy",
+      "departure_window": {
+        "earliest_not_before": "2026-07-04",
+        "earliest_not_after": "2026-07-05",
+        "latest_not_before": null,
+        "latest_not_after": null
+      }
+    },
+    "refine": null,
+    "tier2": false,
+    "notes": "'this weekend' from Wed Jul 1 = Sat Jul 4/Sun Jul 5; narrow (2 days) -> +30 on latest; skip latest check"
+  },
+  {
+    "id": "w2-p-005",
+    "category": "planner",
+    "query": "trip from Mumbai to Paris in spring, economy",
+    "today": "2026-07-01",
+    "expected_planner": {
+      "origin_iata": "BOM",
+      "destination_iata": "CDG",
+      "trip_type": "round_trip",
+      "cabin_class": "economy",
+      "departure_window": {
+        "earliest_not_before": "2027-03-01",
+        "earliest_not_after": "2027-03-01",
+        "latest_not_before": "2027-05-31",
+        "latest_not_after": "2027-05-31"
+      }
+    },
+    "refine": null,
+    "tier2": true,
+    "notes": "season 'spring' -> next occurrence from Jul 2026 = Mar 1-May 31 2027; both bounds exact"
+  },
+  {
+    "id": "w2-p-006",
+    "category": "planner",
+    "query": "one-way economy from Delhi to London on August 15 2026",
+    "today": "2026-07-01",
+    "expected_planner": {
+      "origin_iata": "DEL",
+      "destination_iata": "LHR",
+      "trip_type": "one_way",
+      "cabin_class": "economy",
+      "departure_window": {
+        "earliest_not_before": "2026-08-15",
+        "earliest_not_after": "2026-08-15",
+        "latest_not_before": null,
+        "latest_not_after": null
+      }
+    },
+    "refine": null,
+    "tier2": true,
+    "notes": "specific date -> earliest=Aug 15 exactly; narrow (1 day) -> latest expanded +30; skip latest check"
+  },
+  {
+    "id": "w2-p-007",
+    "category": "planner",
+    "query": "budget flights from Mumbai to Bali for 2 in July 2026",
+    "today": "2026-07-01",
+    "expected_planner": {
+      "origin_iata": "BOM",
+      "destination_iata": "DPS",
+      "trip_type": "round_trip",
+      "cabin_class": "economy",
+      "traveler_count": 2,
+      "departure_window": {
+        "earliest_not_before": "2026-07-01",
+        "earliest_not_after": "2026-07-01",
+        "latest_not_before": "2026-07-31",
+        "latest_not_after": "2026-07-31"
+      }
+    },
+    "refine": null,
+    "tier2": true,
+    "notes": "'budget' keyword -> economy (documented rule, not just default); 'in July 2026' = Jul 1-31"
+  },
+  {
+    "id": "w2-p-008",
+    "category": "planner",
+    "query": "luxury trip from Delhi to Tokyo, September 2026, 1 person",
+    "today": "2026-07-01",
+    "expected_planner": {
+      "origin_iata": "DEL",
+      "destination_iata": "NRT",
+      "trip_type": "round_trip",
+      "cabin_class": "business",
+      "traveler_count": 1,
+      "hotel_min_stars": 5.0,
+      "departure_window": {
+        "earliest_not_before": "2026-09-01",
+        "earliest_not_after": "2026-09-01",
+        "latest_not_before": "2026-09-30",
+        "latest_not_after": "2026-09-30"
+      }
+    },
+    "refine": null,
+    "tier2": true,
+    "notes": "'luxury' keyword -> business AND hotel_min_stars=5.0; both are documented rules"
+  },
+  {
+    "id": "w2-p-009",
+    "category": "planner",
+    "query": "first class flights from Mumbai to Paris in November 2026",
+    "today": "2026-07-01",
+    "expected_planner": {
+      "origin_iata": "BOM",
+      "destination_iata": "CDG",
+      "trip_type": "round_trip",
+      "cabin_class": "first",
+      "departure_window": {
+        "earliest_not_before": "2026-11-01",
+        "earliest_not_after": "2026-11-01",
+        "latest_not_before": "2026-11-30",
+        "latest_not_after": "2026-11-30"
+      }
+    },
+    "refine": null,
+    "tier2": true,
+    "notes": "explicit 'first class' -> CabinClass.FIRST; completes all four cabin enum values"
+  },
+  {
+    "id": "w2-p-010",
+    "category": "planner",
+    "query": "premium economy from Delhi to London for 2 people in August 2026",
+    "today": "2026-07-01",
+    "expected_planner": {
+      "origin_iata": "DEL",
+      "destination_iata": "LHR",
+      "trip_type": "round_trip",
+      "cabin_class": "premium_economy",
+      "traveler_count": 2,
+      "departure_window": {
+        "earliest_not_before": "2026-08-01",
+        "earliest_not_after": "2026-08-01",
+        "latest_not_before": "2026-08-31",
+        "latest_not_after": "2026-08-31"
+      }
+    },
+    "refine": null,
+    "tier2": true,
+    "notes": "explicit 'premium economy' -> CabinClass.PREMIUM_ECONOMY"
+  },
+  {
+    "id": "w2-p-011",
+    "category": "planner",
+    "query": "family of 4 from Mumbai to Bali in July 2026, economy",
+    "today": "2026-07-01",
+    "expected_planner": {
+      "origin_iata": "BOM",
+      "destination_iata": "DPS",
+      "trip_type": "round_trip",
+      "cabin_class": "economy",
+      "traveler_count": 4,
+      "departure_window": {
+        "earliest_not_before": "2026-07-01",
+        "earliest_not_after": "2026-07-01",
+        "latest_not_before": "2026-07-31",
+        "latest_not_after": "2026-07-31"
+      }
+    },
+    "refine": null,
+    "tier2": true,
+    "notes": "'family of 4' -> traveler_count=4 (documented: count all people)"
+  },
+  {
+    "id": "w2-p-012",
+    "category": "planner",
+    "query": "flights from Mumbai to Bangkok, 2 adults + 2 kids, August 2026",
+    "today": "2026-07-01",
+    "expected_planner": {
+      "origin_iata": "BOM",
+      "destination_iata": "BKK",
+      "trip_type": "round_trip",
+      "cabin_class": "economy",
+      "traveler_count": 4,
+      "departure_window": {
+        "earliest_not_before": "2026-08-01",
+        "earliest_not_after": "2026-08-01",
+        "latest_not_before": "2026-08-31",
+        "latest_not_after": "2026-08-31"
+      }
+    },
+    "refine": null,
+    "tier2": false,
+    "notes": "'2 adults + 2 kids' -> traveler_count=4 (explicitly documented phrase)"
+  },
+  {
+    "id": "w2-p-013",
+    "category": "planner",
+    "query": "Air India morning flights from Delhi to London, premium economy, 2 people, September 2026",
+    "today": "2026-07-01",
+    "expected_planner": {
+      "origin_iata": "DEL",
+      "destination_iata": "LHR",
+      "trip_type": "round_trip",
+      "cabin_class": "premium_economy",
+      "traveler_count": 2,
+      "airline_preference": "Air India",
+      "departure_time_constraint": "morning",
+      "departure_window": {
+        "earliest_not_before": "2026-09-01",
+        "earliest_not_after": "2026-09-01",
+        "latest_not_before": "2026-09-30",
+        "latest_not_after": "2026-09-30"
+      }
+    },
+    "refine": null,
+    "tier2": false,
+    "notes": "both optional fields in one case; scorer: airline_preference contains 'Air India' (case-insensitive); departure_time_constraint contains 'morning'"
+  },
+  {
+    "id": "w2-p-014",
+    "category": "planner",
+    "query": "business class trip to Paris for 2 people, 3 lakhs per person, from Mumbai in October 2026",
+    "today": "2026-07-01",
+    "expected_planner": {
+      "origin_iata": "BOM",
+      "destination_iata": "CDG",
+      "trip_type": "round_trip",
+      "cabin_class": "business",
+      "traveler_count": 2,
+      "budget_inr": 600000,
+      "departure_window": {
+        "earliest_not_before": "2026-10-01",
+        "earliest_not_after": "2026-10-01",
+        "latest_not_before": "2026-10-31",
+        "latest_not_after": "2026-10-31"
+      }
+    },
+    "refine": null,
+    "tier2": true,
+    "notes": "'3 lakhs per person x 2' -> budget_inr=600000 total; documented per-person multiply rule"
+  },
+  {
+    "id": "w2-p-015",
+    "category": "planner",
+    "query": "family of 4 from Mumbai to Singapore in July 2026, total budget 2 lakhs, economy",
+    "today": "2026-07-01",
+    "expected_planner": {
+      "origin_iata": "BOM",
+      "destination_iata": "SIN",
+      "trip_type": "round_trip",
+      "cabin_class": "economy",
+      "traveler_count": 4,
+      "budget_inr": 200000,
+      "departure_window": {
+        "earliest_not_before": "2026-07-01",
+        "earliest_not_after": "2026-07-01",
+        "latest_not_before": "2026-07-31",
+        "latest_not_after": "2026-07-31"
+      }
+    },
+    "refine": null,
+    "tier2": false,
+    "notes": "'total budget 2 lakhs' -> budget_inr=200000 as-is (no per-person multiply); contrasts with w2-p-014"
+  },
+  {
+    "id": "w2-p-016",
+    "category": "planner",
+    "query": "10-night trip from Mumbai to Bali, August 2026, 3 adults, economy",
+    "today": "2026-07-01",
+    "expected_planner": {
+      "origin_iata": "BOM",
+      "destination_iata": "DPS",
+      "trip_type": "round_trip",
+      "cabin_class": "economy",
+      "traveler_count": 3,
+      "trip_duration_days": 10,
+      "departure_window": {
+        "earliest_not_before": "2026-08-01",
+        "earliest_not_after": "2026-08-01",
+        "latest_not_before": "2026-08-31",
+        "latest_not_after": "2026-08-31"
+      }
+    },
+    "refine": null,
+    "tier2": true,
+    "notes": "explicit '10-night' -> trip_duration_days=10; '3 adults' -> traveler_count=3"
+  },
+  {
+    "id": "w2-p-017",
+    "category": "planner",
+    "query": "business class to Paris from Mumbai, 5-star hotels only, in October 2026",
+    "today": "2026-07-01",
+    "expected_planner": {
+      "origin_iata": "BOM",
+      "destination_iata": "CDG",
+      "trip_type": "round_trip",
+      "cabin_class": "business",
+      "hotel_min_stars": 5.0,
+      "departure_window": {
+        "earliest_not_before": "2026-10-01",
+        "earliest_not_after": "2026-10-01",
+        "latest_not_before": "2026-10-31",
+        "latest_not_after": "2026-10-31"
+      }
+    },
+    "refine": null,
+    "tier2": true,
+    "notes": "'5-star hotels only' -> hotel_min_stars=5.0 (documented rule)"
+  },
+  {
+    "id": "w2-p-018",
+    "category": "planner",
+    "query": "economy flights from Delhi to Dubai in November 2026, budget hotel preferred",
+    "today": "2026-07-01",
+    "expected_planner": {
+      "origin_iata": "DEL",
+      "destination_iata": "DXB",
+      "trip_type": "round_trip",
+      "cabin_class": "economy",
+      "hotel_min_stars": 2.0,
+      "departure_window": {
+        "earliest_not_before": "2026-11-01",
+        "earliest_not_after": "2026-11-01",
+        "latest_not_before": "2026-11-30",
+        "latest_not_after": "2026-11-30"
+      }
+    },
+    "refine": null,
+    "tier2": false,
+    "notes": "'budget hotel' -> hotel_min_stars=2.0 (documented); contrasts with w2-p-017 (5.0)"
+  },
+  {
+    "id": "w2-p-019",
+    "category": "planner",
+    "query": "mumbai to paris bussiness class in August 2026, 2 pax",
+    "today": "2026-07-01",
+    "expected_planner": {
+      "origin_iata": "BOM",
+      "destination_iata": "CDG",
+      "trip_type": "round_trip",
+      "cabin_class": "business",
+      "traveler_count": 2,
+      "departure_window": {
+        "earliest_not_before": "2026-08-01",
+        "earliest_not_after": "2026-08-01",
+        "latest_not_before": "2026-08-31",
+        "latest_not_after": "2026-08-31"
+      }
+    },
+    "refine": null,
+    "tier2": false,
+    "notes": "edge case: typo 'bussiness' -> business; lowercase query; LLM must normalize"
+  },
+  {
+    "id": "w2-p-020",
+    "category": "planner",
+    "query": "flights from Bombay to Doha in September 2026",
+    "today": "2026-07-01",
+    "expected_planner": {
+      "origin_iata": "BOM",
+      "destination_iata": "DOH",
+      "trip_type": "round_trip",
+      "cabin_class": "economy",
+      "departure_window": {
+        "earliest_not_before": "2026-09-01",
+        "earliest_not_after": "2026-09-01",
+        "latest_not_before": "2026-09-30",
+        "latest_not_after": "2026-09-30"
+      }
+    },
+    "refine": null,
+    "tier2": false,
+    "notes": "IATA alias: 'Bombay' -> BOM (documented); covers DOH"
+  },
+  {
+    "id": "w2-p-021",
+    "category": "planner",
+    "query": "economy round trip from Delhi to Amsterdam, no red-eye flights, in November 2026",
+    "today": "2026-07-01",
+    "expected_planner": {
+      "origin_iata": "DEL",
+      "destination_iata": "AMS",
+      "trip_type": "round_trip",
+      "cabin_class": "economy",
+      "departure_time_constraint": "no red-eyes",
+      "departure_window": {
+        "earliest_not_before": "2026-11-01",
+        "earliest_not_after": "2026-11-01",
+        "latest_not_before": "2026-11-30",
+        "latest_not_after": "2026-11-30"
+      }
+    },
+    "refine": null,
+    "tier2": false,
+    "notes": "'no red-eye flights' -> departure_time_constraint non-null; scorer: value contains 'red'; covers AMS; explicit 'round trip'"
+  },
+  {
+    "id": "w2-p-022",
+    "category": "planner",
+    "query": "flights from Mumbai to Sydney in February 2027, economy, 2 people",
+    "today": "2026-07-01",
+    "expected_planner": {
+      "origin_iata": "BOM",
+      "destination_iata": "SYD",
+      "trip_type": "round_trip",
+      "cabin_class": "economy",
+      "traveler_count": 2,
+      "departure_window": {
+        "earliest_not_before": "2027-02-01",
+        "earliest_not_after": "2027-02-01",
+        "latest_not_before": "2027-02-28",
+        "latest_not_after": "2027-02-28"
+      }
+    },
+    "refine": null,
+    "tier2": true,
+    "notes": "covers SYD; future year; Feb 2027 has 28 days (not a leap year)"
+  },
+  {
+    "id": "w2-p-023",
+    "category": "planner",
+    "query": "economy from Delhi to Hong Kong in March",
+    "today": "2026-07-01",
+    "expected_planner": {
+      "origin_iata": "DEL",
+      "destination_iata": "HKG",
+      "trip_type": "round_trip",
+      "cabin_class": "economy",
+      "departure_window": {
+        "earliest_not_before": "2027-03-01",
+        "earliest_not_after": "2027-03-01",
+        "latest_not_before": "2027-03-31",
+        "latest_not_after": "2027-03-31"
+      }
+    },
+    "refine": null,
+    "tier2": true,
+    "notes": "'in March' no year -> next occurrence = March 2027 (March 2026 already passed); covers HKG"
+  },
+  {
+    "id": "w2-p-024",
+    "category": "planner",
+    "query": "Mumbai to Kuala Lumpur in winter, economy, 1 person",
+    "today": "2026-07-01",
+    "expected_planner": {
+      "origin_iata": "BOM",
+      "destination_iata": "KUL",
+      "trip_type": "round_trip",
+      "cabin_class": "economy",
+      "traveler_count": 1,
+      "departure_window": {
+        "earliest_not_before": "2026-12-01",
+        "earliest_not_after": "2026-12-01",
+        "latest_not_before": "2027-02-28",
+        "latest_not_after": "2027-02-28"
+      }
+    },
+    "refine": null,
+    "tier2": true,
+    "notes": "season 'winter' -> Dec 1 2026 - Feb 28 2027 (next occurrence from Jul 2026); covers KUL"
+  },
+  {
+    "id": "w2-p-025",
+    "category": "planner",
+    "query": "one-way business from New Delhi to Frankfurt in December 2026",
+    "today": "2026-07-01",
+    "expected_planner": {
+      "origin_iata": "DEL",
+      "destination_iata": "FRA",
+      "trip_type": "one_way",
+      "cabin_class": "business",
+      "departure_window": {
+        "earliest_not_before": "2026-12-01",
+        "earliest_not_after": "2026-12-01",
+        "latest_not_before": "2026-12-31",
+        "latest_not_after": "2026-12-31"
+      }
+    },
+    "refine": null,
+    "tier2": false,
+    "notes": "IATA alias: 'New Delhi' -> DEL (documented); covers FRA; one_way explicit"
+  },
+  {
+    "id": "w2-p-026",
+    "category": "planner",
+    "query": "2 economy tickets Mumbai to Abu Dhabi in August 2026, budget 80000 INR total",
+    "today": "2026-07-01",
+    "expected_planner": {
+      "origin_iata": "BOM",
+      "destination_iata": "AUH",
+      "trip_type": "round_trip",
+      "cabin_class": "economy",
+      "traveler_count": 2,
+      "budget_inr": 80000,
+      "departure_window": {
+        "earliest_not_before": "2026-08-01",
+        "earliest_not_after": "2026-08-01",
+        "latest_not_before": "2026-08-31",
+        "latest_not_after": "2026-08-31"
+      }
+    },
+    "refine": null,
+    "tier2": false,
+    "notes": "budget stated as explicit INR integer (no lakhs conversion); covers AUH"
+  },
+  {
+    "id": "w2-p-027",
+    "category": "planner",
+    "query": "cheap flights from Mumbai to New York in January 2027",
+    "today": "2026-07-01",
+    "expected_planner": {
+      "origin_iata": "BOM",
+      "destination_iata": "JFK",
+      "trip_type": "round_trip",
+      "cabin_class": "economy",
+      "departure_window": {
+        "earliest_not_before": "2027-01-01",
+        "earliest_not_after": "2027-01-01",
+        "latest_not_before": "2027-01-31",
+        "latest_not_after": "2027-01-31"
+      }
+    },
+    "refine": null,
+    "tier2": true,
+    "notes": "'cheap' keyword -> economy (documented rule); New York -> JFK (documented); covers JFK"
+  },
+  {
+    "id": "w2-p-028",
+    "category": "planner",
+    "query": "economy round trip from Delhi to Los Angeles in October 2026",
+    "today": "2026-07-01",
+    "expected_planner": {
+      "origin_iata": "DEL",
+      "destination_iata": "LAX",
+      "trip_type": "round_trip",
+      "cabin_class": "economy",
+      "departure_window": {
+        "earliest_not_before": "2026-10-01",
+        "earliest_not_after": "2026-10-01",
+        "latest_not_before": "2026-10-31",
+        "latest_not_after": "2026-10-31"
+      }
+    },
+    "refine": null,
+    "tier2": true,
+    "notes": "Los Angeles -> LAX (documented); covers LAX; completes all 18 IATA table entries"
+  },
+  {
+    "id": "w2-r-001",
+    "category": "both",
+    "query": "economy flights from Mumbai to Tokyo in September 2026",
+    "today": "2026-07-01",
+    "expected_planner": {
+      "origin_iata": "BOM",
+      "destination_iata": "NRT",
+      "trip_type": "round_trip",
+      "cabin_class": "economy",
+      "departure_window": {
+        "earliest_not_before": "2026-09-01",
+        "earliest_not_after": "2026-09-01",
+        "latest_not_before": "2026-09-30",
+        "latest_not_after": "2026-09-30"
+      }
+    },
+    "refine": {
+      "message": "only direct flights please",
+      "constraint": {
+        "type": "direct_only",
+        "field": "layover_count",
+        "assertion": "all(f.layover_count == 0 for f in filtered_results)"
+      }
+    },
+    "tier2": true,
+    "notes": "refine direct_only: _apply_refine_filters filters f.layover_count==0; field confirmed in FlightOption"
+  },
+  {
+    "id": "w2-r-002",
+    "category": "both",
+    "query": "flights from Delhi to Dubai in October 2026",
+    "today": "2026-07-01",
+    "expected_planner": {
+      "origin_iata": "DEL",
+      "destination_iata": "DXB",
+      "trip_type": "round_trip",
+      "cabin_class": "economy",
+      "departure_window": {
+        "earliest_not_before": "2026-10-01",
+        "earliest_not_after": "2026-10-01",
+        "latest_not_before": "2026-10-31",
+        "latest_not_after": "2026-10-31"
+      }
+    },
+    "refine": {
+      "message": "show me cheaper options",
+      "constraint": {
+        "type": "price_sort",
+        "field": "price_inr",
+        "assertion": "all(r[i].price_inr <= r[i+1].price_inr for i in range(len(r)-1))"
+      }
+    },
+    "tier2": false,
+    "notes": "refine price_sort: _apply_refine_filters sorts by price_inr asc (sort_by='price' default); field confirmed in FlightOption"
+  },
+  {
+    "id": "w2-r-003",
+    "category": "both",
+    "query": "flights from Mumbai to Paris in August 2026",
+    "today": "2026-07-01",
+    "expected_planner": {
+      "origin_iata": "BOM",
+      "destination_iata": "CDG",
+      "trip_type": "round_trip",
+      "cabin_class": "economy",
+      "departure_window": {
+        "earliest_not_before": "2026-08-01",
+        "earliest_not_after": "2026-08-01",
+        "latest_not_before": "2026-08-31",
+        "latest_not_after": "2026-08-31"
+      }
+    },
+    "refine": {
+      "message": "morning departures only",
+      "constraint": {
+        "type": "morning_departure",
+        "field": "outbound_departure_at",
+        "assertion": "all(6 <= int(f.outbound_departure_at[11:13]) < 12 for f in filtered_results)"
+      }
+    },
+    "tier2": true,
+    "notes": "refine morning: _apply_refine_filters checks hour chars [11:13] of outbound_departure_at ISO string; bounds 6<=h<12 confirmed in refine.py"
+  }
+]

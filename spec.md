@@ -1,137 +1,146 @@
-# Project Spec: DealHunter — Wave 1 (Stabilize the Base)
+# Project Spec: DealHunter — Wave 2 (Eval Harness)
 
 ## Strategic context
-Demo is done. Goal now: (1) production-grade / usable by real customers, and (3)
-push applied-AI sophistication. Agreed 3-wave sequence:
-- **Wave 1 (THIS spec):** stabilize the base — reliability, observability, honest
-  inventory story.
-- Wave 2: eval harness (AI measurement layer — prerequisite for all AI work).
-- Wave 3: AI capability/reasoning depth, measured against Wave 2.
+Wave 1 (stabilize) is shipped + live: reliable booking, Sentry observability, honest
+inventory. Wave 2 builds the AI MEASUREMENT layer — the instrument panel that makes
+"push applied-AI as far as it goes" (Wave 3) possible, lets us prove quality to
+customers, and is the strongest applied-AI signal in the project.
 
-Wave 1 picks (GG's stated top weaknesses): the multi-instance booking bug, the thin
-synthetic data, and real Aviasales as the primary search story. Observability is
-added because you cannot fix reliability you cannot see.
+3-wave plan: Wave 1 stabilize (DONE) -> **Wave 2 evals (THIS)** -> Wave 3 AI depth
+(measured against Wave 2).
 
 ## Goal
-A platform stable and observable enough to put in front of a real customer, with an
-honest two-sided inventory story: REAL search (Aviasales) + a genuinely convincing
-SANDBOX booking flow (upgraded synthetic). No fake "real bookings."
+A reproducible eval harness that scores the agent across three behaviors, using the
+RIGHT scorer per scope, runnable on demand, producing a quality report you can track
+over time and show a customer/interviewer.
+
+## Scoring architecture (DECIDED)
+Right-scorer-per-scope — NOT LLM-judge-everything:
+- **Planner extraction** -> DETERMINISTIC. There's a ground truth (origin/dest/
+  dates/cabin/trip-type). Assert structured-field match. No LLM needed.
+- **Refinement correctness** -> DETERMINISTIC/PROGRAMMATIC. The constraint is
+  checkable: "make it cheaper" -> new results' prices < previous; "morning only" ->
+  all results depart in the morning window; "direct only" -> 0 stops. Assert the
+  constraint held in the output.
+- **Recommendation / explanation quality** -> LLM-JUDGE (subjective). Is best-value
+  defensible? Is the explanation accurate, relevant, non-generic? Graded by an LLM
+  judge against a rubric.
+
+## Judge (DECIDED)
+- LLM judge runs **locally on Ollama** — zero API cost (off the Groq TPD budget),
+  and a DIFFERENT model family than the Groq generator (no self-grading bias).
+- Pin a specific Ollama judge model (e.g. llama3.1:8b or qwen2.5 — orchestrator
+  recommends; must be a reasonable judge that runs on a typical dev machine).
+- Judge prompt: structured rubric, returns a SCORE (e.g. 1-5 per criterion) + a
+  short rationale, as parseable JSON. Deterministic-ish: temperature 0, fixed rubric.
+
+## Two-tier execution (IMPORTANT — design for it)
+Because the judge is local Ollama:
+- **Tier 1 (deterministic): planner + refine evals** — pure Python assertions, no
+  LLM judge. MUST run anywhere incl. CI. Fast, free, no Ollama dependency.
+- **Tier 2 (LLM-judged): recommendation/explanation quality** — needs local Ollama.
+  Runs on the dev machine. In CI or when Ollama is absent: SKIP GRACEFULLY (clearly
+  reported as "skipped: judge unavailable"), never fail the suite for a missing judge.
+- Note: generating the agent OUTPUTS to evaluate calls the real planner/optimizer
+  (Groq) and costs TPD budget. Provide a way to eval against CACHED/recorded agent
+  outputs so re-running the JUDGE doesn't re-spend Groq tokens. (Record once, judge
+  many.)
 
 ## Current state
-- Live: backend Cloud Run rev 00038-sus (Supabase, dealhunter schema, dealhunter_app
-  role), frontend Vercel. Planner on Groq (demo-llama). Multi-tenant.
-- Aviasales: live SEARCH + affiliate redirect (AVIASALES_LIVE=true). Metasearch only
-  — NOT bookable in-app (no PNR/payment).
-- DemoProvider: generates deterministic offers for any route; sandbox booking with
-  stateless price-change confirm. Thin/synthetic (md5-seeded, limited realism).
-- Known intermittent bug: "Booking error — Stream ended unexpectedly" on some
-  bookings (others succeed). Suspected multi-instance state / SSE closing on
-  unhandled exception.
-- Observability: Sentry + Langfuse only half-wired (SENTRY_DSN unset; audit_id null).
+- Live agent: planner (Groq Llama via demo-llama), optimizer (archetypes +
+  comparisons), conversational refine (/refine). DemoProvider any-route inventory.
+- No eval harness exists. Groq free tier = 100k TPD (shared, easily exhausted) — so
+  the harness MUST be token-frugal (cache outputs, judge offline).
 
-### Load-bearing — do NOT change without escalating
-Tenancy/RLS/resolver/startup-guard, llm_routing.yaml, optimizer prompt/schema,
-booking SSE event contract (unless fixing the bug requires a contract addition —
-escalate that).
+### Load-bearing — do NOT change
+Tenancy/RLS/resolver, llm_routing.yaml, optimizer prompt/schema, booking SSE
+contract. (Wave 2 OBSERVES the agent; it does not modify agent behavior. Wave 3
+changes behavior, measured against this.)
 
-## Scope — three workstreams, in priority order
+## Scope
 
-### WS1 — Booking reliability (P0)
-Fix the intermittent "Stream ended unexpectedly" booking failure so booking
-succeeds on EVERY attempt across multiple Cloud Run instances.
-- Reproduce against prod; capture the failing path (revalidate/book/cancel), the
-  exception, and which instance/revision from Cloud Run logs. Diagnose before fixing.
-- Likely class: generated-offer reconstruction or cancel path not fully stateless
-  across instances, OR SSE stream closing early on an unhandled exception (no
-  error event emitted -> frontend sees "stream ended").
-- Fix: ensure every booking sub-path (revalidate, book, confirm, cancel) is
-  stateless / instance-independent (reconstruct from offer_id + request, no shared
-  in-memory state). Ensure unhandled exceptions in the SSE generator emit a proper
-  error event and close cleanly (never a bare stream end).
-- VERIFY: smoke 10x in a row on a GENERATED route (search -> book -> price-change
-  -> confirm -> PNR -> cancel) AND 10x clean-book. Must be 10/10 (and 10/10 across
-  instances if reproducible). Report all results — not "fixed on one run."
+### 1. Golden dataset
+- A curated set of travel queries (start ~20-30) spanning: domestic/intl, one-way/
+  round-trip, explicit vs vague dates, cabin mentions, edge cases (typos, ambiguous
+  cities). Each entry has the EXPECTED planner extraction (ground truth) and, where
+  applicable, the refinement(s) to apply + the expected constraint.
+- Stored as versioned data (JSON/YAML) in-repo so the set is reproducible + reviewable.
 
-### WS2 — Observability (P0, enables everything)
-Make prod failures visible.
-- Wire Sentry properly (set SENTRY_DSN secret; confirm init_sentry active;
-  exceptions + the booking error reach Sentry; populate audit_id so bookings have a
-  correlation handle). GG provides/approves the DSN (free tier fine — do NOT block
-  on a paid plan).
-- Confirm Langfuse traces the agent pipeline (planner/optimizer/refine) in prod;
-  if half-wired, finish it.
-- Add a minimal structured-logging pass on the booking + search paths so the
-  failing path is greppable.
-- Add a lightweight uptime/health signal (even a simple external ping on /health).
-- Acceptance: when a booking fails, GG can see WHY in Sentry/logs within minutes.
+### 2. Tier-1 deterministic scorers
+- **Planner scorer:** run planner on each query, assert extracted fields ==
+  expected (origin, dest, dates, cabin, trip_type, pax). Report per-field accuracy
+  + overall.
+- **Refine scorer:** for refine cases, apply the refinement, assert the constraint
+  programmatically (prices dropped / all-morning / 0-stops / etc.). Report pass rate.
+- Pure Python; no LLM. Runs in CI.
 
-### WS3 — Honest two-sided inventory (P1)
-Resolve the real-vs-synthetic question by making BOTH halves genuinely good and
-clearly framed — not competing.
-- REAL search (Aviasales) as the primary real-data story: ensure an Aviasales-backed
-  tenant/path returns real fares with the affiliate redirect working and attributed
-  (marker intact). This is the "agent over live inventory" showcase.
-- UPGRADED synthetic for the bookable flow: make DemoProvider materially more
-  realistic — plausible real airlines/schedules per route, sensible fare spreads by
-  distance/cabin, realistic availability, believable times. Goal: the sandbox
-  booking demo no longer looks obviously fake. Still clearly labeled sandbox /
-  no-payment.
-- Framing: the two are the two halves (Aviasales = real search/affiliate; sandbox =
-  full booking orchestration for when a platform plugs in bookable inventory). Keep
-  per-tenant inventory_adapter as the switch. Do NOT present synthetic as real.
-- Propose the approach for "upgraded synthetic" BEFORE building (data source for
-  realistic schedules/airlines — static curated tables vs generated; GG approves).
+### 3. Tier-2 LLM-judge (local Ollama)
+- For each query's optimizer output (archetypes + comparisons + explanations), the
+  Ollama judge scores against a rubric: best-value defensibility, explanation
+  accuracy (does it match the actual offer?), relevance, non-genericness.
+- Returns per-criterion scores + rationale as JSON. Aggregate to a quality score.
+- Graceful skip when Ollama unavailable.
 
-### Out of scope (later waves)
-- Eval harness (Wave 2). New AI capabilities / reasoning depth (Wave 3). Real
-  bookable inventory (business-gated: GDS/IATA/payments/regulatory). Payments. UI
-  redesign.
+### 4. Eval runner + report
+- One command (e.g. `python -m evals.run` or a make target) runs the suite, prints
+  a clear report: planner field-accuracy, refine pass-rate, judged quality scores,
+  with per-case detail for failures. Machine-readable output (JSON) + human summary.
+- Token-frugal: record agent outputs to disk; a `--judge-only` mode re-runs the
+  judge on recorded outputs without re-calling Groq.
+- Establish a BASELINE run (the current agent's scores) — that's the number Wave 3
+  improvements get measured against.
+
+### Out of scope (Wave 3)
+- Changing agent behavior to improve scores. New capabilities (multi-city, budget
+  opt, preference learning). The model-fallback chain (logged separately).
 
 ## Verification
 ```yaml
-- name: tests
-  cmd: "pytest -q && (cd apps/web && npm run build && npm run lint && tsc --noEmit)"
+- name: tier1_runs_in_ci
+  cmd: "python -m evals.run --tier1 (deterministic planner+refine, no Ollama) passes in CI"
   required: true
-- name: booking_10x
-  cmd: "live prod: 10x book->price-change->confirm->cancel on a generated route, 10/10"
+- name: tier2_local
+  cmd: "with Ollama up: python -m evals.run --tier2 produces judged quality scores + rationale"
   required: true
-- name: observability
-  cmd: "trigger a failure; confirm it appears in Sentry + logs with audit_id"
+- name: graceful_skip
+  cmd: "without Ollama: tier2 skips cleanly (reported, not failed)"
   required: true
-- name: real_search
-  cmd: "Aviasales path returns real fares + working attributed affiliate redirect"
+- name: token_frugal
+  cmd: "--judge-only re-runs judge on recorded outputs with ZERO Groq calls"
+  required: true
+- name: baseline
+  cmd: "a baseline report exists with current agent scores"
   required: true
 ```
 
 ## Escalation rules
-- WS1: diagnose + show root cause before the fix if it touches the SSE contract.
-- WS2: GG provides/approves the Sentry DSN; do not set ANTHROPIC_API_KEY ever; do
-  not block on paid observability tiers.
-- WS3: show the "upgraded synthetic" data approach before building.
-- Any prod deploy: backend canary->full + frontend Vercel, GG-gated (GG approves
-  env gate + smokes). PRs reviewed, GG merges.
-- Do not touch load-bearing files without escalating.
+- This is additive (a new evals/ module + golden data) — autonomous to build.
+- Show me the GOLDEN DATASET design (the query set + what 'expected' means per field,
+  and the judge RUBRIC) before mass-authoring it — the eval is only as good as these.
+- Escalate before ANY change to agent behavior (out of scope for Wave 2).
+- No ANTHROPIC_API_KEY. Judge is local Ollama only. Token-frugal (cache outputs).
 
 ## Hard rules
-- No ANTHROPIC_API_KEY (Claude Max). Free tiers only; no paid infra without GG ok.
-- Sandbox bookings stay sandbox:true; never present synthetic as real bookings.
-- Deployed code == committed main (the working-tree-vs-deploy lesson); never promote
-  on green unit tests alone — verify observed-live.
-- Existing tenancy/RLS/isolation tests stay green.
+- Wave 2 OBSERVES; it does not modify agent behavior or load-bearing files.
+- Deterministic scorers where ground truth exists; LLM-judge ONLY for subjective
+  quality. Judge runs on local Ollama (off Groq budget, different family).
+- Token-frugal: record-once-judge-many; --judge-only avoids re-spending Groq.
+- Tier-1 runs in CI; Tier-2 skips gracefully without Ollama.
 
 ## Success criteria
-- Booking succeeds 10/10 across instances (WS1).
-- A prod failure is diagnosable from Sentry/logs within minutes; audit_id populated
-  (WS2).
-- Real Aviasales search returns real fares with working attributed redirect; upgraded
-  synthetic looks credible for the bookable demo, clearly labeled sandbox (WS3).
-- All tests green; verified observed-live; nothing presented as real that isn't.
+- Golden set (~20-30 cases) versioned in-repo, reviewed.
+- Tier-1 deterministic planner + refine scorers run in CI, report accuracy/pass-rate.
+- Tier-2 Ollama judge scores recommendation/explanation quality with rubric +
+  rationale; skips cleanly when Ollama absent.
+- One-command runner + readable report + machine-readable JSON.
+- A committed BASELINE of the current agent's scores (the Wave 3 yardstick).
+- Token-frugal (--judge-only re-spends zero Groq).
 
 ## Build order
-1. WS1 diagnosis (reproduce + root-cause the booking bug) — report before fixing.
-2. WS2 observability (Sentry/Langfuse/logging) — so WS1's fix is verifiable and
-   future failures visible. (Can run alongside WS1 diagnosis.)
-3. WS1 fix + 10x verification.
-4. WS3 real-Aviasales confirmation + upgraded-synthetic (approach approved first).
-5. Deploy (canary->full + Vercel), GG-gated; GG smokes observed-live.
+1. Golden dataset design (query set + expected-fields + judge rubric) — show me
+   BEFORE mass-authoring.
+2. Tier-1 deterministic scorers (planner + refine) + CI wiring.
+3. Tier-2 Ollama judge (rubric, JSON output, graceful skip).
+4. Eval runner + report + record/--judge-only token-frugal mode.
+5. Baseline run; commit the baseline report.
 ```

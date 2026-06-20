@@ -113,3 +113,31 @@ jobs:
 
       - name: Eval quick (VCR replay, threshold 95%)
         run: python -m evals.run --dataset planner --threshold 0.95
+
+  # ── eval-tier1-wave2 ─────────────────────────────────────────────────────
+  # Wave 2 Tier-1: deterministic planner field accuracy + refine constraints.
+  # Reads committed JSONL baseline from evals/wave2/runs/. If no baseline file
+  # exists the scorer exits 0 (graceful skip until first baseline is committed).
+  # Threshold: 80% required-field accuracy. Re-tighten after baseline is locked.
+  eval-tier1-wave2:
+    name: Eval tier1-wave2 (planner + refine, no LLM)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: apps/api/pyproject.toml
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Tier-1 score (deterministic, threshold 80%)
+        run: python -m evals.wave2.scorer --threshold 0.80
