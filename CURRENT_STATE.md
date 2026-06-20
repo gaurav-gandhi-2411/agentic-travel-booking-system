@@ -225,28 +225,24 @@ stateless HMAC verification; tampered PNR and garbage ref correctly rejected.
 See ADR-0023 for the backend deploy narrative; Phase 3.2-F.1 section above for the resolver/
 schema/guard design.
 
-### Frontend (Vercel) — 4 commits behind main (apps/web/), NOT yet redeployed
-
-> **Drift flagged (2026-06-14):** after the 3.2-F backend promotion, the staleness check
-> reports **frontend = 4 commits behind `main` (`apps/web/`)** — the **3.2-E.2 booking UI**
-> (BookingPanel, useBookingStream, /book + /cancel proxy routes, event-map additions)
-> merged to `main` in PR #58's arc but has **not** been deployed to Vercel. Backend = 0
-> behind (current). Staleness issue **#60** opened for the frontend only. Deploying the
-> booking UI to Vercel (`vercel deploy --prod --archive=tgz`) is a **separate, GG-gated
-> frontend step** — out of scope for the backend deploy. The current Vercel deployment
-> still drives search/refine against the (now Postgres-backed) backend; the booking UI
-> panel is what's pending.
+### Frontend (Vercel) — current (2026-06-20)
 
 - **Production URL:** `https://agentic-travel-booking-system.vercel.app`
-- **Deployment ID (current live):** `dpl_F3DMy1YysATzBgWKBpd6RzoCvR85`
-- **Git commit (deployed):** `1cf0a07` — **4 `apps/web/` commits behind main** (booking UI pending)
-- **Deployed:** 2026-05-31 via `vercel deploy --prod --archive=tgz` (Vercel CLI, authenticated as `gaurav-gandhi-2411`)
-- **Env vars (Production scope):** `API_BASE_URL=https://agentic-travel-booking-api-prod-rqyyasfwaa-el.a.run.app`, `DEMO_API_KEY` — both set correctly; prior deployment had both as empty strings (root cause of broken searches)
-- **Post-deploy verified (orchestrator + GG browser visual):**
-  - Bundle: `conversation_thinking`, `conversation_action_classified`, `args_summary`, all 4 chat kinds, all 4 profiles present; `demo-qwen` gone
-  - `/api/search` → full SSE pipeline reaching prod Cloud Run (confirmed via `search_cache_put_success` in Cloud Run logs)
-  - `/api/refine` → `conversation_thinking` → `conversation_action_classified` (action=refine, args_summary LLM-generated) → Redis cache hit → archetypes
-  - GG browser: 4-profile selector, progress feed, archetype cards, chat bubbles (user/thinking/action/message), NO_OP conversation_message, zero console errors
+- **Deployment ID (current live):** `dpl_7v5RKExRgyRhGM1iRx9ehBUWe6ut`
+- **Git commit (deployed):** `40ecf7b` — main HEAD, current (2026-06-20)
+- **Deployed:** 2026-06-20 via `vercel deploy --prod --archive=tgz`
+- **What this deploy carries:**
+  - Full booking UI (BookingPanel, useBookingStream, price-change confirm flow) — present
+    since Phase 3.2-G demo-prep deploy at `173855b`
+  - Wave 1 fix: `accept_price_change` now forwarded through the Next.js `/api/book` proxy
+    to the backend (5-line addition in PR #68; prior live deploy silently dropped it)
+- **Env vars (Production scope):** `API_BASE_URL=https://agentic-travel-booking-api-prod-rqyyasfwaa-el.a.run.app`,
+  `DEMO_API_KEY` — both set; unchanged from prior deploy
+- **Note on stale CURRENT_STATE.md record:** a prior entry (2026-05-31) recorded deployed
+  commit as `1cf0a07`. That was correct at time of writing. Multiple Vercel deploys
+  occurred during Phase 3.2-G demo prep; the live frontend was actually at `173855b`
+  (from `feat/3.2-G-demo-last-mile-fixes`) before this deploy. The `1cf0a07` record was
+  stale and has been corrected here.
 
 ## Production audit summary (Phase 2D iteration 2)
 
@@ -500,6 +496,8 @@ Deploy command (from repo root):
 vercel deploy --prod --archive=tgz
 # --archive=tgz required to stay under Vercel's 15,000-file limit
 ```
+
+Current live: `dpl_7v5RKExRgyRhGM1iRx9ehBUWe6ut` at commit `40ecf7b` (2026-06-20)
 
 Env var rotation: update in Vercel dashboard → redeploy (`vercel deploy --prod --archive=tgz`). Env vars are baked at deploy time even for `force-dynamic` routes.
 
