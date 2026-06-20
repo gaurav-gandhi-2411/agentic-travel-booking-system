@@ -58,7 +58,9 @@ async def stream_book(
     try:
         reval = await provider.revalidate(offer_id)
     except Exception as exc:
-        log.warning("booking_error_emitted", offer_id=offer_id, code="provider_error", error=str(exc))
+        log.warning(
+            "booking_error_emitted", offer_id=offer_id, code="provider_error", error=str(exc)
+        )
         yield {
             "type": BookingEventType.BOOKING_ERROR,
             "message": str(exc),
@@ -115,7 +117,9 @@ async def stream_book(
         }
         return
     except Exception as exc:
-        log.warning("booking_error_emitted", offer_id=offer_id, code="provider_error", error=str(exc))
+        log.warning(
+            "booking_error_emitted", offer_id=offer_id, code="provider_error", error=str(exc)
+        )
         yield {
             "type": BookingEventType.BOOKING_ERROR,
             "message": str(exc),
@@ -157,7 +161,9 @@ async def stream_cancel(
     try:
         result = await provider.cancel(booking_ref)
     except Exception as exc:
-        log.warning("booking_error_emitted", booking_ref=booking_ref, code="provider_error", error=str(exc))
+        log.warning(
+            "booking_error_emitted", booking_ref=booking_ref, code="provider_error", error=str(exc)
+        )
         yield {
             "type": BookingEventType.BOOKING_ERROR,
             "message": str(exc),

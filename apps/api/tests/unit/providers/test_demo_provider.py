@@ -38,6 +38,8 @@ from travel_agent.providers.demo.provider import (
     PRICE_CHANGE_ORIGINAL_PRICE,
     DemoProvider,
     _generate_route_offers,
+    _issue_pnr_token,
+    _verify_pnr_token,
 )
 
 # ---------------------------------------------------------------------------
@@ -428,7 +430,7 @@ async def test_revalidate_works_without_prior_get_flights() -> None:
     A fresh DemoProvider + cleared module index simulates instance B.
     """
     # The trigger is the cheapest NON-STOP economy offer. BOM→SIN (SEA, 360 min)
-    # generates a 4th 1-stop option (0.82× cheapest non-stop) that is excluded from
+    # generates a 4th 1-stop option (0.82x cheapest non-stop) that is excluded from
     # the trigger set — filter layover_count==0 to find the actual trigger.
     offers_tuple = _generate_route_offers("BOM", "SIN")
     cheapest_base = min(
@@ -450,44 +452,91 @@ async def test_revalidate_works_without_prior_get_flights() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Group 12 — Cross-instance cancel + audit_id
+# Group 12 — Cross-instance cancel (HMAC-signed PNR) + audit_id
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_cancel_cross_instance_valid_pnr_format_succeeds() -> None:
-    """PNR in DEMO-PNR-{8HEX} format succeeds on a fresh (cross-instance) provider.
+async def test_cancel_cross_instance_real_pnr_succeeds() -> None:
+    """A PNR issued by provider_a cancels on a fresh provider_b via HMAC verification.
 
-    Simulates: /book hit instance A, /cancel hits instance B with empty _holds.
-    The cancel must succeed because the format proves DemoProvider issued the PNR.
+    Simulates the Cloud Run cross-instance scenario: /book hits instance A,
+    /cancel hits instance B (empty _holds). The HMAC tag in the PNR proves
+    DemoProvider issued it — no stored state required.
     """
-    provider_b = DemoProvider()  # fresh instance — no _holds
+    provider_a = DemoProvider()
+    provider_b = DemoProvider()  # fresh — no _holds
 
-    pnr = "DEMO-PNR-A1B2C3D4"
-    assert _DEMO_PNR_RE.match(pnr), "test PNR must match the format regex"
+    window = Window(start_date=date(2025, 8, 1), end_date=date(2025, 8, 8))
+    offer_id = f"DEMO-FLT-001-{window.start_date.isoformat()}"
+    booking = await provider_a.book(offer_id, "cross-instance-cancel-key")
+    pnr = booking.pnr
 
+    # Cancel on fresh instance — HMAC must verify without _holds
     result = await provider_b.cancel(pnr)
     assert result.cancelled is True
     assert result.booking_ref == pnr
 
 
 @pytest.mark.asyncio
-async def test_cancel_cross_instance_invalid_format_fails() -> None:
-    """A ref that doesn't match DEMO-PNR-{8HEX} returns cancelled=False on fresh instance."""
+async def test_cancel_cross_instance_tampered_pnr_fails() -> None:
+    """A legitimately issued PNR with a corrupted HMAC tag returns cancelled=False.
+
+    Flipping the last 2 hex chars of the token corrupts the HMAC tag portion,
+    deterministically triggering an HMAC mismatch without depending on randomness.
+    """
+    provider_a = DemoProvider()
     provider_b = DemoProvider()
 
-    for bad_ref in ["DEMO-PNR-ZZZZZZZZ", "REAL-PNR-12345678", "DEMO-PNR-A1B2"]:
+    window = Window(start_date=date(2025, 8, 1), end_date=date(2025, 8, 8))
+    offer_id = f"DEMO-FLT-001-{window.start_date.isoformat()}"
+    booking = await provider_a.book(offer_id, "tamper-test-key")
+    pnr = booking.pnr  # e.g. "DEMO-PNR-AABB1234"
+
+    # Flip last 2 chars: "34" → "CC" (or "00" if already "CC") to corrupt the HMAC tag
+    last_two = pnr[-2:]
+    corrupted_suffix = "CC" if last_two != "CC" else "00"
+    tampered = pnr[:-2] + corrupted_suffix
+
+    assert _DEMO_PNR_RE.match(tampered), "tampered PNR must still be format-valid"
+    result = await provider_b.cancel(tampered)
+    assert result.cancelled is False
+
+
+@pytest.mark.asyncio
+async def test_cancel_garbage_ref_fails() -> None:
+    """Non-DEMO-PNR refs and never-issued well-formatted refs return cancelled=False."""
+    provider_b = DemoProvider()
+
+    for bad_ref in ["REAL-PNR-12345678", "DEMO-PNR-A1B2", "", "DEMO-PNR-ZZZZZZZZ"]:
         result = await provider_b.cancel(bad_ref)
-        assert result.cancelled is False, f"{bad_ref!r} should fail format check"
+        assert result.cancelled is False, f"{bad_ref!r} should return cancelled=False"
+
+
+def test_pnr_token_round_trip() -> None:
+    """_issue_pnr_token() produces a token that _verify_pnr_token() accepts."""
+    for _ in range(20):
+        token = _issue_pnr_token()
+        assert len(token) == 16  # 4-byte payload + 4-byte HMAC tag = 8 bytes = 16 hex chars
+        assert _verify_pnr_token(token), f"token {token!r} failed own verification"
+
+
+def test_pnr_token_tamper_detection() -> None:
+    """Flipping any byte in the HMAC tag portion causes verification to fail."""
+    token = _issue_pnr_token()
+    # Corrupt the tag (last 4 bytes = chars 8-15 of hex = chars 4-7 of token)
+    last_two = token[-2:]
+    corrupted = token[:-2] + ("CC" if last_two != "CC" else "00")
+    assert not _verify_pnr_token(corrupted), f"tampered token {corrupted!r} should not verify"
 
 
 @pytest.mark.asyncio
 async def test_book_populates_audit_id(provider: DemoProvider, window: Window) -> None:
     """book() must set audit_id to a non-None UUID (WS2 correlation handle)."""
+    import uuid as _uuid
+
     offer_id = f"DEMO-FLT-001-{window.start_date.isoformat()}"
     result = await provider.book(offer_id, "audit-id-test-key")
 
     assert result.audit_id is not None, "audit_id must be populated"
-    # uuid.UUID constructor validates format; raises ValueError on bad input
-    import uuid as _uuid
     _uuid.UUID(str(result.audit_id))

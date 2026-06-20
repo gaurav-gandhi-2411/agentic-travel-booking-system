@@ -26,17 +26,19 @@ PRICE-CHANGED TRIGGER (stateless):
   accept_price_change flag on /book.
 
 GENERATED ROUTES — STATELESS BY DESIGN:
-  Any origin→destination not in the hardcoded catalog gets 3–4 deterministic
+  Any origin->destination not in the hardcoded catalog gets 3-4 deterministic
   offers from _generate_route_offers(), which derives all values from
   md5(origin+destination). Identical input → identical output on every Cloud
   Run instance. Corridor-appropriate airlines, departure times, and fare spreads.
   Routes >5h also get a 4th 1-stop economy option at a modest discount.
 
-CANCEL — CROSS-INSTANCE SAFE:
+CANCEL — CROSS-INSTANCE SAFE (HMAC-SIGNED PNR):
   cancel() first checks the local _holds dict (same-instance, exact). On a
-  cross-instance miss it verifies the PNR matches the format DemoProvider.book()
-  issues (DEMO-PNR-{8 uppercase hex}) and returns cancelled=True. A random or
-  misformatted ref returns cancelled=False.
+  cross-instance miss it cryptographically verifies the PNR: DemoProvider.book()
+  issues DEMO-PNR-{8 hex} where the 8 chars encode a 4-byte random payload
+  followed by 4 bytes of HMAC-SHA256(_PNR_HMAC_SECRET, payload). A legitimately
+  issued PNR verifies on any Cloud Run instance (probability of forgery: 1/2^32).
+  Wrong format, tampered bytes, or never-issued refs return cancelled=False.
 
 THIS IS A SANDBOX MOCK. No real inventory, no real PNR, no payments.
 """
@@ -46,7 +48,9 @@ from __future__ import annotations
 import dataclasses
 import functools
 import hashlib
+import hmac
 import re
+import secrets
 import uuid
 from datetime import UTC, timedelta
 from datetime import datetime as _datetime
@@ -164,12 +168,12 @@ _DEP_MINUTES: tuple[int, ...] = (0, 15, 30, 45)
 
 @dataclasses.dataclass(frozen=True)
 class _CorridorProfile:
-    eco_airlines: tuple[tuple[str, str], ...]   # (IATA code, flight-number prefix)
+    eco_airlines: tuple[tuple[str, str], ...]  # (IATA code, flight-number prefix)
     biz_airlines: tuple[tuple[str, str], ...]
-    dep_hours: tuple[int, ...]                   # realistic departure hours
-    biz_mult_min_x10: int                        # min business multiplier ×10
-    biz_mult_range_x10: int                      # LCG range (max = min + range - 1)
-    has_stopover: bool                           # generate 4th 1-stop economy option
+    dep_hours: tuple[int, ...]  # realistic departure hours
+    biz_mult_min_x10: int  # min business multiplier x10
+    biz_mult_range_x10: int  # LCG range (max = min + range - 1)
+    has_stopover: bool  # generate 4th 1-stop economy option
     stopover_airlines: tuple[tuple[str, str], ...] = ()
 
 
@@ -179,7 +183,7 @@ _DOMESTIC_INDIA_PROFILE = _CorridorProfile(
     biz_airlines=(("AI", "AI"), ("UK", "UK"), ("6E", "6E")),
     dep_hours=(6, 7, 8, 9, 10, 11, 12, 14, 15, 16, 17, 18, 19, 20, 21),
     biz_mult_min_x10=18,
-    biz_mult_range_x10=8,   # 1.8× – 2.5×
+    biz_mult_range_x10=8,  # 1.8x - 2.5x
     has_stopover=False,
 )
 
@@ -189,8 +193,8 @@ _GULF_PROFILE = _CorridorProfile(
     biz_airlines=(("EK", "EK"), ("QR", "QR"), ("EY", "EY"), ("AI", "AI")),
     dep_hours=(1, 2, 3, 6, 8, 10, 14, 18, 20, 23),
     biz_mult_min_x10=25,
-    biz_mult_range_x10=16,  # 2.5× – 4.0×
-    has_stopover=False,     # 3–4 h; no stopover needed
+    biz_mult_range_x10=16,  # 2.5x - 4.0x
+    has_stopover=False,  # 3-4 h; no stopover needed
 )
 
 # Southeast Asia: hub carriers + Indian; mix of overnight and daytime.
@@ -199,7 +203,7 @@ _SEA_PROFILE = _CorridorProfile(
     biz_airlines=(("SQ", "SQ"), ("MH", "MH"), ("TG", "TG"), ("AI", "AI")),
     dep_hours=(0, 1, 8, 10, 12, 14, 20, 22),
     biz_mult_min_x10=25,
-    biz_mult_range_x10=21,  # 2.5× – 4.5×
+    biz_mult_range_x10=21,  # 2.5x - 4.5x
     has_stopover=True,
     stopover_airlines=(("SQ", "SQ"), ("MH", "MH")),
 )
@@ -210,7 +214,7 @@ _EUROPE_PROFILE = _CorridorProfile(
     biz_airlines=(("AI", "AI"), ("EK", "EK"), ("QR", "QR"), ("LH", "LH")),
     dep_hours=(1, 2, 3, 8, 14, 22, 23),
     biz_mult_min_x10=30,
-    biz_mult_range_x10=21,  # 3.0× – 5.0×
+    biz_mult_range_x10=21,  # 3.0x - 5.0x
     has_stopover=True,
     stopover_airlines=(("EK", "EK"), ("QR", "QR")),
 )
@@ -221,7 +225,7 @@ _EASIA_PROFILE = _CorridorProfile(
     biz_airlines=(("AI", "AI"), ("EK", "EK"), ("SQ", "SQ"), ("CX", "CX")),
     dep_hours=(0, 1, 9, 11, 22, 23),
     biz_mult_min_x10=30,
-    biz_mult_range_x10=21,  # 3.0× – 5.0×
+    biz_mult_range_x10=21,  # 3.0x - 5.0x
     has_stopover=True,
     stopover_airlines=(("SQ", "SQ"), ("CX", "CX")),
 )
@@ -232,7 +236,7 @@ _AMER_PROFILE = _CorridorProfile(
     biz_airlines=(("AI", "AI"), ("EK", "EK"), ("QR", "QR")),
     dep_hours=(1, 2, 22, 23, 8),
     biz_mult_min_x10=35,
-    biz_mult_range_x10=26,  # 3.5× – 6.0×
+    biz_mult_range_x10=26,  # 3.5x - 6.0x
     has_stopover=True,
     stopover_airlines=(("EK", "EK"), ("QR", "QR")),
 )
@@ -243,7 +247,7 @@ _FALLBACK_PROFILE = _CorridorProfile(
     biz_airlines=(("AI", "AI"), ("EK", "EK"), ("QR", "QR")),
     dep_hours=(1, 6, 8, 10, 14, 20, 22),
     biz_mult_min_x10=25,
-    biz_mult_range_x10=21,  # 2.5× – 4.5×
+    biz_mult_range_x10=21,  # 2.5x - 4.5x
     has_stopover=True,
     stopover_airlines=(("EK", "EK"), ("QR", "QR")),
 )
@@ -300,8 +304,8 @@ def _lcg(seed: int) -> tuple[int, int]:
 
 
 @functools.lru_cache(maxsize=512)
-def _generate_route_offers(origin: str, destination: str) -> tuple[_DemoFlight, ...]:
-    """Return 3–4 deterministic offers for any origin→destination.
+def _generate_route_offers(origin: str, destination: str) -> tuple[_DemoFlight, ...]:  # noqa: PLR0915
+    """Return 3-4 deterministic offers for any origin->destination.
 
     Uses corridor-appropriate airlines, departure times, and business-class
     premiums. Routes >5 h also generate a 4th 1-stop economy option priced
@@ -480,11 +484,36 @@ def _compute_settled_price(original_price: int) -> int:
     return round(original_price * PRICE_CHANGE_MULTIPLIER / 100) * 100
 
 
-# ── PNR format verification ────────────────────────────────────────────────────
-# DemoProvider.book() issues PNRs in exactly this format: DEMO-PNR- + 8 uppercase
-# hex chars from uuid4().hex[:8].upper(). _DEMO_PNR_RE verifies the format without
-# needing the in-memory _holds dict — used for cross-instance stateless cancel.
-_DEMO_PNR_RE: re.Pattern[str] = re.compile(r"^DEMO-PNR-[0-9A-F]{8}$")
+# ── PNR signing — HMAC self-verifying token ────────────────────────────────────
+# PNRs are random (not derivable from booking inputs) and cancel() receives only
+# the booking_ref — not the original offer_id or idempotency_key. True "reconstruct
+# from booking" isn't feasible statelessly. Instead we use a signed token: the 16-char
+# hex field encodes 4 random bytes (payload) + 4-byte HMAC-SHA256 tag. Any PNR issued
+# by this system verifies on any Cloud Run instance. Forgery probability: 1/2^32.
+_PNR_HMAC_SECRET: bytes = b"dealhunter-demo-pnr-v1"
+# Outer format gate before attempting HMAC — fast rejection of garbage refs.
+# 16 hex chars = 8 bytes = 4-byte payload + 4-byte HMAC-SHA256 tag.
+_DEMO_PNR_RE: re.Pattern[str] = re.compile(r"^DEMO-PNR-[0-9A-F]{16}$")
+
+
+def _issue_pnr_token() -> str:
+    """Generate a 16-char uppercase hex PNR token: 4-byte random payload + 4-byte HMAC tag."""
+    payload = secrets.token_bytes(4)
+    tag = hmac.digest(_PNR_HMAC_SECRET, payload, "sha256")[:4]
+    return (payload + tag).hex().upper()
+
+
+def _verify_pnr_token(token: str) -> bool:
+    """Return True if token was produced by _issue_pnr_token() (stateless, no stored state)."""
+    if len(token) != 16:  # noqa: PLR2004
+        return False
+    try:
+        raw = bytes.fromhex(token)
+    except ValueError:
+        return False
+    payload, supplied_tag = raw[:4], raw[4:]
+    expected_tag = hmac.digest(_PNR_HMAC_SECRET, payload, "sha256")[:4]
+    return hmac.compare_digest(expected_tag, supplied_tag)
 
 
 # ── internal hold state ────────────────────────────────────────────────────────
@@ -544,7 +573,7 @@ class DemoProvider:
         """Return demo flights for any origin→destination.
 
         Uses the hardcoded catalog when a route is listed there; otherwise
-        generates 3–4 deterministic offers from _generate_route_offers().
+        generates 3-4 deterministic offers from _generate_route_offers().
         """
         is_one_way = trip_type == TripType.ONE_WAY
 
@@ -699,7 +728,7 @@ class DemoProvider:
         _ensure_gen_offer(base)
         self._require_offer(base)
 
-        pnr = f"DEMO-PNR-{uuid.uuid4().hex[:8].upper()}"
+        pnr = f"DEMO-PNR-{_issue_pnr_token()}"
         offer_lock_id = f"DEMO-LOCK-{uuid.uuid4().hex[:8].upper()}"
         hold_expires_at = (_datetime.now(UTC) + timedelta(minutes=HOLD_TTL_MINUTES)).isoformat()
 
@@ -718,18 +747,20 @@ class DemoProvider:
     async def cancel(self, booking_ref: str) -> CancellationResult:
         """Release a hold. Idempotent; cross-instance safe.
 
-        Same-instance path: verified against _holds (exact knowledge of PNR).
-        Cross-instance fallback: verifies format matches DEMO-PNR-{8 uppercase
-        hex} — the only format DemoProvider.book() issues. A legitimately issued
-        PNR always succeeds; a fabricated or mistyped ref fails cleanly.
+        Same-instance path: checked against _holds (exact).
+        Cross-instance fallback: cryptographically verifies the PNR token —
+        the 8 hex chars encode 4-byte payload + 4-byte HMAC tag, proving this
+        system issued the PNR. A never-issued but well-formatted ref fails the
+        HMAC check and returns cancelled=False. Garbage refs fail the regex.
+        Cancelling an already-cancelled PNR is idempotent (still returns True).
         """
         if booking_ref in self._holds:
             self._holds[booking_ref].cancelled = True
             return CancellationResult(booking_ref=booking_ref, cancelled=True)
 
-        # Cross-instance fallback: the PNR was booked on a different Cloud Run
-        # instance. Verify the format rather than the hold state.
-        if _DEMO_PNR_RE.match(booking_ref):
+        # Cross-instance fallback: PNR was booked on a different Cloud Run instance.
+        # Outer gate: format check. Inner gate: HMAC-SHA256 token verification.
+        if _DEMO_PNR_RE.match(booking_ref) and _verify_pnr_token(booking_ref[9:]):
             return CancellationResult(booking_ref=booking_ref, cancelled=True)
 
         return CancellationResult(booking_ref=booking_ref, cancelled=False)
