@@ -22,16 +22,20 @@ export async function POST(req: NextRequest): Promise<Response> {
   let idempotency_key: string;
   let request_id: string | undefined;
 
+  let accept_price_change: boolean;
+
   try {
     const body = (await req.json()) as {
       offer_id?: unknown;
       idempotency_key?: unknown;
       request_id?: unknown;
+      accept_price_change?: unknown;
     };
     offer_id = typeof body.offer_id === 'string' ? body.offer_id.trim() : '';
     idempotency_key = typeof body.idempotency_key === 'string' ? body.idempotency_key.trim() : '';
     request_id =
       typeof body.request_id === 'string' ? body.request_id.trim() : undefined;
+    accept_price_change = body.accept_price_change === true;
   } catch {
     return errorSSE('Invalid request body');
   }
@@ -57,6 +61,7 @@ export async function POST(req: NextRequest): Promise<Response> {
         offer_id,
         idempotency_key,
         ...(request_id ? { request_id } : {}),
+        ...(accept_price_change ? { accept_price_change: true } : {}),
       }),
       signal: controller.signal,
     });

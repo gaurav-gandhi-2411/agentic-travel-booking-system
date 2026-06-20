@@ -12,6 +12,7 @@ Groups:
   9. Generated routes: any-route generation (5 tests)
  10. Generated routes: full booking lifecycle (1 test)
  11. Generated routes: stateless reconstruction from offer_id (1 test)
+ 12. Cross-instance cancel + audit_id (3 tests)
 """
 
 from __future__ import annotations
@@ -29,6 +30,7 @@ from travel_agent.providers.base import (
     InventoryProvider,
 )
 from travel_agent.providers.demo.provider import (
+    _DEMO_PNR_RE,
     _GENERATED_FLIGHT_INDEX,
     _GENERATED_PRICE_CHANGE_OFFER_IDS,
     PRICE_CHANGE_NEW_PRICE,
@@ -36,6 +38,8 @@ from travel_agent.providers.demo.provider import (
     PRICE_CHANGE_ORIGINAL_PRICE,
     DemoProvider,
     _generate_route_offers,
+    _issue_pnr_token,
+    _verify_pnr_token,
 )
 
 # ---------------------------------------------------------------------------
@@ -289,8 +293,10 @@ async def test_close_clears_state(provider: DemoProvider, window: Window) -> Non
 
     assert len(provider._holds) == 0
 
+    # Stateless cancel: _holds is gone (cross-instance simulation) but PNR format is
+    # valid (DEMO-PNR-{8 hex}), so cancel succeeds via format-based fallback.
     cancel_result = await provider.cancel(pnr)
-    assert cancel_result.cancelled is False
+    assert cancel_result.cancelled is True
 
 
 # ---------------------------------------------------------------------------
@@ -423,12 +429,14 @@ async def test_revalidate_works_without_prior_get_flights() -> None:
     (get_flights called), /book hits instance B (no prior get_flights).
     A fresh DemoProvider + cleared module index simulates instance B.
     """
-    # Directly compute expected offer data without calling get_flights first
+    # The trigger is the cheapest NON-STOP economy offer. BOM→SIN (SEA, 360 min)
+    # generates a 4th 1-stop option (0.82x cheapest non-stop) that is excluded from
+    # the trigger set — filter layover_count==0 to find the actual trigger.
     offers_tuple = _generate_route_offers("BOM", "SIN")
     cheapest_base = min(
-        (f for f in offers_tuple if f.cabin_class == "economy"),
+        (f for f in offers_tuple if f.cabin_class == "economy" and f.layover_count == 0),
         key=lambda f: f.price_inr,
-    ).offer_id  # e.g. "GEN-BOMSIN-001"
+    ).offer_id  # always "GEN-BOMSIN-001" (non-stop economy)
 
     provider = DemoProvider()
     window = Window(start_date=date(2025, 7, 1), end_date=date(2025, 7, 8))
@@ -441,3 +449,94 @@ async def test_revalidate_works_without_prior_get_flights() -> None:
     assert rv.is_available is True
     # Stateless: trigger offer always returns price_changed=True on any instance
     assert rv.price_changed is True
+
+
+# ---------------------------------------------------------------------------
+# Group 12 — Cross-instance cancel (HMAC-signed PNR) + audit_id
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_cancel_cross_instance_real_pnr_succeeds() -> None:
+    """A PNR issued by provider_a cancels on a fresh provider_b via HMAC verification.
+
+    Simulates the Cloud Run cross-instance scenario: /book hits instance A,
+    /cancel hits instance B (empty _holds). The HMAC tag in the PNR proves
+    DemoProvider issued it — no stored state required.
+    """
+    provider_a = DemoProvider()
+    provider_b = DemoProvider()  # fresh — no _holds
+
+    window = Window(start_date=date(2025, 8, 1), end_date=date(2025, 8, 8))
+    offer_id = f"DEMO-FLT-001-{window.start_date.isoformat()}"
+    booking = await provider_a.book(offer_id, "cross-instance-cancel-key")
+    pnr = booking.pnr
+
+    # Cancel on fresh instance — HMAC must verify without _holds
+    result = await provider_b.cancel(pnr)
+    assert result.cancelled is True
+    assert result.booking_ref == pnr
+
+
+@pytest.mark.asyncio
+async def test_cancel_cross_instance_tampered_pnr_fails() -> None:
+    """A legitimately issued PNR with a corrupted HMAC tag returns cancelled=False.
+
+    Flipping the last 2 hex chars of the token corrupts the HMAC tag portion,
+    deterministically triggering an HMAC mismatch without depending on randomness.
+    """
+    provider_a = DemoProvider()
+    provider_b = DemoProvider()
+
+    window = Window(start_date=date(2025, 8, 1), end_date=date(2025, 8, 8))
+    offer_id = f"DEMO-FLT-001-{window.start_date.isoformat()}"
+    booking = await provider_a.book(offer_id, "tamper-test-key")
+    pnr = booking.pnr  # e.g. "DEMO-PNR-AABB1234"
+
+    # Flip last 2 chars: "34" → "CC" (or "00" if already "CC") to corrupt the HMAC tag
+    last_two = pnr[-2:]
+    corrupted_suffix = "CC" if last_two != "CC" else "00"
+    tampered = pnr[:-2] + corrupted_suffix
+
+    assert _DEMO_PNR_RE.match(tampered), "tampered PNR must still be format-valid"
+    result = await provider_b.cancel(tampered)
+    assert result.cancelled is False
+
+
+@pytest.mark.asyncio
+async def test_cancel_garbage_ref_fails() -> None:
+    """Non-DEMO-PNR refs and never-issued well-formatted refs return cancelled=False."""
+    provider_b = DemoProvider()
+
+    for bad_ref in ["REAL-PNR-12345678", "DEMO-PNR-A1B2", "", "DEMO-PNR-ZZZZZZZZ"]:
+        result = await provider_b.cancel(bad_ref)
+        assert result.cancelled is False, f"{bad_ref!r} should return cancelled=False"
+
+
+def test_pnr_token_round_trip() -> None:
+    """_issue_pnr_token() produces a token that _verify_pnr_token() accepts."""
+    for _ in range(20):
+        token = _issue_pnr_token()
+        assert len(token) == 16  # 4-byte payload + 4-byte HMAC tag = 8 bytes = 16 hex chars
+        assert _verify_pnr_token(token), f"token {token!r} failed own verification"
+
+
+def test_pnr_token_tamper_detection() -> None:
+    """Flipping any byte in the HMAC tag portion causes verification to fail."""
+    token = _issue_pnr_token()
+    # Corrupt the tag (last 4 bytes = chars 8-15 of hex = chars 4-7 of token)
+    last_two = token[-2:]
+    corrupted = token[:-2] + ("CC" if last_two != "CC" else "00")
+    assert not _verify_pnr_token(corrupted), f"tampered token {corrupted!r} should not verify"
+
+
+@pytest.mark.asyncio
+async def test_book_populates_audit_id(provider: DemoProvider, window: Window) -> None:
+    """book() must set audit_id to a non-None UUID (WS2 correlation handle)."""
+    import uuid as _uuid
+
+    offer_id = f"DEMO-FLT-001-{window.start_date.isoformat()}"
+    result = await provider.book(offer_id, "audit-id-test-key")
+
+    assert result.audit_id is not None, "audit_id must be populated"
+    _uuid.UUID(str(result.audit_id))
