@@ -1,124 +1,137 @@
-# Project Spec: DealHunter — Phase 3.2-G (Demo Last-Mile Fixes)
+# Project Spec: DealHunter — Wave 1 (Stabilize the Base)
+
+## Strategic context
+Demo is done. Goal now: (1) production-grade / usable by real customers, and (3)
+push applied-AI sophistication. Agreed 3-wave sequence:
+- **Wave 1 (THIS spec):** stabilize the base — reliability, observability, honest
+  inventory story.
+- Wave 2: eval harness (AI measurement layer — prerequisite for all AI work).
+- Wave 3: AI capability/reasoning depth, measured against Wave 2.
+
+Wave 1 picks (GG's stated top weaknesses): the multi-instance booking bug, the thin
+synthetic data, and real Aviasales as the primary search story. Observability is
+added because you cannot fix reliability you cannot see.
 
 ## Goal
-
-Fix the demo-presentation-layer bugs found in the live /demo audit so a prospect
-can drive the full loop without hitting credibility-breaking or confusing states.
-Backend SSE is clean (audit found zero backend bugs); all fixes are frontend +
-demo-tenant config. No tenancy/RLS/resolver changes.
-
-**Sandbox demo only. Frontend + config. No backend SSE/agent logic changes.**
-Prod backend is live (00032-cex); deploy frontend to Vercel + at most a demo-tenant
-config/catalog change to the backend if B1 requires it (gated).
+A platform stable and observable enough to put in front of a real customer, with an
+honest two-sided inventory story: REAL search (Aviasales) + a genuinely convincing
+SANDBOX booking flow (upgraded synthetic). No fake "real bookings."
 
 ## Current state
+- Live: backend Cloud Run rev 00038-sus (Supabase, dealhunter schema, dealhunter_app
+  role), frontend Vercel. Planner on Groq (demo-llama). Multi-tenant.
+- Aviasales: live SEARCH + affiliate redirect (AVIASALES_LIVE=true). Metasearch only
+  — NOT bookable in-app (no PNR/payment).
+- DemoProvider: generates deterministic offers for any route; sandbox booking with
+  stateless price-change confirm. Thin/synthetic (md5-seeded, limited realism).
+- Known intermittent bug: "Booking error — Stream ended unexpectedly" on some
+  bookings (others succeed). Suspected multi-instance state / SSE closing on
+  unhandled exception.
+- Observability: Sentry + Langfuse only half-wired (SENTRY_DSN unset; audit_id null).
 
-- Live: backend 00032-cex (Groq planner), frontend on Vercel /demo, multi-tenant
-  on Supabase. Demo tenant uses DemoProvider (inventory_adapter="demo").
-- Audit (2026-06-15): backend SSE clean. 5 demo-layer issues: C1, B1, F1, F2, C2.
-- Per-tenant `affiliate_enabled` flag EXISTS (from 3.2-A) — it's just set true for
-  the demo tenant, which is wrong for a demo.
+### Load-bearing — do NOT change without escalating
+Tenancy/RLS/resolver/startup-guard, llm_routing.yaml, optimizer prompt/schema,
+booking SSE event contract (unless fixing the bug requires a contract addition —
+escalate that).
 
-### Load-bearing — do NOT touch without escalating
-- Tenancy/RLS/resolver, llm_routing.yaml, optimizer.py prompt/thresholds, llm/ adapters
-- Backend SSE event contract and booking_streaming logic (audit confirmed clean)
+## Scope — three workstreams, in priority order
 
-## Scope (in priority order)
+### WS1 — Booking reliability (P0)
+Fix the intermittent "Stream ended unexpectedly" booking failure so booking
+succeeds on EVERY attempt across multiple Cloud Run instances.
+- Reproduce against prod; capture the failing path (revalidate/book/cancel), the
+  exception, and which instance/revision from Cloud Run logs. Diagnose before fixing.
+- Likely class: generated-offer reconstruction or cancel path not fully stateless
+  across instances, OR SSE stream closing early on an unhandled exception (no
+  error event emitted -> frontend sees "stream ended").
+- Fix: ensure every booking sub-path (revalidate, book, confirm, cancel) is
+  stateless / instance-independent (reconstruct from offer_id + request, no shared
+  in-memory state). Ensure unhandled exceptions in the SSE generator emit a proper
+  error event and close cleanly (never a bare stream end).
+- VERIFY: smoke 10x in a row on a GENERATED route (search -> book -> price-change
+  -> confirm -> PNR -> cancel) AND 10x clean-book. Must be 10/10 (and 10/10 across
+  instances if reproducible). Report all results — not "fixed on one run."
 
-### P0 — C1: suppress Aviasales affiliate button for the demo tenant
-- The demo tenant must be `affiliate_enabled=false` so DemoProvider offers carry
-  NO Aviasales deeplink. A prospect must never see a "Book on Aviasales" button
-  next to a ₹4,850 demo fare that opens real ₹40k+ Aviasales results.
-- Prefer the existing per-tenant `affiliate_enabled` mechanism: set the demo
-  tenant's config to affiliate_enabled=false (config/seed change), and confirm the
-  frontend hides the Aviasales CTA when an offer has no deeplink_url.
-- Frontend: when `deeplink_url` is absent/empty, do NOT render the "Book on
-  Aviasales" button at all (no broken/empty button).
+### WS2 — Observability (P0, enables everything)
+Make prod failures visible.
+- Wire Sentry properly (set SENTRY_DSN secret; confirm init_sentry active;
+  exceptions + the booking error reach Sentry; populate audit_id so bookings have a
+  correlation handle). GG provides/approves the DSN (free tier fine — do NOT block
+  on a paid plan).
+- Confirm Langfuse traces the agent pipeline (planner/optimizer/refine) in prod;
+  if half-wired, finish it.
+- Add a minimal structured-logging pass on the booking + search paths so the
+  failing path is greppable.
+- Add a lightweight uptime/health signal (even a simple external ping on /health).
+- Acceptance: when a booking fails, GG can see WHY in Sentry/logs within minutes.
 
-### P0 — B1: make the price-change trust moment reachable from the UI
-- The price-change flow is DealHunter's signature trust moment and is currently
-  unreachable (FLT-005 is never surfaced as an archetype; it's price-dominated by
-  FLT-001).
-- Fix at the DEMO CATALOG level, NOT by forcing the optimizer: restructure the
-  DemoProvider catalog so a SURFACED archetype demonstrates the re-price. Options
-  (orchestrator proposes, GG approves):
-  (a) Make the price-change trigger an offer the optimizer DOES surface (e.g. the
-      best-value or best-experience archetype's underlying offer returns
-      price_changed=true on revalidate), or
-  (b) Restructure the catalog so FLT-005 is the best-value pick (not dominated),
-      so it becomes an archetype and its Book triggers the price change.
-- Goal: clicking "Book this flight" on a visible archetype card can reach the
-  price-change confirm step. Keep at least one offer that books cleanly with NO
-  price change too (so both paths are demoable).
-- This may touch DemoProvider (backend) — that's allowed for the demo catalog
-  ONLY; do not change provider contracts or the optimizer.
+### WS3 — Honest two-sided inventory (P1)
+Resolve the real-vs-synthetic question by making BOTH halves genuinely good and
+clearly framed — not competing.
+- REAL search (Aviasales) as the primary real-data story: ensure an Aviasales-backed
+  tenant/path returns real fares with the affiliate redirect working and attributed
+  (marker intact). This is the "agent over live inventory" showcase.
+- UPGRADED synthetic for the bookable flow: make DemoProvider materially more
+  realistic — plausible real airlines/schedules per route, sensible fare spreads by
+  distance/cabin, realistic availability, believable times. Goal: the sandbox
+  booking demo no longer looks obviously fake. Still clearly labeled sandbox /
+  no-payment.
+- Framing: the two are the two halves (Aviasales = real search/affiliate; sandbox =
+  full booking orchestration for when a platform plugs in bookable inventory). Keep
+  per-tenant inventory_adapter as the switch. Do NOT present synthetic as real.
+- Propose the approach for "upgraded synthetic" BEFORE building (data source for
+  realistic schedules/airlines — static curated tables vs generated; GG approves).
 
-### P1 — F2: disable ALL book buttons during an in-progress/confirmed booking
-- Clicking the other archetype card's "Book this flight" while a booking is
-  in-flight or confirmed currently aborts and silently destroys the confirmed PNR.
-- Fix: while `booking.status !== 'idle'`, disable "Book this flight" on ALL
-  archetype cards (not just the selected one), OR require the active booking to be
-  closed/cancelled first. No silent destruction of a confirmed booking.
-
-### P1 — F1: add a dismiss/close affordance to the confirmed state
-- The confirmed BookingPanel has only "Cancel this booking" — a viewer must cancel
-  to exit, so a confirmed booking can't be left on screen.
-- Add a "Done"/"Close" (dismiss) action in the confirmed state that closes the
-  panel WITHOUT cancelling the booking. Include `confirmed` in the showClose logic.
-
-### P2 — C2: audit_id (low, optional this pass)
-- audit_id is null because Sentry DSN is unset. Out of scope unless trivial;
-  acceptable to defer. Do NOT set a real SENTRY_DSN as a blocking step.
-
-### Out of scope
-- Backend SSE/agent/booking logic changes (audit clean), real inventory, payments,
-  tenancy/RLS/resolver, optimizer tuning, landing-page copy.
+### Out of scope (later waves)
+- Eval harness (Wave 2). New AI capabilities / reasoning depth (Wave 3). Real
+  bookable inventory (business-gated: GDS/IATA/payments/regulatory). Payments. UI
+  redesign.
 
 ## Verification
 ```yaml
-- name: web_build
-  cmd: "cd apps/web && npm run build && npm run lint && tsc --noEmit"
+- name: tests
+  cmd: "pytest -q && (cd apps/web && npm run build && npm run lint && tsc --noEmit)"
   required: true
-- name: api_tests
-  cmd: "pytest -q (if DemoProvider catalog changed)"
+- name: booking_10x
+  cmd: "live prod: 10x book->price-change->confirm->cancel on a generated route, 10/10"
   required: true
-- name: manual_browser
-  cmd: "live /demo: search -> see NO Aviasales button on demo offers; book clean offer -> confirm -> Done (dismiss, not cancel); reach price-change step from a visible card; other book buttons disabled mid-booking"
+- name: observability
+  cmd: "trigger a failure; confirm it appears in Sentry + logs with audit_id"
+  required: true
+- name: real_search
+  cmd: "Aviasales path returns real fares + working attributed affiliate redirect"
   required: true
 ```
 
 ## Escalation rules
-- Show GG the B1 catalog-restructure approach (a vs b) BEFORE implementing — it
-  affects what the demo shows.
-- Escalate before any backend change beyond the DemoProvider demo catalog / demo
-  tenant config.
-- Frontend deploy to Vercel = prod promotion → GG-gated (show what deploys, stop
-  for go). Any backend redeploy (if B1 touches DemoProvider) = canary→full, GG-gated.
-- Do NOT touch load-bearing files. Do NOT set ANTHROPIC_API_KEY.
+- WS1: diagnose + show root cause before the fix if it touches the SSE contract.
+- WS2: GG provides/approves the Sentry DSN; do not set ANTHROPIC_API_KEY ever; do
+  not block on paid observability tiers.
+- WS3: show the "upgraded synthetic" data approach before building.
+- Any prod deploy: backend canary->full + frontend Vercel, GG-gated (GG approves
+  env gate + smokes). PRs reviewed, GG merges.
+- Do not touch load-bearing files without escalating.
 
 ## Hard rules
-- Sandbox only; sandbox:true preserved. Demo tenant affiliate_enabled=false.
-- No backend SSE/agent logic changes; existing tests stay green.
-- Frontend changes additive to existing search/refine UI behavior.
-- Deploys GG-gated (frontend Vercel; backend canary→full if touched).
+- No ANTHROPIC_API_KEY (Claude Max). Free tiers only; no paid infra without GG ok.
+- Sandbox bookings stay sandbox:true; never present synthetic as real bookings.
+- Deployed code == committed main (the working-tree-vs-deploy lesson); never promote
+  on green unit tests alone — verify observed-live.
+- Existing tenancy/RLS/isolation tests stay green.
 
 ## Success criteria
-- Demo offers show NO "Book on Aviasales" button (C1 fixed; demo tenant affiliate-off).
-- The price-change confirm step is reachable by booking a VISIBLE archetype card
-  (B1 fixed); a clean no-price-change booking is also still demoable.
-- During an in-progress/confirmed booking, book buttons on all cards are disabled;
-  a confirmed PNR cannot be silently destroyed (F2 fixed).
-- Confirmed state has a Done/Close that dismisses without cancelling (F1 fixed).
-- web build/lint/typecheck clean; backend tests green if DemoProvider touched.
-- Verified live in a browser on /demo.
+- Booking succeeds 10/10 across instances (WS1).
+- A prod failure is diagnosable from Sentry/logs within minutes; audit_id populated
+  (WS2).
+- Real Aviasales search returns real fares with working attributed redirect; upgraded
+  synthetic looks credible for the bookable demo, clearly labeled sandbox (WS3).
+- All tests green; verified observed-live; nothing presented as real that isn't.
 
 ## Build order
-1. C1: set demo tenant affiliate_enabled=false (config/seed) + frontend hide
-   Aviasales CTA when no deeplink_url. Verify offers show only "Book this flight".
-2. B1: propose catalog-restructure (a vs b), show GG, implement so a visible
-   archetype reaches the price-change step; keep one clean-booking offer.
-3. F2: disable all book buttons while booking.status !== 'idle'.
-4. F1: add Done/Close dismiss to confirmed state.
-5. Build + lint + typecheck; backend tests if DemoProvider changed.
-6. Deploy (frontend Vercel; backend canary→full if touched) — GG-gated; GG browser-smokes /demo.
+1. WS1 diagnosis (reproduce + root-cause the booking bug) — report before fixing.
+2. WS2 observability (Sentry/Langfuse/logging) — so WS1's fix is verifiable and
+   future failures visible. (Can run alongside WS1 diagnosis.)
+3. WS1 fix + 10x verification.
+4. WS3 real-Aviasales confirmation + upgraded-synthetic (approach approved first).
+5. Deploy (canary->full + Vercel), GG-gated; GG smokes observed-live.
 ```
