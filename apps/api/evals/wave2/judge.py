@@ -62,6 +62,18 @@ _CRITERIA = {
     ),
 }
 
+# Known judge limitation — validated 2026-06-21.
+# qwen3:8b under-penalizes generic filler text on the specificity criterion:
+# a pure-filler explanation ("Great flight, highly recommended") scored 4/5 specificity
+# when the correct score is 1/5. factual_accuracy, value_defensibility, and
+# traveler_framing discriminate correctly. Report specificity scores as LOW-CONFIDENCE;
+# use the other three criteria as the primary Tier-2 signal.
+_SPECIFICITY_CAVEAT = (
+    "NOTE: specificity is a known-soft criterion on qwen3:8b — it under-penalizes "
+    "generic filler text (validated: pure-filler scored 4/5). "
+    "Primary signal: factual_accuracy, value_defensibility, traveler_framing."
+)
+
 
 def _build_judge_prompt(query: str, archetypes: list[dict[str, Any]]) -> str:
     sections: list[str] = [
@@ -127,7 +139,8 @@ async def _call_judge(
             {"role": "user", "content": prompt},
         ],
         "stream": False,
-        "options": {"temperature": 0, "num_predict": 800},
+        "think": False,
+        "options": {"temperature": 0, "num_predict": 1200},
     }
     try:
         resp = await client.post(f"{_OLLAMA_BASE}/api/chat", json=payload, timeout=120.0)
@@ -258,10 +271,12 @@ def _print_report(results: list[dict[str, Any]], run_path: Path, judge_model: st
 
     print("\nAGGREGATE QUALITY SCORES  (1-5 scale)")
     for key, vals in crit_scores.items():
-        print(f"  {key:<32}  {_avg(vals):.2f}  (n={len(vals)})")
+        suffix = "  [LOW-CONFIDENCE — see caveat]" if key == "specificity" else ""
+        print(f"  {key:<32}  {_avg(vals):.2f}  (n={len(vals)}){suffix}")
 
     overall_vals = [r["overall_quality"] for r in judged]
     print(f"\n  {'OVERALL':<32}  {_avg(overall_vals):.2f}")
+    print(f"\n  {_SPECIFICITY_CAVEAT}")
 
     print("\nPER-CASE DETAIL")
     for r in sorted(judged, key=lambda x: x["overall_quality"]):
@@ -306,9 +321,18 @@ def _write_md_report(
                     if val is not None:
                         crit_scores[key].append(float(val))
         for key, vals in crit_scores.items():
-            lines.append(f"| {key} | {_avg(vals):.2f} |")
+            note = " ¹" if key == "specificity" else ""
+            lines.append(f"| {key}{note} | {_avg(vals):.2f} |")
         overall_vals = [r["overall_quality"] for r in judged]
-        lines += [f"| **OVERALL** | **{_avg(overall_vals):.2f}** |", ""]
+        lines += [
+            f"| **OVERALL** | **{_avg(overall_vals):.2f}** |",
+            "",
+            "> ¹ **specificity is a known-soft criterion on qwen3:8b**: validated 2026-06-21 —"
+            " a pure-filler explanation scored 4/5 instead of the correct 1/5."
+            " Primary quality signal: `factual_accuracy`, `value_defensibility`, `traveler_framing`."
+            " Treat `specificity` scores as low-confidence / inflated.",
+            "",
+        ]
 
     lines += ["## Per-Case Results", "", "| ID | Quality | Rationale |", "|---|---|---|"]
     for r in sorted(results, key=lambda x: (x.get("skipped", False), -x.get("overall_quality", 0))):
