@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import sys
 import time
 from dataclasses import dataclass
@@ -29,6 +30,7 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
+import httpx
 import structlog
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
@@ -116,6 +118,21 @@ SYNTHETIC_REFINE_POOL: list[FlightOption] = [
 ]
 
 
+def _make_route_pool(intent: TravelIntent) -> list[FlightOption]:
+    """Return the synthetic pool with each flight's route and cabin substituted
+    from the planned intent. Prices, stop counts, and departure times are
+    preserved so the optimizer always ranks the same Pareto frontier; only
+    the BOM→NRT placeholders are replaced with the case's actual route."""
+    return [
+        f.model_copy(update={
+            "origin_iata": intent.origin_iata,
+            "destination_iata": intent.destination_iata,
+            "cabin_class": intent.cabin_class,
+        })
+        for f in SYNTHETIC_REFINE_POOL
+    ]
+
+
 @dataclass
 class _Agents:
     planner: PlannerAgent
@@ -127,8 +144,16 @@ def _load_golden() -> list[dict[str, Any]]:
     return json.loads(_GOLDEN_FILE.read_text(encoding="utf-8"))
 
 
-def _resolve_agents(profile: str) -> _Agents:
-    """Instantiate the three agents for the given routing profile."""
+def _resolve_agents(profile: str, *, use_fallback: bool = True) -> _Agents:
+    """Instantiate the three agents for the given routing profile.
+
+    use_fallback=True (default) wires the planner/optimizer through the profile's
+    fallback_chain (llm_routing.yaml) so a Groq TPD wall doesn't block generation --
+    see spec.md. Pass use_fallback=False for the AUTHORITATIVE Wave 2 baseline: that
+    run must stay single-model-clean (see evals/wave2/README.md "Fallback and the
+    authoritative baseline"), since a case served by a different, weaker free model
+    isn't comparable to one served by the configured model.
+    """
     from travel_agent.llm import (  # noqa: PLC0415
         get_llm_client_and_model,
         get_llm_client_for_provider,
@@ -144,7 +169,7 @@ def _resolve_agents(profile: str) -> _Agents:
     extra_params: dict[str, Any] | None = cfg.get("extra_params") or None
 
     if "model" in cfg:
-        # Flat profile — same client + model for every agent
+        # Flat profile — same client + model for every agent; no fallback_chain support.
         client = get_llm_client_for_provider(cfg["provider"])
         model: str = cfg["model"]
         return _Agents(
@@ -153,9 +178,13 @@ def _resolve_agents(profile: str) -> _Agents:
             opt=OptimizerAgent(client=client, model=model),
         )
 
-    planner_client, planner_model = get_llm_client_and_model("planner", profile)
+    planner_client, planner_model = get_llm_client_and_model(
+        "planner", profile, use_fallback=use_fallback
+    )
     conv_client, conv_model = get_llm_client_and_model("conversation", profile)
-    opt_client, opt_model = get_llm_client_and_model("optimizer", profile)
+    opt_client, opt_model = get_llm_client_and_model(
+        "optimizer", profile, use_fallback=use_fallback
+    )
     return _Agents(
         planner=PlannerAgent(client=planner_client, model=planner_model),
         conv=ConversationManagerAgent(client=conv_client, model=conv_model),
@@ -192,6 +221,14 @@ async def _generate_one(
         "refine_error": None,
         "optimizer_archetypes": None,
         "optimizer_error": None,
+        # Fallback-chain transparency (spec.md) — the model that actually served
+        # each call, vs. model_planner/model_optimizer above (the profile's
+        # CONFIGURED model). They differ only when a Groq->OpenRouter fallback
+        # fired mid-case. fallback_used=True flags the case as not directly
+        # comparable to a pure single-model baseline.
+        "served_model_planner": None,
+        "served_model_optimizer": None,
+        "fallback_used": False,
     }
 
     # --- Planner ---
@@ -200,6 +237,7 @@ async def _generate_one(
         state = RequestState(raw_input=case["query"])
         result = await agents.planner.run(state, today=date.fromisoformat(case["today"]))
         record["latency_ms_planner"] = round((time.monotonic() - t0) * 1000, 1)
+        record["served_model_planner"] = result.served_model.get("planner")
         if result.intent is None:
             record["intent_error"] = "planner returned None intent"
         else:
@@ -235,7 +273,7 @@ async def _generate_one(
         opt_state = RequestState(
             raw_input=case["query"],
             intent=intent,
-            flight_options=SYNTHETIC_REFINE_POOL,
+            flight_options=_make_route_pool(intent),
         )
         t0 = time.monotonic()
         try:
@@ -244,6 +282,10 @@ async def _generate_one(
             record["optimizer_archetypes"] = [
                 a.model_dump(mode="json") for a in opt_result.archetypes
             ]
+            optimizer_served = {
+                k: v for k, v in opt_result.served_model.items() if k.startswith("optimizer")
+            }
+            record["served_model_optimizer"] = optimizer_served or None
         except Exception as exc:
             record["latency_ms_optimizer"] = round((time.monotonic() - t0) * 1000, 1)
             record["optimizer_error"] = str(exc)
@@ -251,7 +293,22 @@ async def _generate_one(
             safe_err = str(exc).encode("ascii", "replace").decode()
             _logger.warning("optimizer_error", case_id=case["id"], error=safe_err)
 
+    record["fallback_used"] = _did_fallback(record)
     return record
+
+
+def _did_fallback(record: dict[str, Any]) -> bool:
+    """True if any call in this case was served by a model other than the
+    profile's configured model — i.e. a Groq->OpenRouter fallback fired."""
+    served_planner = record["served_model_planner"]
+    if served_planner and served_planner != record["model_planner"]:
+        return True
+    served_optimizer: dict[str, str] | None = record["served_model_optimizer"]
+    return bool(
+        served_optimizer
+        and record["model_optimizer"]
+        and any(v != record["model_optimizer"] for v in served_optimizer.values())
+    )
 
 
 async def generate_all(
@@ -260,15 +317,20 @@ async def generate_all(
     limit: int | None,
     *,
     run_optimizer: bool,
+    use_fallback: bool = True,
 ) -> list[dict[str, Any]]:
-    agents = _resolve_agents(profile)
+    agents = _resolve_agents(profile, use_fallback=use_fallback)
     planner_model: str = agents.planner._model  # type: ignore[attr-defined]
 
     if limit is not None:
         cases = cases[:limit]
 
     opt_tag = " + optimizer" if run_optimizer else " (no optimizer)"
-    print(f"Generating {len(cases)} cases — profile={profile}, planner={planner_model}{opt_tag}")
+    fb_tag = "fallback ON" if use_fallback else "fallback OFF (single-model-clean)"
+    print(
+        f"Generating {len(cases)} cases — profile={profile}, planner={planner_model}"
+        f"{opt_tag}, {fb_tag}"
+    )
 
     records: list[dict[str, Any]] = []
     for i, case in enumerate(cases, 1):
@@ -300,7 +362,25 @@ async def generate_all(
             )
             print(f"         optimizer: {o_status}")
 
+    _print_fallback_summary(records)
     return records
+
+
+def _print_fallback_summary(records: list[dict[str, Any]]) -> None:
+    """Provider-transparency note (spec.md) — flag cases served by a fallback
+    model so a mixed-provider run is never mistaken for a clean single-model
+    baseline."""
+    mixed = [r["id"] for r in records if r.get("fallback_used")]
+    if not mixed:
+        return
+    print(
+        f"\n*** {len(mixed)}/{len(records)} cases used the OpenRouter fallback "
+        f"(Gemma-4-31B) instead of the configured Groq model: {mixed} ***\n"
+        "This run is NOT directly comparable to a pure single-model baseline -- "
+        "a case scoring lower may reflect the fallback model, not the agent. "
+        "For the AUTHORITATIVE Wave 2 baseline, re-run with --no-fallback once "
+        "Groq TPD resets."
+    )
 
 
 def save_run(profile: str, records: list[dict[str, Any]]) -> Path:
@@ -312,6 +392,67 @@ def save_run(profile: str, records: list[dict[str, Any]]) -> Path:
             fh.write(json.dumps(rec) + "\n")
     print(f"\nSaved {len(records)} records -> {out}")
     return out
+
+
+# Estimated Groq token consumption for a full 31-case demo-llama run.
+# Each case: 1 planner + 3 optimizer LLM calls ≈ 1,123 tokens/call (measured).
+# 31 cases x 4 calls + 3 refine extra = 127 calls x 1,123 ≈ 143,000 tokens.
+# Groq llama-3.3-70b-versatile TPD is 100,000 — the full run CANNOT complete in one
+# day without splitting the run or changing the optimizer model. See README.md.
+_GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
+_GROQ_PROBE_MODEL = "llama-3.3-70b-versatile"
+_HTTP_TOO_MANY_REQUESTS = 429
+# Minimum remaining TPD we require before starting; set to the full daily limit so
+# any prior consumption stops the run. A partial baseline is not usable.
+_GROQ_MIN_REMAINING = 100_000
+
+
+async def probe_groq_tpd(print_fn=print) -> dict[str, int | str]:
+    """Probe Groq TPD headroom by reading rate-limit headers from a 5-token call.
+
+    Returns a dict with keys: remaining, limit, used, status.
+    status is one of: 'ok', '429', 'error'.
+    """
+    api_key = os.environ.get("GROQ_API_KEY", "")
+    if not api_key:
+        return {"status": "error", "detail": "GROQ_API_KEY not set"}
+
+    payload = {
+        "model": _GROQ_PROBE_MODEL,
+        "messages": [{"role": "user", "content": "Say OK"}],
+        "max_tokens": 5,
+    }
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                _GROQ_API_URL,
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json=payload,
+                timeout=30.0,
+            )
+    except Exception as exc:
+        return {"status": "error", "detail": str(exc)}
+
+    if resp.status_code == _HTTP_TOO_MANY_REQUESTS:
+        reset_at = resp.headers.get("x-ratelimit-reset-tokens-day", "?")
+        print_fn(f"[probe] 429 TPD_EXHAUSTED  reset={reset_at}")
+        return {"status": "429", "reset_at": reset_at}
+
+    try:
+        resp.raise_for_status()
+    except Exception as exc:
+        return {"status": "error", "detail": f"HTTP {resp.status_code}: {exc}"}
+
+    hdrs = resp.headers
+    remaining = int(hdrs.get("x-ratelimit-remaining-tokens-day", 0))
+    limit = int(hdrs.get("x-ratelimit-limit-tokens-day", 0))
+    used = limit - remaining
+
+    print_fn(
+        f"[probe] Groq TPD  remaining={remaining:,}  used={used:,}  limit={limit:,}  "
+        f"model={_GROQ_PROBE_MODEL}"
+    )
+    return {"status": "ok", "remaining": remaining, "limit": limit, "used": used}
 
 
 async def main() -> int:
@@ -328,13 +469,60 @@ async def main() -> int:
         "--no-optimizer", action="store_true",
         help="Skip optimizer call (faster; Tier-1 only run)",
     )
+    parser.add_argument(
+        "--probe", action="store_true",
+        help="Probe Groq TPD headroom and exit (reads x-ratelimit-remaining-tokens-day header)",
+    )
+    parser.add_argument(
+        "--no-fallback", action="store_true",
+        help=(
+            "Disable the OpenRouter fallback chain -- forces every case through the "
+            "profile's configured model only. REQUIRED for the authoritative Wave 2 "
+            "baseline (mixed-provider runs aren't comparable to a single-model "
+            "baseline); the default (fallback ON) is for resilient/non-blocking "
+            "reruns through a Groq TPD wall. See README.md."
+        ),
+    )
     args = parser.parse_args()
+
+    # Loaded unconditionally (not just --probe): the default fallback-ON path now
+    # also constructs an OpenRouterAdapter per spec.md, so OPENROUTER_API_KEY must
+    # be present alongside GROQ_API_KEY.
+    from dotenv import find_dotenv, load_dotenv  # noqa: PLC0415
+
+    load_dotenv(
+        find_dotenv(usecwd=True) or r"C:\Users\gaura\ml-projects\agentic-travel-booking-system\.env"
+    )
+
+    if args.probe:
+        result = await probe_groq_tpd()
+        if result["status"] == "429":
+            print("STOP — TPD exhausted. Wait for reset before running the full eval.")
+            return 1
+        if result["status"] == "error":
+            print(f"STOP — probe failed: {result.get('detail')}")
+            return 1
+        remaining = result.get("remaining", 0)
+        if remaining < _GROQ_MIN_REMAINING:
+            print(
+                f"STOP — insufficient headroom: {remaining:,} remaining, "
+                f"need {_GROQ_MIN_REMAINING:,} (full daily reset required).\n"
+                "NOTE: full 31-case demo-llama run needs ~143k tokens (exceeds 100k daily limit).\n"
+                "See evals/wave2/README.md for split-run options."
+            )
+            return 1
+        print(f"OK — {remaining:,} tokens available. Full run needs ~143k (may exceed limit).")
+        return 0
 
     cases = _load_golden()
     print(f"Loaded {len(cases)} cases from {_GOLDEN_FILE.name}")
 
     records = await generate_all(
-        cases, args.profile, args.limit, run_optimizer=not args.no_optimizer
+        cases,
+        args.profile,
+        args.limit,
+        run_optimizer=not args.no_optimizer,
+        use_fallback=not args.no_fallback,
     )
     save_run(args.profile, records)
     return 0
