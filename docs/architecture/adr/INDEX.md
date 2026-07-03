@@ -30,3 +30,4 @@ All ADRs for the agentic-travel-booking-system project.
 | [0024](0024-production-frontend-alignment.md) | Production Frontend Alignment: Vercel Freeze + Empty Env Vars | 2D.4 | Both prod surfaces were silently non-functional from day one; fixed via redeploy + env var correction |
 | [0025](0025-staleness-guardrail.md) | Production Staleness Guardrail | 2D.5 | Daily GitHub Actions cron checks both Cloud Run and Vercel for drift vs main; alert-only, never deploys |
 | [0026](0026-eval-rigor.md) | Eval Rigor: Judge Consistency Gate and Cache Poison Fix | 2D.6 | `judge_model`/`parse_failed` on JudgeScore; validate-on-read; cross-profile gate; Approach 3 rationale |
+| [0027](0027-llm-fallback-chain.md) | LLM Provider Fallback Chain (Groq → OpenRouter) | Post-Wave-2 | Groq Llama → OpenRouter Gemma-4-31B for planner/optimizer only; `FallbackLLMClient`; single choke-point wiring; eval provider transparency |
