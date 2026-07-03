@@ -77,6 +77,32 @@ profiles:
     booking:        llama-3.1-8b-instant
     conversation:   llama-3.3-70b-versatile
     provider:       groq
+    # Fallback chain (spec.md, validated 2026-07-04 — see
+    # apps/api/scripts/validate_fallback_candidates.py and ADR-0027). On a
+    # retryable Groq error (429/timeout/5xx), planner and optimizer fall back
+    # to OpenRouter's free Gemma-4-31B — the only free candidate that was BOTH
+    # schema-clean (16/16 across two validation rounds against our real tool
+    # schemas) AND reliably available (100%, vs. every stronger free model
+    # tested being either oversubscribed or tool-schema-incompatible).
+    #
+    # conversation_manager is intentionally NOT covered: its tool schema
+    # (ConversationManagerOutput) was never validated against Gemma. A Groq
+    # outage still hard-fails /refine until that's validated — known gap, not
+    # an oversight.
+    #
+    # OpenRouter Llama-3.3-70B (same model as primary, for quality parity) was
+    # evaluated as position #2 and DROPPED: 0/6 successful calls across two
+    # validation rounds (100% 429, oversubscribed on OpenRouter's free
+    # routing) — it would add a guaranteed-to-fail round-trip on every
+    # fallback, which is pure latency on the exact path that fires when we're
+    # already degraded.
+    fallback_chain:
+      planner:
+        - provider: openrouter
+          model: google/gemma-4-31b-it:free
+      optimizer:
+        - provider: openrouter
+          model: google/gemma-4-31b-it:free
 
   # ── demo-deepseek-v4 ─────────────────────────────────────────────────────────
   # NVIDIA NIM profile — DeepSeek-V4-Flash via integrate.api.nvidia.com.

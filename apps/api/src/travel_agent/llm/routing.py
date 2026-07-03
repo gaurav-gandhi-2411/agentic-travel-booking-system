@@ -106,3 +106,18 @@ def get_model_for_agent_in_profile(agent: str, profile_name: str) -> str:
 
 def get_provider_for_profile(profile_name: str) -> str:
     return get_profile_by_name(profile_name)["provider"]
+
+
+def get_fallback_chain_for_profile(profile_name: str) -> dict[str, list[dict[str, str]]]:
+    """Return the fallback_chain config for *profile_name*, or {} if absent.
+
+    Shape: ``{agent_key: [{"provider": str, "model": str}, ...]}``. Only agents
+    explicitly listed get a fallback client — an agent key absent from
+    fallback_chain (e.g. "conversation" on demo-llama) uses just its primary
+    provider/model, unchanged. See llm_routing.yaml for the current chains.
+    """
+    profile = get_profile_by_name(profile_name)
+    raw_chain = profile.get("fallback_chain")
+    if not raw_chain:
+        return {}
+    return cast("dict[str, list[dict[str, str]]]", raw_chain)

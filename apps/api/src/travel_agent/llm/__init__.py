@@ -21,11 +21,13 @@ from travel_agent.llm.base import (
     ToolCall,
     ToolDefinition,
 )
+from travel_agent.llm.fallback import AllProvidersExhaustedError, FallbackHop, FallbackLLMClient
 from travel_agent.llm.groq import GroqAdapter
 from travel_agent.llm.nvidia import NIMAdapter
 from travel_agent.llm.ollama import OllamaAdapter
 from travel_agent.llm.openrouter import OpenRouterAdapter
 from travel_agent.llm.routing import (
+    get_fallback_chain_for_profile,
     get_model_for_agent,
     get_model_for_agent_in_profile,
     get_provider,
@@ -65,15 +67,41 @@ def get_llm_client_for_provider(provider: str) -> LLMClient:
     return _build_client_for_provider(provider)
 
 
-def get_llm_client_and_model(agent: str, profile_name: str) -> tuple[LLMClient, str]:
+def get_llm_client_and_model(
+    agent: str, profile_name: str, *, use_fallback: bool = True
+) -> tuple[LLMClient, str]:
     """Return (client, model_id) for *agent* under an explicit named profile.
 
     Used for per-request profile overrides (X-LLM-Profile header). Does not
     read LLM_ROUTING_PROFILE from the environment.
+
+    When the profile declares a fallback_chain for *agent* (llm_routing.yaml)
+    and use_fallback is True (the default), the returned client is a
+    FallbackLLMClient that tries each configured hop in order on a retryable
+    error (429/timeout/5xx). Pass use_fallback=False to force the bare primary
+    client — used by the Wave 2 eval runner's authoritative baseline run, which
+    must stay single-model-clean (see evals/wave2/README.md).
     """
     model = get_model_for_agent_in_profile(agent, profile_name)
     provider = get_provider_for_profile(profile_name)
-    return _build_client_for_provider(provider), model
+    primary_client = _build_client_for_provider(provider)
+
+    if not use_fallback:
+        return primary_client, model
+
+    chain = get_fallback_chain_for_profile(profile_name).get(agent)
+    if not chain:
+        return primary_client, model
+
+    fallbacks = [
+        FallbackHop(
+            provider=hop["provider"],
+            model=hop["model"],
+            client=_build_client_for_provider(hop["provider"]),
+        )
+        for hop in chain
+    ]
+    return FallbackLLMClient(primary_client, provider, fallbacks), model
 
 
 def get_llm_client(agent: str) -> LLMClient:
@@ -90,6 +118,9 @@ def get_llm_client(agent: str) -> LLMClient:
 
 
 __all__ = [
+    "AllProvidersExhaustedError",
+    "FallbackHop",
+    "FallbackLLMClient",
     "LLMClient",
     "LLMError",
     "LLMResponse",

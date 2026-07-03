@@ -79,15 +79,22 @@ class OptimizerAgent:
 
         system = _load_system_prompt(today)
 
-        value_explanation, exp_explanation = await asyncio.gather(
+        (value_explanation, value_served), (exp_explanation, exp_served) = await asyncio.gather(
             self._explain(best_value, ArchetypeLabel.BEST_VALUE, system),
             self._explain(best_exp, ArchetypeLabel.BEST_EXPERIENCE, system),
         )
 
         # Single LLM call for both comparison strings (different flights only)
-        value_comparison, exp_comparison = await self._generate_comparisons(
+        value_comparison, exp_comparison, compare_served = await self._generate_comparisons(
             best_value, best_exp, system
         )
+
+        if value_served:
+            state.served_model["optimizer_value_explain"] = value_served
+        if exp_served:
+            state.served_model["optimizer_exp_explain"] = exp_served
+        if compare_served:
+            state.served_model["optimizer_compare"] = compare_served
 
         archetypes: list[Archetype] = [
             Archetype(
@@ -116,9 +123,10 @@ class OptimizerAgent:
         flight: FlightOption,
         label: ArchetypeLabel,
         system: str,
-    ) -> str:
+    ) -> tuple[str, str]:
+        """Returns (explanation, served_model). served_model is "" when no LLM call was made."""
         if self._client is None:
-            return _fallback_explanation(flight, label)
+            return _fallback_explanation(flight, label), ""
 
         summary = _flight_summary(flight, label)
         messages = [Message(role="user", content=summary)]
@@ -180,17 +188,21 @@ class OptimizerAgent:
 
         if response.tool_calls:
             raw = response.tool_calls[0].input
-            return str(raw.get("explanation", "")).strip() or _fallback_explanation(flight, label)
-        return _fallback_explanation(flight, label)
+            explanation = str(raw.get("explanation", "")).strip() or _fallback_explanation(
+                flight, label
+            )
+            return explanation, response.model
+        return _fallback_explanation(flight, label), response.model
 
     async def _generate_comparisons(
         self,
         value_flight: FlightOption,
         exp_flight: FlightOption,
         system: str,
-    ) -> tuple[str, str]:
+    ) -> tuple[str, str, str]:
+        """Returns (value_comparison, exp_comparison, served_model)."""
         if self._client is None or value_flight.id == exp_flight.id:
-            return ("", "")
+            return ("", "", "")
 
         value_summary = _flight_summary(value_flight, ArchetypeLabel.BEST_VALUE)
         exp_summary = _flight_summary(exp_flight, ArchetypeLabel.BEST_EXPERIENCE)
@@ -259,8 +271,9 @@ class OptimizerAgent:
             return (
                 str(raw.get("best_value_comparison", "")).strip(),
                 str(raw.get("best_experience_comparison", "")).strip(),
+                response.model,
             )
-        return ("", "")
+        return ("", "", response.model)
 
     def _build_deeplink(self, flight: FlightOption, label: ArchetypeLabel) -> str:
         if not self._partner_marker:

@@ -70,6 +70,7 @@ class PlannerAgent:
             tools=[EXTRACT_TRAVEL_INTENT],
             cache_system_prompt=True,
         )
+        state.served_model["planner"] = response.model
 
         # Cost telemetry + Langfuse generation — optional, never breaks the agent
         cost = compute_cost(

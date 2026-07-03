@@ -243,6 +243,13 @@ class RequestState(BaseModel):
     # Set by BookingAgent
     booking: BookingStatus = Field(default_factory=BookingStatus)
 
+    # Fallback observability — actual model that served each LLM call, keyed by
+    # call site ("planner", "optimizer_value_explain", "optimizer_exp_explain",
+    # "optimizer_compare"). May differ from the routing profile's configured
+    # model when a FallbackLLMClient hop served instead of the primary. See
+    # ADR-0027.
+    served_model: dict[str, str] = Field(default_factory=dict)
+
     # Coordinator metadata
     phase: CoordinatorPhase = CoordinatorPhase.PLANNING
     call_budget: CallBudget = Field(default_factory=CallBudget)

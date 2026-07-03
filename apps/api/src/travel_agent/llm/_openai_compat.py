@@ -48,8 +48,17 @@ async def openai_compat_chat(
     start = time.monotonic()
     try:
         response = await client.chat.completions.create(**create_kwargs)
+    except openai.APIStatusError as exc:
+        # Has a real HTTP status (400, 429, 5xx, ...) — let LLMError classify it.
+        raise LLMError(str(exc), status_code=exc.status_code) from exc
+    except openai.APIConnectionError as exc:
+        # Covers APITimeoutError too (subclasses APIConnectionError). Never reached
+        # the provider, so always safe to retry on a different one.
+        raise LLMError(str(exc), retryable=True) from exc
     except openai.APIError as exc:
-        raise LLMError(str(exc)) from exc
+        # Rare catch-all (e.g. malformed-response parsing inside the SDK itself) —
+        # treat conservatively as non-retryable rather than mask a real bug.
+        raise LLMError(str(exc), retryable=False) from exc
     latency_ms = (time.monotonic() - start) * 1000
 
     choice = response.choices[0]

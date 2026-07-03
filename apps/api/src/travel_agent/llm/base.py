@@ -45,8 +45,41 @@ class LLMResponse:
     cache_creation_input_tokens: int = 0
 
 
+_HTTP_TOO_MANY_REQUESTS = 429
+_HTTP_SERVER_ERROR_THRESHOLD = 500
+
+
+def _default_retryable(status_code: int | None) -> bool:
+    """429/5xx/unknown-connection-error (no status code) are transient; other
+    4xx (400, 401, ...) mean the request itself was bad and won't succeed on
+    a different provider either."""
+    if status_code is None:
+        return True
+    if status_code == _HTTP_TOO_MANY_REQUESTS:
+        return True
+    return status_code >= _HTTP_SERVER_ERROR_THRESHOLD
+
+
 class LLMError(Exception):
-    pass
+    """Raised by an LLMClient adapter on any request failure.
+
+    status_code carries the HTTP status when known (None for connection/timeout
+    errors that never reached the provider). retryable distinguishes transient
+    failures (429/5xx/timeout) — safe to retry on a different provider — from
+    ones our own request caused (400 and other 4xx), which would fail
+    identically everywhere. See travel_agent.llm.fallback.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int | None = None,
+        retryable: bool | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.retryable = _default_retryable(status_code) if retryable is None else retryable
 
 
 @runtime_checkable
