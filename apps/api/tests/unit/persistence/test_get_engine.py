@@ -112,6 +112,17 @@ def test_pooler_connect_args_disables_cache_for_supabase_pooler_host() -> None:
     assert args["prepared_statement_cache_size"] == 0
 
 
+def test_pooler_connect_args_disables_raw_asyncpg_cache_too() -> None:
+    """Regression guard: prepared_statement_cache_size=0 only covers SQLAlchemy's
+    own query-execution path. pool_pre_ping's do_ping() calls fetchrow() directly
+    on the underlying asyncpg connection, which uses asyncpg's OWN internal cache
+    (raw statement_cache_size, a different setting) -- confirmed live to still
+    collide (DuplicatePreparedStatementError / InvalidSQLStatementNameError) if
+    this key is left at asyncpg's default of 100."""
+    args = engine_mod._pooler_connect_args("aws-1-ap-south-1.pooler.supabase.com")
+    assert args["statement_cache_size"] == 0
+
+
 def test_pooler_connect_args_name_func_produces_globally_unique_names() -> None:
     """The whole point of this addendum: prepared_statement_cache_size=0 ALONE
     still lets asyncpg fall back to its own sequential per-connection-object
