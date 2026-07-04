@@ -119,10 +119,21 @@ class TestApiKeyModel:
 
 
 def test_metadata_contains_both_tables() -> None:
-    """Base.metadata must reflect both tables so Alembic autogenerate works."""
+    """Base.metadata must reflect both tables so Alembic autogenerate works.
+
+    Table metadata keys are schema-qualified (`dealhunter.tenants`) since both
+    models declare __table_args__ = {"schema": DB_SCHEMA} -- explicit schema
+    qualification (not search_path) is what makes these queries safe under the
+    Supabase transaction pooler. See ADR-0028.
+    """
     table_names = set(Base.metadata.tables.keys())
-    assert "tenants" in table_names
-    assert "api_keys" in table_names
+    assert "dealhunter.tenants" in table_names
+    assert "dealhunter.api_keys" in table_names
+
+
+def test_tables_are_schema_qualified() -> None:
+    assert Tenant.__table__.schema == "dealhunter"  # type: ignore[attr-defined]
+    assert ApiKey.__table__.schema == "dealhunter"  # type: ignore[attr-defined]
 
 
 @pytest.mark.parametrize(

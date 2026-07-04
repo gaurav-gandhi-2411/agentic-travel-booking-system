@@ -12,10 +12,40 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.sql import text
 
 from travel_agent.persistence.rls import _validate_tenant_id
-from travel_agent.persistence.schema import DB_SCHEMA
 
 _engine: AsyncEngine | None = None
 _session_factory: async_sessionmaker[AsyncSession] | None = None
+
+
+# Runtime pool sizing (ADR-0028) — explicit, not SQLAlchemy defaults. The defaults
+# (pool_size=5, max_overflow=10 => 15) were the bug: they exactly matched the
+# Supabase session pooler's own 15-client ceiling, so a single Cloud Run instance
+# alone could exhaust the ENTIRE shared-with-a-co-tenant pooler under a burst.
+#
+# The runtime engine now connects over the Supabase TRANSACTION pooler (port 6543)
+# instead, whose free-tier ceiling is 200 max client connections (Supabase compute-
+# and-disk docs, Nano/free tier) -- a different, much larger number from the
+# session-mode "pool_size: 15" that appeared in the EMAXCONNSESSION error, because
+# transaction mode multiplexes many client connections over few backend ones
+# instead of dedicating one backend connection per client for its lifetime.
+#
+# Math: budget ourselves HALF the ceiling, leaving the other half for the
+# co-tenant project sharing this Supabase instance:
+#   200 (free-tier Supavisor client ceiling)
+#   / 2  (deliberate 50/50 split with the co-tenant -- their usage is unknown/
+#         uncontracted, so we don't claim more than half by default)
+#   = 100 connections is OUR worst-case budget
+#   / 20 (Cloud Run --max-instances, deploy-prod.yml -- each instance gets its own
+#         engine/pool, so the FLEET-WIDE worst case is max_instances x per-instance)
+#   = 5 connections per instance, at the theoretical full-scale-out worst case.
+_POOL_SIZE = 3  # always-open connections per instance
+_MAX_OVERFLOW = 2  # burst connections beyond pool_size, per instance
+# 3 + 2 = 5/instance x 20 max instances = 100 worst-case fleet total = 50% of the
+# 200-client ceiling, leaving 100 for the co-tenant.
+
+# Fails fast into TenantAuthMiddleware's retry-then-503 layer (auth.py) rather than
+# blocking a request for up to SQLAlchemy's 30s default while waiting on a full pool.
+_POOL_TIMEOUT_SECONDS = 5
 
 
 def _normalise_url(url: str) -> str:
@@ -27,21 +57,35 @@ def _normalise_url(url: str) -> str:
 
 
 def get_engine() -> AsyncEngine:
-    """Return the singleton AsyncEngine, creating it on first call."""
+    """Return the singleton AsyncEngine, creating it on first call.
+
+    Prefers DATABASE_URL_RUNTIME (the Supabase transaction pooler, port 6543) for
+    the app's own query traffic; falls back to DATABASE_URL (session pooler) if
+    the runtime-specific secret isn't provisioned, so this is safe to deploy before
+    or after DATABASE_URL_RUNTIME exists. Alembic migrations always use DATABASE_URL
+    directly (env.py) -- migrations stay on the session pooler unconditionally.
+    """
     global _engine  # noqa: PLW0603
     if _engine is None:
-        raw = os.environ.get("DATABASE_URL")
+        raw = os.environ.get("DATABASE_URL_RUNTIME") or os.environ.get("DATABASE_URL")
         if not raw:
-            msg = "DATABASE_URL environment variable is not set"
+            msg = "DATABASE_URL_RUNTIME or DATABASE_URL environment variable must be set"
             raise RuntimeError(msg)
         _engine = create_async_engine(
             _normalise_url(raw),
             echo=os.environ.get("DB_ECHO", "false").lower() == "true",
             pool_pre_ping=True,
-            # Pin every pooled connection to DealHunter's dedicated schema. The ORM and
-            # the resolver call resolve to DB_SCHEMA objects only; `public` is never on
-            # the path, so a shared instance's `public`/co-tenant objects are unreachable.
-            connect_args={"server_settings": {"search_path": DB_SCHEMA}},
+            pool_size=_POOL_SIZE,
+            max_overflow=_MAX_OVERFLOW,
+            pool_timeout=_POOL_TIMEOUT_SECONDS,
+            # NOTE: no search_path server_setting here. Tenant/ApiKey now declare
+            # schema=DB_SCHEMA explicitly (tenancy/models.py) and
+            # resolve_api_key_secure has SET search_path bound into the function
+            # definition itself (migration b2c3d4e5f6a7) -- neither depends on the
+            # connection's ambient search_path, which is what makes this path safe
+            # under transaction pooling (a pooled connection can be handed to a
+            # different logical session between transactions, so a search_path
+            # pinned only at connection-open time isn't guaranteed to still apply).
         )
     return _engine
 

@@ -6,12 +6,23 @@ real Postgres connection is required.
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from contextlib import asynccontextmanager
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import TimeoutError as SATimeoutError
+from starlette.applications import Starlette
+from starlette.responses import PlainTextResponse
+from starlette.routing import Route
 from starlette.testclient import TestClient
 
-from travel_agent.api.middleware.auth import _extract_key
+from travel_agent.api.middleware.auth import (
+    _AUTH_DB_MAX_ATTEMPTS,
+    TenantAuthMiddleware,
+    _extract_key,
+    _resolve_key_with_retry,
+)
 
 # ── _extract_key ──────────────────────────────────────────────────────────────
 
@@ -82,3 +93,164 @@ def test_health_endpoint_always_open(monkeypatch: pytest.MonkeyPatch) -> None:
     client = TestClient(fastapi_app, raise_server_exceptions=False)
     resp = client.get("/health")
     assert resp.status_code == 200
+
+
+# ── _resolve_key_with_retry: ADR-0028 pool-exhaustion retry ───────────────────
+
+
+def _make_factory() -> MagicMock:
+    """Stand-in for get_session_factory()'s return value.
+
+    factory() must be callable repeatedly (once per retry attempt), each time
+    yielding a fresh async context manager -- resolve_key itself is mocked
+    separately per test, so the dummy session's contents don't matter.
+    """
+
+    @asynccontextmanager
+    async def _session_cm():  # type: ignore[no-untyped-def]
+        yield MagicMock()
+
+    return MagicMock(side_effect=_session_cm)
+
+
+class TestResolveKeyWithRetry:
+    async def test_succeeds_first_attempt_no_retry(self) -> None:
+        tenant = MagicMock()
+        with (
+            patch(
+                "travel_agent.api.middleware.auth.get_session_factory", return_value=_make_factory()
+            ),
+            patch(
+                "travel_agent.api.middleware.auth.resolve_key", AsyncMock(return_value=tenant)
+            ) as mock_resolve,
+        ):
+            result = await _resolve_key_with_retry("some-key")
+        assert result is tenant
+        assert mock_resolve.call_count == 1
+
+    async def test_retries_on_operational_error_then_succeeds(self) -> None:
+        tenant = MagicMock()
+        exc = OperationalError("stmt", {}, Exception("pool full"))
+        mock_resolve = AsyncMock(side_effect=[exc, tenant])
+        with (
+            patch(
+                "travel_agent.api.middleware.auth.get_session_factory", return_value=_make_factory()
+            ),
+            patch("travel_agent.api.middleware.auth.resolve_key", mock_resolve),
+            patch("travel_agent.api.middleware.auth.asyncio.sleep", AsyncMock()) as mock_sleep,
+        ):
+            result = await _resolve_key_with_retry("some-key")
+        assert result is tenant
+        assert mock_resolve.call_count == 2
+        mock_sleep.assert_awaited_once()
+
+    async def test_timeout_error_also_retries(self) -> None:
+        tenant = MagicMock()
+        mock_resolve = AsyncMock(side_effect=[SATimeoutError("timed out"), tenant])
+        with (
+            patch(
+                "travel_agent.api.middleware.auth.get_session_factory", return_value=_make_factory()
+            ),
+            patch("travel_agent.api.middleware.auth.resolve_key", mock_resolve),
+            patch("travel_agent.api.middleware.auth.asyncio.sleep", AsyncMock()),
+        ):
+            result = await _resolve_key_with_retry("some-key")
+        assert result is tenant
+
+    async def test_exhausts_retries_and_raises(self) -> None:
+        """After _AUTH_DB_MAX_ATTEMPTS, the last OperationalError propagates so the
+        middleware can convert it to a clean 503 -- not swallowed, not infinite."""
+        exc = OperationalError("stmt", {}, Exception("pool full"))
+        mock_resolve = AsyncMock(side_effect=[exc] * _AUTH_DB_MAX_ATTEMPTS)
+        with (
+            patch(
+                "travel_agent.api.middleware.auth.get_session_factory", return_value=_make_factory()
+            ),
+            patch("travel_agent.api.middleware.auth.resolve_key", mock_resolve),
+            patch("travel_agent.api.middleware.auth.asyncio.sleep", AsyncMock()),
+            pytest.raises(OperationalError),
+        ):
+            await _resolve_key_with_retry("some-key")
+        assert mock_resolve.call_count == _AUTH_DB_MAX_ATTEMPTS
+
+    async def test_non_transient_error_is_not_retried(self) -> None:
+        """A genuine bug (not a connectivity blip) propagates immediately on the
+        first attempt -- retrying it would just fail the same way three times
+        instead of once."""
+        mock_resolve = AsyncMock(side_effect=ValueError("not a connection problem"))
+        with (
+            patch(
+                "travel_agent.api.middleware.auth.get_session_factory", return_value=_make_factory()
+            ),
+            patch("travel_agent.api.middleware.auth.resolve_key", mock_resolve),
+            pytest.raises(ValueError, match="not a connection problem"),
+        ):
+            await _resolve_key_with_retry("some-key")
+        assert mock_resolve.call_count == 1
+
+
+class TestAuthMiddlewareBusyResponse:
+    """A guarded route returns a clean structured 503 (not a raw exception) when
+    the auth DB check exhausts its retries.
+
+    Built as a minimal standalone Starlette app (not the cached
+    travel_agent.api.main singleton) because TenantAuthMiddleware reads APP_MODE
+    once at construction time; the shared app's middleware stack is built on
+    first import and doesn't reconstruct when a later test monkeypatches the
+    env var, so re-importing it here would silently inherit whatever mode an
+    earlier test in this module left behind.
+    """
+
+    def _build_app(self) -> Starlette:
+        async def _stub(_request: object) -> PlainTextResponse:
+            return PlainTextResponse("ok")
+
+        app = Starlette(routes=[Route("/search", _stub, methods=["POST"])])
+        app.add_middleware(TenantAuthMiddleware)
+        return app
+
+    def test_pool_exhaustion_returns_structured_503(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("APP_MODE", "demo")
+        app = self._build_app()
+
+        exc = OperationalError("stmt", {}, Exception("pool full"))
+        with patch(
+            "travel_agent.api.middleware.auth._resolve_key_with_retry",
+            AsyncMock(side_effect=exc),
+        ):
+            client = TestClient(app, raise_server_exceptions=False)
+            resp = client.post(
+                "/search",
+                json={"query": "fly from Mumbai to Paris"},
+                headers={"X-API-Key": "irrelevant-in-this-test"},
+            )
+        assert resp.status_code == 503
+        assert resp.json() == {"detail": "Service temporarily busy, please retry."}
+
+    def test_healthy_key_resolution_still_passes_through(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Sanity check on the same minimal app: a normal resolution (no
+        exception) still reaches the guarded route, confirming the 503 test
+        above is exercising the failure path specifically, not just always
+        503-ing regardless of what _resolve_key_with_retry does."""
+        monkeypatch.setenv("APP_MODE", "demo")
+        app = self._build_app()
+
+        tenant = MagicMock(
+            id="11111111-1111-1111-1111-111111111111",
+            inventory_adapter="aviasales",
+            affiliate_enabled=True,
+        )
+        with patch(
+            "travel_agent.api.middleware.auth._resolve_key_with_retry",
+            AsyncMock(return_value=tenant),
+        ):
+            client = TestClient(app, raise_server_exceptions=False)
+            resp = client.post(
+                "/search",
+                json={"query": "fly from Mumbai to Paris"},
+                headers={"X-API-Key": "a-valid-looking-key"},
+            )
+        assert resp.status_code == 200
+        assert resp.text == "ok"
