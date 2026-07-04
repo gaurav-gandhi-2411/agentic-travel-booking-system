@@ -71,24 +71,46 @@ _POOL_RECYCLE_SECONDS = 300
 
 # ADR-0028 addendum -- asyncpg + Supavisor transaction-mode prepared-statement fix.
 #
-# SQLAlchemy's asyncpg dialect has its OWN prepared-statement layer, independent of
-# raw asyncpg: every execution calls `connection.prepare(operation, name=<name_func>())`
-# directly (see sqlalchemy/dialects/postgresql/asyncpg.py, AsyncAdapt_asyncpg_connection
-# ._prepare). The parameter is `prepared_statement_cache_size` (NOT the raw asyncpg
-# `statement_cache_size` -- that name is only meaningful to asyncpg.connect() directly,
-# and is silently a no-op when passed through SQLAlchemy's connect_args, which is
-# exactly what happened here originally: the "fix" set the wrong key).
+# There are TWO independent prepared-statement layers in play, and BOTH must be
+# handled or the collision only moves, not disappears (confirmed live: the first
+# version of this fix, below, still hit DuplicatePreparedStatementError /
+# InvalidSQLStatementNameError on ~3/24 requests in a canary re-burst):
 #
-# Setting prepared_statement_cache_size=0 ALONE is NOT sufficient: with caching
-# disabled, SQLAlchemy still falls back to its DEFAULT name function, which enumerates
-# names sequentially PER CONNECTION OBJECT. Under transaction-mode pooling, two
-# different concurrent client connections can independently reach the same sequential
-# name and collide when Supavisor routes them to the same backend at the same time --
-# this is exactly the live DuplicatePreparedStatementError observed under a 24-request
-# concurrent burst (SQLAlchemy's own docs describe this exact PgBouncer failure mode).
-# Fix: prepared_statement_name_func generates a globally-unique name (uuid4) per
-# statement, making a collision effectively impossible regardless of pool/backend
-# multiplexing.
+# (1) SQLAlchemy's OWN layer, used for every ORM/Core query executed through a
+#     Session (session.execute()/scalar()/etc). AsyncAdapt_asyncpg_connection._prepare()
+#     (sqlalchemy/dialects/postgresql/asyncpg.py) calls
+#     `connection.prepare(operation, name=self._prepared_statement_name_func())` --
+#     an EXPLICIT name is always passed, so raw asyncpg's own auto-naming/cache logic
+#     is bypassed entirely for this path (asyncpg's Connection._prepare() takes the
+#     `isinstance(named, str)` branch and uses exactly the name given). The relevant
+#     parameter is `prepared_statement_cache_size` (NOT the raw asyncpg
+#     `statement_cache_size` -- a different name, meaningful only to asyncpg.connect()
+#     directly). cache_size=0 ALONE is not sufficient here either: with caching
+#     disabled, SQLAlchemy falls back to its DEFAULT name function, which enumerates
+#     names sequentially PER CONNECTION OBJECT -- two different concurrent client
+#     connections can independently reach the same sequential name and collide when
+#     Supavisor routes both onto the same backend at once. Fix: prepared_statement_name_func
+#     generates a globally-unique name (uuid4) per statement, making that collision
+#     structurally impossible.
+#
+# (2) asyncpg's OWN internal statement cache (asyncpg/connection.py, Connection._stmt_cache),
+#     used by any call made DIRECTLY on the underlying asyncpg connection object rather
+#     than through SQLAlchemy's execute path -- the one place this happens here is
+#     `pool_pre_ping=True`'s connection-liveness check: do_ping() -> _async_ping() ->
+#     `self._connection.fetchrow(";")`, calling asyncpg's fetchrow() directly. That goes
+#     through asyncpg's OWN `_get_statement()`, which (when its cache is enabled, the
+#     default: statement_cache_size=100) auto-generates a NAMED statement via its own
+#     sequential `_get_unique_id('stmt')` counter -- the exact same class of collision as
+#     (1), just in a code path (1)'s fix doesn't touch, since fetchrow() never received an
+#     explicit `name=`. This is controlled by the RAW asyncpg `statement_cache_size`
+#     parameter, which -- unlike (1) -- IS forwarded verbatim to asyncpg.connect(): the
+#     SQLAlchemy dialect's connect() wrapper only pops `prepared_statement_cache_size`/
+#     `prepared_statement_name_func`/`async_fallback`/`async_creator_fn` from connect_args
+#     before forwarding the rest, so `statement_cache_size` reaches raw asyncpg unchanged.
+#     Setting it to 0 makes `_get_statement()` fall through to an ANONYMOUS (empty-name)
+#     prepared statement for this path -- Postgres's protocol lets an unnamed statement be
+#     silently replaced on each use, so there is no persistent name left to collide, and no
+#     stale-plan risk if Supavisor swaps the backing backend connection between calls.
 #
 # SQLAlchemy's docs also recommend NullPool + PgBouncer-side DISCARD for this scenario,
 # to prevent "useless prepared statements" accumulating on a long-lived connection.
@@ -106,7 +128,8 @@ def _pooler_connect_args(host: str | None) -> dict[str, object]:
     if not host or _POOLER_HOST_MARKER not in host:
         return {}
     return {
-        "prepared_statement_cache_size": 0,
+        "statement_cache_size": 0,  # raw asyncpg's own cache -- see (2) above
+        "prepared_statement_cache_size": 0,  # SQLAlchemy's own layer -- see (1) above
         "prepared_statement_name_func": lambda: f"__asyncpg_{uuid4()}__",
     }
 

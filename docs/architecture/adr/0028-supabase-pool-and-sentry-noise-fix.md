@@ -191,23 +191,57 @@ independently reach the same sequential name and collide when Supavisor's transa
 multiplexing routes both onto the same backend at the same moment — exactly SQLAlchemy's
 own documented "Prepared Statement Name with PGBouncer" failure mode.
 
-**Fix:** `prepared_statement_cache_size=0` **and** `prepared_statement_name_func=lambda:
-f"__asyncpg_{uuid4()}__"` together (`persistence/engine.py::_pooler_connect_args()`),
-matching SQLAlchemy's own prescribed remedy. The name-func is the load-bearing half: it
-makes the collision structurally impossible (globally-unique names can never collide,
-regardless of backend multiplexing) rather than merely less frequent — `cache_size=0` alone
-would not have eliminated it, only changed which sequential counter collided. `NullPool`
-(SQLAlchemy's other documented mitigation, paired with PgBouncer-side `DISCARD`) was
-deliberately not adopted, to preserve the explicit `pool_size`/`max_overflow` budget this
-ADR exists to enforce; `pool_recycle=300` was added instead to bound how long any one
+**First fix (PR #74):** `prepared_statement_cache_size=0` **and**
+`prepared_statement_name_func=lambda: f"__asyncpg_{uuid4()}__"` together
+(`persistence/engine.py::_pooler_connect_args()`), matching SQLAlchemy's own prescribed
+remedy. This is correct and sufficient for every ORM/Core query executed through a
+`Session` — but it was **not the whole bug**.
+
+**Re-verified against the fixed canary, still not clean:** redeploying and re-running the
+identical 24-request burst still produced 3/24 raw errors —
+`InvalidSQLStatementNameError: prepared statement "__asyncpg_stmt_N__" does not exist` and
+`DuplicatePreparedStatementError: prepared statement "__asyncpg_stmt_1__" already exists` —
+the same failure signature, on a smaller scale. Confirmed via Cloud Run structured logs, not
+inferred: this was a genuinely separate code path from the one PR #74 fixed.
+
+**Second root cause:** `get_engine()` sets `pool_pre_ping=True` (deliberately, to reject
+dead connections before use). Its liveness check — `do_ping()` → `_async_ping()` →
+`self._connection.fetchrow(";")` (`sqlalchemy/dialects/postgresql/asyncpg.py`) — calls
+`fetchrow()` **directly on the underlying asyncpg connection**, bypassing
+`AsyncAdapt_asyncpg_connection._prepare()` (and therefore `prepared_statement_name_func`)
+entirely. `fetchrow()` goes through asyncpg's own internal cache (`asyncpg/connection.py`,
+`Connection._get_statement()`), controlled by a *different*, raw asyncpg parameter:
+`statement_cache_size` (default 100 — NOT `prepared_statement_cache_size`, which only the
+SQLAlchemy dialect recognizes). Confirmed by reading the SQLAlchemy dialect's `connect()`
+wrapper: it pops exactly `prepared_statement_cache_size`/`prepared_statement_name_func`/
+`async_fallback`/`async_creator_fn` from `connect_args` and forwards everything else
+verbatim into `asyncpg.connect(**kw)` — so `statement_cache_size` reaches raw asyncpg
+untouched, left at its default, still auto-naming statements via its own sequential
+`_get_unique_id('stmt')` counter for this one code path. Same collision, different layer.
+
+**Complete fix:** add raw `statement_cache_size=0` alongside the two SQLAlchemy-level
+settings. With asyncpg's own cache disabled, `_get_statement()` falls through to an
+**anonymous** (empty-name) prepared statement for `do_ping()`'s `fetchrow()` call —
+Postgres's protocol allows an unnamed statement to be silently replaced on each use, so
+there is no persistent name left to collide, and no stale-plan risk if Supavisor swaps the
+backing backend connection between calls. All three settings are additive, not competing:
+SQLAlchemy's own query-execution path always passes an explicit `name=`, so it never
+touches asyncpg's internal cache/naming logic regardless of `statement_cache_size` —
+disabling it only changes behavior for the one path (`pool_pre_ping`) that calls asyncpg
+directly.
+
+`NullPool` (SQLAlchemy's other documented mitigation, paired with PgBouncer-side `DISCARD`)
+was deliberately not adopted, to preserve the explicit `pool_size`/`max_overflow` budget
+this ADR exists to enforce; `pool_recycle=300` was added instead to bound how long any one
 connection's prepared statements can accumulate.
 
 **Process gap, fixed:** `scripts/verify_transaction_pooler_isolation.py` had the identical
 wrong parameter name (it was written by copying the same mistaken pattern) and ran fully
-sequentially, so it could not have caught this regardless. It now imports
+sequentially, so it could not have caught either collision. It now imports
 `_pooler_connect_args()` directly from `persistence/engine.py` (instead of reimplementing
 it) and includes a 24-request concurrent burst as a permanent verification step — a future
-change to pooler connect_args cannot regress this silently again.
+change to pooler connect_args cannot regress this silently again, and inherits both fixes
+automatically since it calls the shared helper rather than its own copy.
 
 ## Consequences
 
