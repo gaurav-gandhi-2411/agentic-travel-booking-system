@@ -17,11 +17,23 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+import sentry_sdk
 import structlog
 
 from travel_agent.llm.base import LLMClient, LLMError, LLMResponse, Message, ToolDefinition
 
 _logger = structlog.get_logger(__name__)
+
+# Sentry scope tag set around every hop attempt (ADR-0028 fix (b)). Sentry's
+# OpenAIIntegration auto-captures ANY exception a chat.completions.create() call
+# raises -- including ones this class goes on to recover from via the next hop --
+# which would otherwise generate a spurious "RateLimitError" Sentry issue for
+# every successfully-handled retryable failure. observability/sentry.py's
+# before_send drops auto-captured events carrying this tag when the exception is
+# one of the known-retryable provider classes, since those cases are already
+# reported with richer context by this module's own capture_message (on a served
+# fallback) / capture_exception (on full exhaustion) calls below.
+LLM_FALLBACK_MANAGED_TAG = "llm_fallback_managed"
 
 
 @dataclass(frozen=True)
@@ -79,15 +91,17 @@ class FallbackLLMClient:
         for i, (provider, hop_model, client) in enumerate(hops):
             is_last = i == len(hops) - 1
             try:
-                response = await client.chat(
-                    messages,
-                    model=hop_model,
-                    max_tokens=max_tokens,
-                    temperature=temperature,
-                    system=system,
-                    tools=tools,
-                    **kwargs,
-                )
+                with sentry_sdk.new_scope() as scope:
+                    scope.set_tag(LLM_FALLBACK_MANAGED_TAG, "true")
+                    response = await client.chat(
+                        messages,
+                        model=hop_model,
+                        max_tokens=max_tokens,
+                        temperature=temperature,
+                        system=system,
+                        tools=tools,
+                        **kwargs,
+                    )
             except LLMError as exc:
                 _logger.warning(
                     "llm_fallback_attempt_failed",
@@ -101,8 +115,6 @@ class FallbackLLMClient:
                     raise  # e.g. 400 — never falls back, surfaces the real error
                 last_exc = exc
                 if is_last:
-                    import sentry_sdk  # noqa: PLC0415 — lazy import, matches observability/sentry.py
-
                     sentry_sdk.capture_exception(exc)
                     msg = (
                         f"All {len(hops)} LLM providers exhausted "
@@ -121,8 +133,6 @@ class FallbackLLMClient:
                         from_model=hops[0][1],
                         reason=str(last_exc),
                     )
-                    import sentry_sdk  # noqa: PLC0415
-
                     sentry_sdk.capture_message(
                         f"LLM fallback served: {hops[0][0]}/{hops[0][1]} -> "
                         f"{provider}/{hop_model} (reason: {last_exc})",

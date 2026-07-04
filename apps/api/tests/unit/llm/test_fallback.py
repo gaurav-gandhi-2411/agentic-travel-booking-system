@@ -6,9 +6,15 @@ from typing import Any
 from unittest.mock import patch
 
 import pytest
+import sentry_sdk
 
 from travel_agent.llm.base import LLMError, LLMResponse, Message
-from travel_agent.llm.fallback import AllProvidersExhaustedError, FallbackHop, FallbackLLMClient
+from travel_agent.llm.fallback import (
+    LLM_FALLBACK_MANAGED_TAG,
+    AllProvidersExhaustedError,
+    FallbackHop,
+    FallbackLLMClient,
+)
 
 _MSG = [Message(role="user", content="fly from Delhi to Dubai next month")]
 
@@ -135,3 +141,44 @@ async def test_primary_success_never_touches_fallback() -> None:
 def test_requires_at_least_one_fallback_hop() -> None:
     with pytest.raises(ValueError, match="at least one fallback hop"):
         FallbackLLMClient(_FakeClient(), "groq", [])
+
+
+async def test_every_hop_attempt_is_tagged_for_sentry_filter() -> None:
+    """Each hop attempt runs inside a Sentry scope tagged
+    LLM_FALLBACK_MANAGED_TAG=true, so observability/sentry.py's before_send can
+    identify and drop already-recovered per-hop noise (ADR-0028 fix (b)). Checked
+    by having the test double read the ACTIVE scope's tag from inside chat() --
+    the same vantage point Sentry's OpenAIIntegration captures from."""
+    seen_tags: list[str | None] = []
+
+    class _TagCapturingClient:
+        def __init__(self, *outcomes: LLMResponse | Exception) -> None:
+            self._outcomes = list(outcomes)
+
+        async def chat(self, messages: list[Message], *, model: str, **kwargs: Any) -> LLMResponse:
+            seen_tags.append(sentry_sdk.get_current_scope()._tags.get(LLM_FALLBACK_MANAGED_TAG))
+            outcome = self._outcomes.pop(0)
+            if isinstance(outcome, Exception):
+                raise outcome
+            return outcome
+
+    primary = _TagCapturingClient(LLMError("rate limited", status_code=429))
+    fb = _TagCapturingClient(_response("google/gemma-4-31b-it:free"))
+    client = FallbackLLMClient(
+        primary, "groq", [FallbackHop(provider="openrouter", model="gemma", client=fb)]
+    )
+    await client.chat(_MSG, model="llama-3.3-70b-versatile")
+    assert seen_tags == ["true", "true"]
+
+
+async def test_scope_tag_does_not_leak_outside_the_hop_attempt() -> None:
+    """new_scope() must not leave llm_fallback_managed set on the ambient scope
+    after chat() returns -- otherwise unrelated Sentry events emitted later in
+    the same request would be mistakenly eligible for the noise filter."""
+    primary = _FakeClient(_response("llama-3.3-70b-versatile"))
+    fb = _FakeClient(_response("google/gemma-4-31b-it:free"))
+    client = FallbackLLMClient(
+        primary, "groq", [FallbackHop(provider="openrouter", model="gemma", client=fb)]
+    )
+    await client.chat(_MSG, model="llama-3.3-70b-versatile")
+    assert sentry_sdk.get_current_scope()._tags.get(LLM_FALLBACK_MANAGED_TAG) is None
