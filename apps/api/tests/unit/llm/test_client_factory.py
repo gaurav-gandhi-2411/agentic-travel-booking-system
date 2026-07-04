@@ -31,12 +31,13 @@ def test_optimizer_on_demo_llama_gets_fallback_client() -> None:
     assert isinstance(client, FallbackLLMClient)
 
 
-def test_conversation_on_demo_llama_stays_plain_client() -> None:
-    """conversation_manager's tool schema isn't validated against the fallback
-    model (llm_routing.yaml comment) -- no fallback_chain entry for it."""
-    client, _model = get_llm_client_and_model("conversation", "demo-llama")
-    assert not isinstance(client, FallbackLLMClient)
-    assert isinstance(client, GroqAdapter)
+def test_conversation_on_demo_llama_gets_fallback_client() -> None:
+    """conversation_manager's tool schema (ConversationManagerOutput's
+    exactly-one-of-args invariant) was validated separately against Gemma-4-31B
+    and passed -- it shares the same fallback hop as planner/optimizer."""
+    client, model = get_llm_client_and_model("conversation", "demo-llama")
+    assert isinstance(client, FallbackLLMClient)
+    assert model == "llama-3.3-70b-versatile"
 
 
 def test_use_fallback_false_forces_plain_client() -> None:
@@ -44,6 +45,12 @@ def test_use_fallback_false_forces_plain_client() -> None:
     assert not isinstance(client, FallbackLLMClient)
     assert isinstance(client, GroqAdapter)
     assert model == "llama-3.3-70b-versatile"
+
+
+def test_conversation_use_fallback_false_forces_plain_client() -> None:
+    client, _model = get_llm_client_and_model("conversation", "demo-llama", use_fallback=False)
+    assert not isinstance(client, FallbackLLMClient)
+    assert isinstance(client, GroqAdapter)
 
 
 def test_profile_without_fallback_chain_stays_plain_client() -> None:

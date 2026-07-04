@@ -89,14 +89,16 @@ python -m evals.wave2.judge
 
 ### Fallback and the authoritative baseline
 
-`demo-llama`'s planner and optimizer route through a Groq -> OpenRouter (Gemma-4-31B)
-fallback chain by default (spec.md, ADR-0027) — a Groq TPD wall no longer hard-blocks
-generation. **The runner defaults to fallback ON.**
+`demo-llama`'s planner, optimizer, AND conversation (the refine-case classifier) all
+route through a Groq -> OpenRouter (Gemma-4-31B) fallback chain by default (spec.md,
+ADR-0027) — a Groq TPD wall no longer hard-blocks generation. **The runner defaults to
+fallback ON.**
 
 This is a double-edged sword for eval baselines: a run that mixes Groq Llama-3.3-70B
 and OpenRouter Gemma-4-31B output is not a clean measurement of one model. Every
-record carries `served_model_planner`, `served_model_optimizer`, and a `fallback_used`
-flag; a non-empty set of flagged cases prints a warning at the end of the run.
+record carries `served_model_planner`, `served_model_conversation`,
+`served_model_optimizer`, and a `fallback_used` flag; a non-empty set of flagged cases
+prints a warning at the end of the run.
 
 **Rule:** the AUTHORITATIVE Wave 2 baseline (the one the Tier-1 CI gate and Tier-2
 judge score against) MUST be generated with `--no-fallback`, so every case is served

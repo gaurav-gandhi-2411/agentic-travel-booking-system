@@ -79,16 +79,20 @@ profiles:
     provider:       groq
     # Fallback chain (spec.md, validated 2026-07-04 — see
     # apps/api/scripts/validate_fallback_candidates.py and ADR-0027). On a
-    # retryable Groq error (429/timeout/5xx), planner and optimizer fall back
-    # to OpenRouter's free Gemma-4-31B — the only free candidate that was BOTH
-    # schema-clean (16/16 across two validation rounds against our real tool
-    # schemas) AND reliably available (100%, vs. every stronger free model
-    # tested being either oversubscribed or tool-schema-incompatible).
+    # retryable Groq error (429/timeout/5xx), planner, optimizer, AND
+    # conversation (ConversationManagerAgent, the /refine classifier) fall
+    # back to OpenRouter's free Gemma-4-31B — the only free candidate that
+    # was BOTH schema-clean AND reliably available (vs. every stronger free
+    # model tested being either oversubscribed or tool-schema-incompatible).
     #
-    # conversation_manager is intentionally NOT covered: its tool schema
-    # (ConversationManagerOutput) was never validated against Gemma. A Groq
-    # outage still hard-fails /refine until that's validated — known gap, not
-    # an oversight.
+    # conversation_manager's tool (extract_conversation_action /
+    # ConversationManagerOutput) is structurally harder than planner/
+    # optimizer's flat objects -- it has an exactly-one-of-three-nested-
+    # objects invariant (refine_args/replan_args/no_op_args) enforced by a
+    # Pydantic model_validator, not plain JSON Schema. Validated separately
+    # (2026-07-04): 3/3 clean across REFINE/REPLAN/NO_OP cases, including the
+    # exactly-one-of invariant and the args_summary-required rule. Added to
+    # the chain once that passed -- was excluded before this validation ran.
     #
     # OpenRouter Llama-3.3-70B (same model as primary, for quality parity) was
     # evaluated as position #2 and DROPPED: 0/6 successful calls across two
@@ -101,6 +105,9 @@ profiles:
         - provider: openrouter
           model: google/gemma-4-31b-it:free
       optimizer:
+        - provider: openrouter
+          model: google/gemma-4-31b-it:free
+      conversation:
         - provider: openrouter
           model: google/gemma-4-31b-it:free
 

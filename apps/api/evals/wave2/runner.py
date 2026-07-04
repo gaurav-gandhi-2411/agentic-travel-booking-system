@@ -147,12 +147,12 @@ def _load_golden() -> list[dict[str, Any]]:
 def _resolve_agents(profile: str, *, use_fallback: bool = True) -> _Agents:
     """Instantiate the three agents for the given routing profile.
 
-    use_fallback=True (default) wires the planner/optimizer through the profile's
-    fallback_chain (llm_routing.yaml) so a Groq TPD wall doesn't block generation --
-    see spec.md. Pass use_fallback=False for the AUTHORITATIVE Wave 2 baseline: that
-    run must stay single-model-clean (see evals/wave2/README.md "Fallback and the
-    authoritative baseline"), since a case served by a different, weaker free model
-    isn't comparable to one served by the configured model.
+    use_fallback=True (default) wires planner/optimizer/conversation through the
+    profile's fallback_chain (llm_routing.yaml) so a Groq TPD wall doesn't block
+    generation -- see spec.md. Pass use_fallback=False for the AUTHORITATIVE Wave 2
+    baseline: that run must stay single-model-clean (see evals/wave2/README.md
+    "Fallback and the authoritative baseline"), since a case served by a different,
+    weaker free model isn't comparable to one served by the configured model.
     """
     from travel_agent.llm import (  # noqa: PLC0415
         get_llm_client_and_model,
@@ -181,7 +181,9 @@ def _resolve_agents(profile: str, *, use_fallback: bool = True) -> _Agents:
     planner_client, planner_model = get_llm_client_and_model(
         "planner", profile, use_fallback=use_fallback
     )
-    conv_client, conv_model = get_llm_client_and_model("conversation", profile)
+    conv_client, conv_model = get_llm_client_and_model(
+        "conversation", profile, use_fallback=use_fallback
+    )
     opt_client, opt_model = get_llm_client_and_model(
         "optimizer", profile, use_fallback=use_fallback
     )
@@ -227,6 +229,7 @@ async def _generate_one(
         # fired mid-case. fallback_used=True flags the case as not directly
         # comparable to a pure single-model baseline.
         "served_model_planner": None,
+        "served_model_conversation": None,
         "served_model_optimizer": None,
         "fallback_used": False,
     }
@@ -260,6 +263,7 @@ async def _generate_one(
         try:
             classified = await agents.conv.understand(case["refine"]["message"], refine_state)
             record["latency_ms_conversation"] = round((time.monotonic() - t0) * 1000, 1)
+            record["served_model_conversation"] = refine_state.served_model.get("conversation")
             record["refine_classified"] = classified.model_dump(mode="json")
         except Exception as exc:
             record["latency_ms_conversation"] = round((time.monotonic() - t0) * 1000, 1)
@@ -302,6 +306,9 @@ def _did_fallback(record: dict[str, Any]) -> bool:
     profile's configured model — i.e. a Groq->OpenRouter fallback fired."""
     served_planner = record["served_model_planner"]
     if served_planner and served_planner != record["model_planner"]:
+        return True
+    served_conversation = record["served_model_conversation"]
+    if served_conversation and served_conversation != record["model_conversation"]:
         return True
     served_optimizer: dict[str, str] | None = record["served_model_optimizer"]
     return bool(

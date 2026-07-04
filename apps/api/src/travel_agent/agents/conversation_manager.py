@@ -136,6 +136,7 @@ class ConversationManagerAgent:
             cache_system_prompt=True,
             extra_params=self._extra_params or None,
         )
+        state.served_model["conversation"] = response.model
 
         cost = compute_cost(
             response.model,

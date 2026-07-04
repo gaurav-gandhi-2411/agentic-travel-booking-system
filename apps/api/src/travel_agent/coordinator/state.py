@@ -245,9 +245,9 @@ class RequestState(BaseModel):
 
     # Fallback observability — actual model that served each LLM call, keyed by
     # call site ("planner", "optimizer_value_explain", "optimizer_exp_explain",
-    # "optimizer_compare"). May differ from the routing profile's configured
-    # model when a FallbackLLMClient hop served instead of the primary. See
-    # ADR-0027.
+    # "optimizer_compare", "conversation"). May differ from the routing profile's
+    # configured model when a FallbackLLMClient hop served instead of the
+    # primary. See ADR-0027.
     served_model: dict[str, str] = Field(default_factory=dict)
 
     # Coordinator metadata

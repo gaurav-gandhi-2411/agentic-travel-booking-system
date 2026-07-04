@@ -80,16 +80,16 @@ demo-llama:
     optimizer:
       - provider: openrouter
         model: google/gemma-4-31b-it:free
+    conversation:
+      - provider: openrouter
+        model: google/gemma-4-31b-it:free
 ```
 
-Only `planner` and `optimizer` are covered. **`conversation` (ConversationManagerAgent)
-is intentionally excluded** — its tool schema (`ConversationManagerOutput`) was never
-validated against Gemma-4-31B; the validation script only covers
-`EXTRACT_TRAVEL_INTENT` and the two `GENERATE_ARCHETYPE_*` tools. Wiring an unvalidated
-model into an unvalidated schema would violate the project's core rule ("every
-candidate model validated against our real tool schemas before inclusion"). A Groq
-outage still hard-fails `/refine` until conversation_manager's schema is separately
-validated — a known, tracked gap, not an oversight.
+`planner`, `optimizer`, and `conversation` are all covered as of the addendum below.
+At initial write-up, `conversation` (ConversationManagerAgent) was intentionally
+excluded because its tool schema (`ConversationManagerOutput`) had never been
+validated against Gemma-4-31B — see "Addendum: conversation_manager coverage" for
+the follow-up validation that resolved this.
 
 ### Wrapper (`apps/api/src/travel_agent/llm/fallback.py`)
 
@@ -124,9 +124,10 @@ eval automatically share the exact same chain with zero duplicated wiring.
 ### Eval provider transparency
 
 `RequestState.served_model: dict[str, str]` (new field) is populated by
-`PlannerAgent`/`OptimizerAgent` with the actual `response.model` from whichever hop
-served the call — this can differ from the routing profile's *configured* model when
-a fallback fired mid-case. The Wave 2 runner records `served_model_planner`,
+`PlannerAgent`/`OptimizerAgent`/`ConversationManagerAgent` with the actual
+`response.model` from whichever hop served the call — this can differ from the
+routing profile's *configured* model when a fallback fired mid-case. The Wave 2
+runner records `served_model_planner`, `served_model_conversation`,
 `served_model_optimizer`, and a computed `fallback_used` flag per case, and prints a
 summary of any mixed-provider cases at the end of a run.
 
@@ -141,22 +142,21 @@ non-blocking eval reruns — never treated as the authoritative baseline. See
 ## Consequences
 
 **Positive:**
-- `/search` and `/refine` degrade gracefully under Groq TPD exhaustion instead of a
-  hard 429, for the planner and optimizer calls (the majority of the pipeline).
+- `/search` AND `/refine` degrade gracefully under Groq TPD exhaustion instead of a
+  hard 429 — planner, optimizer, and (as of the addendum) conversation_manager all
+  covered. No "search works but refine crashes" partial-degradation gap.
 - The Wave 2 eval runner can complete a full pass through a Groq TPD wall via the
   same chain, with per-case provider transparency so a mixed-provider run is never
   silently mistaken for a clean baseline.
-- Zero agent-level code changes required for the fallback itself — `PlannerAgent` and
-  `OptimizerAgent` are unaware they might be talking to a `FallbackLLMClient`.
+- Zero agent-level code changes required for the fallback itself — `PlannerAgent`,
+  `OptimizerAgent`, and `ConversationManagerAgent` are unaware they might be talking
+  to a `FallbackLLMClient`.
 
 **Negative / accepted:**
-- `conversation_manager` (`/refine`'s classification step) has no fallback yet — a
-  Groq outage still fails that path. Tracked as a follow-up; requires validating
-  Gemma-4-31B (or another candidate) against `ConversationManagerOutput`'s schema
-  first, per the project's non-negotiable validation rule.
 - `google/gemma-4-31b-it:free` is a materially weaker model than Llama 3.3 70B. A
-  fallback-served archetype explanation may read less specific/detailed than a
-  Groq-served one — expected and flagged via `served_model`/`fallback_used`, not a bug.
+  fallback-served archetype explanation, or a fallback-served /refine
+  classification, may read less specific/detailed than a Groq-served one —
+  expected and flagged via `served_model`/`fallback_used`, not a bug.
 - OpenRouter free tier (20 RPM, ~200-1000 req/day) is not production-grade capacity.
   If Gemma-4-31B itself becomes saturated under real fallback load, the chain still
   ends in a clean structured error — no infinite retry, no cascading failure — but
@@ -177,7 +177,55 @@ degraded-primary-provider path is to fail fast and move on, not to spend more ti
 retrying a hop that just failed.
 
 **Cover `conversation_manager` in the initial chain by reusing the planner/optimizer
-validation.** Rejected — `ConversationManagerOutput`'s schema was never exercised by
-`validate_fallback_candidates.py`. Extending the fallback to an unvalidated schema
-contradicts the project's explicit rule that every fallback candidate is validated
-against the schema it will actually serve.
+validation.** Rejected at initial write-up — `ConversationManagerOutput`'s schema was
+never exercised by `validate_fallback_candidates.py`. Extending the fallback to an
+unvalidated schema contradicts the project's explicit rule that every fallback
+candidate is validated against the schema it will actually serve. Resolved by the
+addendum below once that specific validation ran.
+
+---
+
+## Addendum (2026-07-04, same day) — conversation_manager coverage
+
+**Problem raised:** shipping the chain as originally accepted meant `/search`
+degrades gracefully under a Groq outage but `/refine`'s classification step still
+hard-fails — a confusing partial-degradation UX (search works, refine breaks
+mid-session).
+
+**Resolution: validated, then added.** Extended
+`apps/api/scripts/validate_fallback_candidates.py` with a `conversation_manager`
+check against the real `extract_conversation_action` tool
+(`ConversationManagerOutput`). This schema is structurally harder than
+planner/optimizer's flat objects: it has an **exactly-one-of-three-nested-objects**
+invariant (`refine_args`/`replan_args`/`no_op_args`) plus an
+args-summary-required-for-refine/replan rule, both enforced by a Pydantic
+`model_validator` — invisible to plain JSON-Schema-level checks (required fields,
+non-nullable nulls, enum/pattern). A model could return well-formed JSON that passes
+every generic check and still be semantically broken (e.g. two args objects
+populated, or the wrong one for the declared action).
+
+**Result: 3/3 clean** — one case per action (REFINE/REPLAN/NO_OP), each verified via
+`ConversationManagerOutput.model_validate()` on the real tool-call output, not just
+generic schema shape:
+
+| Case | Action | Result |
+|---|---|---|
+| "show me only direct flights under 30000 rupees" | refine | PASS — correct nested object populated, `args_summary` non-empty |
+| "actually let's change the destination to Bangkok and bump my budget to 60000" | replan | PASS (first attempt hit a 429 — availability, not schema; clean retry after a 60s cooldown) |
+| "what's the weather like in Paris this time of year?" | no_op | PASS |
+
+The one 429 mirrors the same "shared free-tier bucket" pattern documented in the
+original candidate matrix — not a new schema concern, since Gemma-4-31B already
+carries planner + optimizer traffic in this same chain.
+
+**Decision: added `conversation` to `fallback_chain` in `llm_routing.yaml`**, same
+single hop (`openrouter` / `google/gemma-4-31b-it:free`) as planner/optimizer. Wired
+through the same choke point (`get_llm_client_and_model`), so `refine.py` picked it up
+automatically with no route-level code change. `ConversationManagerAgent.understand()`
+now also records `state.served_model["conversation"]`, and the Wave 2 runner's
+`--no-fallback` flag now covers all three agents uniformly (previously `conversation`
+was wired without the flag since there was nothing to disable).
+
+**Updated consequence:** the "conversation_manager has no fallback yet" item in the
+original Consequences section is resolved — removed from Negative/accepted, `/refine`
+now degrades exactly like `/search`.
