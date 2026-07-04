@@ -3,6 +3,8 @@ from __future__ import annotations
 import os
 from collections.abc import AsyncGenerator
 
+import structlog
+from sqlalchemy import make_url
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -12,6 +14,20 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.sql import text
 
 from travel_agent.persistence.rls import _validate_tenant_id
+
+_logger = structlog.get_logger(__name__)
+
+# Supabase pooler ports (ADR-0028) -- logged at engine construction so a canary
+# smoke test can PROVE which pooler is actually active from structured logs,
+# rather than inferring it from the absence of a pool-exhaustion error (which
+# could also mean the fallback-to-session-pooler path silently activated under
+# light load that never would have triggered EMAXCONNSESSION either way).
+_SESSION_POOLER_PORT = 5432
+_TRANSACTION_POOLER_PORT = 6543
+_POOLER_MODE_BY_PORT: dict[int, str] = {
+    _SESSION_POOLER_PORT: "session",
+    _TRANSACTION_POOLER_PORT: "transaction",
+}
 
 _engine: AsyncEngine | None = None
 _session_factory: async_sessionmaker[AsyncSession] | None = None
@@ -67,6 +83,9 @@ def get_engine() -> AsyncEngine:
     """
     global _engine  # noqa: PLW0603
     if _engine is None:
+        source = (
+            "DATABASE_URL_RUNTIME" if os.environ.get("DATABASE_URL_RUNTIME") else "DATABASE_URL"
+        )
         raw = os.environ.get("DATABASE_URL_RUNTIME") or os.environ.get("DATABASE_URL")
         if not raw:
             msg = "DATABASE_URL_RUNTIME or DATABASE_URL environment variable must be set"
@@ -86,6 +105,19 @@ def get_engine() -> AsyncEngine:
             # under transaction pooling (a pooled connection can be handed to a
             # different logical session between transactions, so a search_path
             # pinned only at connection-open time isn't guaranteed to still apply).
+        )
+        # Port only -- never log host/credentials. This is the one log line that
+        # PROVES which pooler is actually active: the absence of a pool-exhaustion
+        # error is NOT proof (the session-pooler fallback could be silently active
+        # under load too light to ever hit its 15-client ceiling). A canary smoke
+        # test should grep for this line, not just check for a lack of 500s.
+        port = make_url(_normalise_url(raw)).port
+        pooler_mode = _POOLER_MODE_BY_PORT.get(port, "unknown") if port is not None else "unknown"
+        _logger.info(
+            "db_engine_configured",
+            port=port,
+            pooler_mode=pooler_mode,
+            source_env_var=source,
         )
     return _engine
 

@@ -87,6 +87,7 @@ jobs:
             AVIASALES_API_KEY=travelpayouts-api-token:latest
             AVIASALES_PARTNER_ID=travelpayouts-aviasales-marker:latest
             DATABASE_URL=supabase-dealhunter-url-prod:latest
+            DATABASE_URL_RUNTIME=database-url-runtime-prod:latest
             DEMO_API_KEY=demo-api-key:latest
             GROQ_API_KEY=groq-api-key:latest
             OPENROUTER_API_KEY=openrouter-api-key:latest
