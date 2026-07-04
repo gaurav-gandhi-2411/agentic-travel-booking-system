@@ -74,10 +74,12 @@ generic text (filler scored 4/5 instead of the correct 1/5).
 ## Running the full eval
 
 ```bash
-# 0. Probe Groq TPD headroom first (reads x-ratelimit-remaining-tokens-day header)
+# 0. Probe Groq TPD headroom first
 python -m evals.wave2.runner --probe
 
-# 1. Generate outputs (requires GROQ_API_KEY, OPENROUTER_API_KEY, and Ollama)
+# 1. Generate outputs (requires GROQ_API_KEY, OPENROUTER_API_KEY, and Ollama).
+#    See "Groq TPD budget" below -- the full 31-case run does not fit in one
+#    window, so this is normally two-or-more invocations, not one.
 python -m evals.wave2.runner --profile demo-llama --no-fallback   # authoritative baseline
 
 # 2. Tier-1 accuracy
@@ -133,29 +135,60 @@ conversation agents. The 100k tokens/day limit applies to ALL three.
 | Groq daily limit | 100,000 |
 
 **The full 31-case run CANNOT complete in a single 100k TPD window.** Even from a
-completely clean window (0 tokens pre-consumed), the run needs ~143k tokens vs 100k allowed.
+completely clean window (0 tokens pre-consumed), the run needs ~143k tokens vs 100k
+allowed — and **the optimizer step alone (93 calls, ~104k tokens) already exceeds the
+100k ceiling by itself**, confirmed empirically 2026-07-05. This means even the
+"planner+refine now, optimizer separately" split needs the optimizer half spread
+across **at least 2** clean windows, not one.
+
+Groq's TPD bucket is a **rolling 24h window**, not a fixed daily-reset clock — usage
+ages out continuously (confirmed empirically: a 429's "try again in Xm" scales with
+how much of a given request's token cost needs to age out, not a fixed countdown to
+midnight). Practically: after a heavy burst, remaining headroom recovers gradually
+over the following ~24h, not all at once.
 
 #### Split-run options
 
-1. **Tier-1 only (recommended for initial baseline)**
-   - `python -m evals.wave2.runner --profile demo-llama --no-optimizer`
-   - 31 planner calls + 3 refine calls = 34 calls × ~1,123 = ~38k tokens (fits easily)
-   - Gives complete Tier-1 accuracy baseline (all 31 cases)
-   - Tier-2 can follow on a second day using a cached intent file
+1. **Tier-1 first, optimizer via `--resume-from` across multiple windows (recommended)**
+   ```bash
+   # Window 1: planner + refine, all 31 cases (~38k tokens, fits easily)
+   python -m evals.wave2.runner --profile demo-llama --no-fallback --no-optimizer
+
+   # Window 2 (next clean window): optimizer for as many cases as fit. Reuses the
+   # cached planner/refine output from window 1 -- does NOT re-spend those tokens.
+   python -m evals.wave2.runner --profile demo-llama --no-fallback \
+     --resume-from runs/<window-1-file>.jsonl
+
+   # Window 3+ (repeat against the latest run file until every case's
+   # optimizer_archetypes is populated): each pass only spends tokens on
+   # cases neither planner NOR optimizer succeeded for yet.
+   python -m evals.wave2.runner --profile demo-llama --no-fallback \
+     --resume-from runs/<window-2-file>.jsonl
+   ```
+   `--resume-from` reuses any already-succeeded planner/refine/optimizer call from
+   the given prior run file — a case is only re-attempted if that specific call is
+   still missing. This is what makes multi-window assembly token-frugal instead of
+   restarting from zero each time.
 
 2. **Change optimizer to llama-3.1-8b-instant for eval runs**
    - `llama-3.1-8b-instant` has 500k TPD (separate model bucket)
    - Planner stays on 70B (100k bucket): 31 + 3 = 34 calls × ~1,800 = ~61k tokens
-   - Optimizer on 8B (500k bucket): 93 calls, no TPD pressure
+   - Optimizer on 8B (500k bucket): 93 calls, no TPD pressure, all in one window
    - Tradeoff: Tier-2 scores reflect 8B explanations, not 70B
 
 3. **Use --limit 22 to cap the run to what fits (22 cases × ~4.5k = ~99k tokens)**
    - Not recommended — partial baselines are not authoritative
 
-Always probe before starting: `python -m evals.wave2.runner --probe`
+Always probe before starting: `python -m evals.wave2.runner --probe`. The probe
+deliberately over-requests (at the model's own max_tokens ceiling, 32768) so a 429's
+error body reveals the real Used/Limit/reset-eta — Groq's success-response headers
+never carry daily-bucket figures at all, only per-minute ones. A single probe call
+can therefore only ever confirm a lower bound (~32.7k), never the full 100k, since
+32768 < 100,000.
 
 A partial run (429 mid-way) produces an incomplete baseline — do not score partial runs as
-authoritative.
+authoritative. Use `--resume-from` to complete it token-frugally on a later window
+instead of re-running from scratch.
 
 ## Synthetic flight pool
 
