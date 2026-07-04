@@ -12,19 +12,53 @@ The DEMO_API_KEY env var continues to authenticate via the seeded demo tenant
 
 from __future__ import annotations
 
+import asyncio
 import os
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import TimeoutError as SATimeoutError
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
 from starlette.types import ASGIApp
 
 from travel_agent.persistence.engine import get_session_factory
+from travel_agent.tenancy.models import Tenant
 from travel_agent.tenancy.service import resolve_key
 
 _GUARDED_PREFIXES = ("/search", "/refine", "/book", "/cancel")
 _LOCAL_MODES = {"local", "synthetic"}
+
+# ADR-0028 — a Supabase pooler burst (EMAXCONNSESSION and friends) is transient:
+# it clears within milliseconds as other requests release their connections. A
+# couple of short retries absorbs that without making the caller wait for
+# SQLAlchemy's full pool_timeout, and without letting a raw connection exception
+# surface as an unhandled 500.
+_AUTH_DB_MAX_ATTEMPTS = 3  # initial attempt + 2 retries
+_AUTH_DB_RETRY_DELAYS_SECONDS = (0.1, 0.3)
+_BUSY_RESPONSE_BODY = {"detail": "Service temporarily busy, please retry."}
+
+
+async def _resolve_key_with_retry(raw_key: str) -> Tenant | None:
+    """Resolve raw_key to a Tenant, retrying only transient DB connection failures.
+
+    OperationalError/TimeoutError (pool exhaustion, connection refused, etc.) are
+    retried a couple of times with a short backoff. Any other exception is a real
+    bug, not a connectivity blip -- retrying it would just fail the same way
+    three times instead of once, so it propagates immediately.
+    """
+    factory = get_session_factory()
+    for attempt in range(_AUTH_DB_MAX_ATTEMPTS):
+        try:
+            async with factory() as session:
+                return await resolve_key(raw_key, session)
+        except (OperationalError, SATimeoutError):
+            if attempt == _AUTH_DB_MAX_ATTEMPTS - 1:
+                raise
+            await asyncio.sleep(_AUTH_DB_RETRY_DELAYS_SECONDS[attempt])
+    unreachable_msg = "unreachable"
+    raise AssertionError(unreachable_msg)  # pragma: no cover
 
 
 class TenantAuthMiddleware(BaseHTTPMiddleware):
@@ -63,9 +97,10 @@ class TenantAuthMiddleware(BaseHTTPMiddleware):
                 status_code=401,
             )
 
-        factory = get_session_factory()
-        async with factory() as session:
-            tenant = await resolve_key(raw_key, session)
+        try:
+            tenant = await _resolve_key_with_retry(raw_key)
+        except (OperationalError, SATimeoutError):
+            return JSONResponse(_BUSY_RESPONSE_BODY, status_code=503)
 
         if tenant is None:
             return JSONResponse({"detail": "Invalid or inactive API key."}, status_code=401)

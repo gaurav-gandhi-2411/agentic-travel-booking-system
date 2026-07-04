@@ -7,13 +7,26 @@ from sqlalchemy import Boolean, DateTime, ForeignKey, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
+from travel_agent.persistence.schema import DB_SCHEMA
+
 
 class Base(DeclarativeBase):
     pass
 
 
 class Tenant(Base):
+    """`{DB_SCHEMA}.tenants` — schema explicit, not search_path-derived.
+
+    Explicit schema qualification (rather than relying on the connection's
+    ambient search_path) is what makes this table safe to query over the
+    Supabase transaction pooler: transaction-mode connections can be handed
+    to a different logical session between transactions, so a search_path
+    pinned only at connection-open time isn't guaranteed to still apply.
+    Fully-qualified SQL has no such dependency. See ADR-0028.
+    """
+
     __tablename__ = "tenants"
+    __table_args__ = {"schema": DB_SCHEMA}  # noqa: RUF012 -- SQLAlchemy dunder, not a mutable-default hazard
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -43,12 +56,15 @@ class Tenant(Base):
 
 
 class ApiKey(Base):
+    """`{DB_SCHEMA}.api_keys` — schema explicit, not search_path-derived. See Tenant."""
+
     __tablename__ = "api_keys"
+    __table_args__ = {"schema": DB_SCHEMA}  # noqa: RUF012 -- SQLAlchemy dunder, not a mutable-default hazard
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("tenants.id", ondelete="CASCADE"),
+        ForeignKey(f"{DB_SCHEMA}.tenants.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
