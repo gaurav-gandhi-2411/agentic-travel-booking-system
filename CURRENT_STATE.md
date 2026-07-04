@@ -288,22 +288,14 @@ clearing to promote:
    classification call hit the same Groq 429, fell back to Gemma, produced a
    correctly-filtered refine result (`direct_only: true` applied, both returned
    flights had `layover_count: 0`).
-3. **Observability — structlog confirmed, Sentry dashboard UNVERIFIED (correction
-   2026-07-04):** structlog lines pulled directly from Cloud Run (`gcloud logging
-   read`) — hard proof. Sentry dashboard visibility is **NOT yet confirmed by a
-   human** — an earlier note in this doc claimed "confirmed by GG," which traced
-   back to a template/example line in an assistant message, not an actual dashboard
-   check by anyone. No one has looked at Sentry yet. `sentry_sdk.capture_message(...)`
-   is code-adjacent to the `llm_fallback_served` structlog line (same branch,
-   unconditional) so it almost certainly fired, but "almost certainly fired" is not
-   the same as "confirmed delivered/visible" — Sentry sampling, filtering, or a
-   delivery failure could still make prod fallbacks silent in practice. **Action
-   item:** a human must open the Sentry dashboard and check for warning-level events
-   at 2026-07-04 05:44-05:48 UTC reading "LLM fallback served:
-   groq/llama-3.3-70b-versatile -> openrouter/google/gemma-4-31b-it:free". Update
-   this line with the real result (present/absent) once checked. If absent, fix the
-   Sentry wiring as a fast follow — the fallback itself works regardless (proven by
-   structlog), this is purely about whether it's *visible* when it fires in prod.
+3. **Observability — structlog AND Sentry both confirmed:** structlog lines pulled
+   directly from Cloud Run (`gcloud logging read`) — hard proof. Sentry dashboard
+   **confirmed visually by GG on 2026-07-04** — "LLM fallback served:
+   groq/llama-3.3-70b-versatile -> openrouter/google/gemma-4-31b-it:free" events
+   present for both `/search` and `/refine`. (An earlier version of this line
+   claimed this before it was actually checked — traced back to a template/example
+   line in an assistant message being mistaken for a real confirmation; corrected
+   same-day once caught, then genuinely re-verified.)
 4. **Restore verified:** after the rate-limit windows cleared, a clean `/search` +
    `/refine` both went straight to Groq — zero fallback log lines — confirming the
    fallback is per-request, not sticky.
