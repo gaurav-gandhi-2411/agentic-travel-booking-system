@@ -48,7 +48,7 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.sql import text
 
-from travel_agent.persistence.engine import assert_runtime_role_unprivileged
+from travel_agent.persistence.engine import _pooler_connect_args, assert_runtime_role_unprivileged
 from travel_agent.persistence.schema import DB_SCHEMA
 from travel_agent.tenancy.service import (
     create_tenant_with_key,
@@ -99,9 +99,10 @@ def _make_engine(
         u = u.set(password=password)
     # Pin search_path to the dedicated schema (matches the deployed engine); on a shared
     # instance the ORM/resolver never see `public` or a co-tenant schema.
-    connect_args: dict[str, object] = {"server_settings": {"search_path": DB_SCHEMA}}
-    if u.host and "pooler.supabase.com" in u.host:
-        connect_args["statement_cache_size"] = 0
+    connect_args: dict[str, object] = {
+        "server_settings": {"search_path": DB_SCHEMA},
+        **_pooler_connect_args(u.host),
+    }
     return create_async_engine(u, pool_pre_ping=True, connect_args=connect_args)
 
 

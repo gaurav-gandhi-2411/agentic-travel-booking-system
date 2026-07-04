@@ -91,3 +91,52 @@ def test_singleton_only_logs_once_across_repeated_calls(monkeypatch: pytest.Monk
         engine_mod.get_engine()
         engine_mod.get_engine()
     assert mock_logger.info.call_count == 1
+
+
+# ── _pooler_connect_args() -- ADR-0028 addendum, DuplicatePreparedStatementError fix ──
+
+
+def test_pooler_connect_args_empty_for_non_pooler_host() -> None:
+    """Non-Supabase hosts (e.g. local Postgres, Neon) get no connect_args at all --
+    the prepared-statement collision is specific to Supavisor's transaction-mode
+    multiplexing, not something every Postgres needs to pay for."""
+    assert engine_mod._pooler_connect_args("db.example.com") == {}
+
+
+def test_pooler_connect_args_empty_for_none_host() -> None:
+    assert engine_mod._pooler_connect_args(None) == {}
+
+
+def test_pooler_connect_args_disables_cache_for_supabase_pooler_host() -> None:
+    args = engine_mod._pooler_connect_args("aws-1-ap-south-1.pooler.supabase.com")
+    assert args["prepared_statement_cache_size"] == 0
+
+
+def test_pooler_connect_args_name_func_produces_globally_unique_names() -> None:
+    """The whole point of this addendum: prepared_statement_cache_size=0 ALONE
+    still lets asyncpg fall back to its own sequential per-connection-object
+    naming (name=None), which is exactly what collided under concurrent load.
+    A supplied name_func must generate a fresh, non-colliding name every call,
+    not just once at construction time."""
+    args = engine_mod._pooler_connect_args("aws-1-ap-south-1.pooler.supabase.com")
+    name_func = args["prepared_statement_name_func"]
+    assert callable(name_func)
+    names = {name_func() for _ in range(1000)}  # type: ignore[operator]
+    assert len(names) == 1000
+    assert all(n.startswith("__asyncpg_") and n.endswith("__") for n in names)
+
+
+def test_get_engine_passes_pooler_connect_args_to_create_engine(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """End-to-end wiring check: get_engine() must actually forward
+    _pooler_connect_args()'s output into create_async_engine(), not just compute
+    it and drop it -- this is the exact class of bug (right helper, not wired
+    in) that let the wrong key silently pass code review before."""
+    monkeypatch.setenv("DATABASE_URL_RUNTIME", _RUNTIME_URL)
+    with patch.object(engine_mod, "create_async_engine") as mock_create:
+        engine_mod.get_engine()
+    call_kwargs = mock_create.call_args.kwargs
+    assert call_kwargs["connect_args"]["prepared_statement_cache_size"] == 0
+    assert callable(call_kwargs["connect_args"]["prepared_statement_name_func"])
+    assert call_kwargs["pool_recycle"] == engine_mod._POOL_RECYCLE_SECONDS

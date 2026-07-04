@@ -43,14 +43,21 @@ from typing import Any, cast
 from dotenv import find_dotenv, load_dotenv
 from sqlalchemy import CursorResult, make_url
 from sqlalchemy.exc import DBAPIError, IntegrityError, ProgrammingError
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 from sqlalchemy.sql import text
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from scripts.verify_resolver_free_pg import _asyncpg_url, _role_flags  # noqa: E402
-from travel_agent.persistence.schema import DB_SCHEMA  # noqa: E402
-from travel_agent.tenancy.service import (  # noqa: E402
+from scripts.verify_resolver_free_pg import _asyncpg_url, _role_flags
+
+from travel_agent.persistence.engine import _pooler_connect_args
+from travel_agent.persistence.schema import DB_SCHEMA
+from travel_agent.tenancy.service import (
     create_tenant_with_key,
     generate_raw_key,
     hash_key,
@@ -77,12 +84,53 @@ def _make_transaction_pooler_engine(url: str) -> AsyncEngine:
     schema-qualified (tenancy/models.py) and resolve_api_key_secure has its own
     bound search_path (migration b2c3d4e5f6a7), so nothing here should depend
     on the connection's ambient search_path -- matches persistence/engine.py.
+
+    connect_args is imported directly from persistence/engine.py (not
+    reimplemented here) so this script can never again silently drift from the
+    runtime engine's prepared-statement handling the way it did before ADR-0028's
+    addendum -- this script's own `connect_args["statement_cache_size"] = 0` was
+    the SAME wrong-parameter-name bug as the runtime code, just discovered here
+    first via a passing-but-meaningless sequential run.
     """
     u = make_url(url)
-    connect_args: dict[str, object] = {}
-    if u.host and "pooler.supabase.com" in u.host:
-        connect_args["statement_cache_size"] = 0  # Supavisor: no prepared statements
-    return create_async_engine(u, pool_pre_ping=True, connect_args=connect_args)
+    return create_async_engine(u, pool_pre_ping=True, connect_args=_pooler_connect_args(u.host))
+
+
+_CONCURRENT_BURST_SIZE = 24  # matches the canary smoke-test burst that first surfaced the collision
+
+
+async def _concurrent_resolve_burst(
+    factory: async_sessionmaker[AsyncSession],
+    raw_key: str,
+    expected_tenant_id: uuid.UUID,
+    n: int,
+) -> tuple[int, list[str]]:
+    """Fire N simultaneous resolve_key() calls over the SAME pooled engine.
+
+    Regression guard for the DuplicatePreparedStatementError incident: every
+    check above runs one session at a time, which never exercises concurrent
+    statement preparation over connections Supavisor may multiplex onto the same
+    backend -- exactly the condition that let the prepared-statement name
+    collision through 12/12 "PASS" the first time this script ran. A future
+    change to _pooler_connect_args()/get_engine() must pass THIS, not just the
+    sequential battery, or it can silently regress the same bug.
+    """
+
+    async def _one() -> str:
+        async with factory() as s:
+            resolved = await resolve_key(raw_key, s)
+            if resolved is None or resolved.id != expected_tenant_id:
+                return f"unexpected result: {resolved.id if resolved else None}"
+            return "ok"
+
+    outcomes = await asyncio.gather(*(_one() for _ in range(n)), return_exceptions=True)
+    errors: list[str] = []
+    for outcome in outcomes:
+        if isinstance(outcome, BaseException):
+            errors.append(f"{type(outcome).__name__}: {outcome}")
+        elif outcome != "ok":
+            errors.append(outcome)
+    return n - len(errors), errors
 
 
 async def _rowcount(session: AsyncSession, sql: str, tenant_id: uuid.UUID) -> int:
@@ -231,6 +279,21 @@ async def main() -> int:  # noqa: PLR0915
                 int(total or 0) == 1 and a_via_boot == 1 and b_via_boot == 0,
                 f"total={total}, a={a_via_boot}, b={b_via_boot}",
             )
+
+        # ── 3. Concurrent burst -- regression guard for DuplicatePreparedStatementError.
+        # Everything above is sequential and would NOT have caught that bug; this is.
+        ok_count, burst_errors = await _concurrent_resolve_burst(
+            app_factory, raw_a, tenant_a_id, _CONCURRENT_BURST_SIZE
+        )
+        detail = f"ok={ok_count}/{_CONCURRENT_BURST_SIZE}"
+        if burst_errors:
+            detail += f", errors(first 3)={burst_errors[:3]}"
+        check(
+            f"concurrent burst ({_CONCURRENT_BURST_SIZE} simultaneous resolve_key calls): "
+            "0 errors, all resolve correctly",
+            ok_count == _CONCURRENT_BURST_SIZE,
+            detail,
+        )
     finally:
         try:
             async with app_engine.begin() as conn:
@@ -239,16 +302,20 @@ async def main() -> int:  # noqa: PLR0915
                     text(f"DELETE FROM {_TQ_API_KEYS} WHERE tenant_id = :tid"),
                     {"tid": tenant_a_id},
                 )
-                await conn.execute(text(f"DELETE FROM {_TQ_TENANTS} WHERE id = :id"), {"id": tenant_a_id})
+                await conn.execute(
+                    text(f"DELETE FROM {_TQ_TENANTS} WHERE id = :id"), {"id": tenant_a_id}
+                )
             async with app_engine.begin() as conn:
                 await conn.execute(text(f"SET LOCAL app.current_tenant = '{tenant_b_id}'"))
                 await conn.execute(
                     text(f"DELETE FROM {_TQ_API_KEYS} WHERE tenant_id = :tid"),
                     {"tid": tenant_b_id},
                 )
-                await conn.execute(text(f"DELETE FROM {_TQ_TENANTS} WHERE id = :id"), {"id": tenant_b_id})
+                await conn.execute(
+                    text(f"DELETE FROM {_TQ_TENANTS} WHERE id = :id"), {"id": tenant_b_id}
+                )
             check("cleanup: both temporary test tenants (A/B) removed", True)
-        except Exception as exc:  # noqa: BLE001 -- cleanup best-effort, still report
+        except Exception as exc:
             check("cleanup completed", False, str(exc))
         await app_engine.dispose()
 
