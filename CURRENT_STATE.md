@@ -304,30 +304,54 @@ clearing to promote:
    immediately, exactly one `llm_fallback_attempt_failed retryable=False` log line,
    **no** fallback attempt to Gemma. Restored the correct secret afterward.
 
-### Backend (Cloud Run) — current (2026-07-04)
+### Backend (Cloud Run) — current (2026-07-04, post-ADR-0028 promotion)
 
-- **Running revision:** `agentic-travel-booking-api-prod-restored` at **100%
-  traffic**; prior `agentic-travel-booking-api-prod-00042-cit` **drained** (confirmed
-  via `gcloud run services describe` — traffic list has exactly one entry). Staleness
-  check re-run post-promotion: **GREEN — both surfaces current**.
-- **Image/commit:** `c51989f` (full fallback-chain work: `a875a95` planner/optimizer
-  fallback core, `fb1916a` eval-runner wiring + TPD probe, `7714840` judge fix,
-  `e43bf05` ADR-0027 + spec.md, `c51989f` conversation_manager coverage).
-- **Revision name note:** `-restored` is a manual-gcloud revision suffix from the
-  smoke-test sequence (canary -> forced-401 test revision `-groqfail2` -> `-restored`
-  once the correct `GROQ_API_KEY` secret was rebound), not a GitHub Actions naming
-  convention. Promoted to 100% via `workflow_dispatch stage=full` (traffic-shift-only
-  path — the workflow's build/deploy steps are skipped for `stage=full`, it just
-  shifts 5% -> soaks 5 min -> 100% -> health check against whatever revision the
-  `canary` tag already points to).
-- **New secret/IAM artifacts from the smoke test:** none remain — the temporary
-  `smoke-test-invalid-groq-key` secret and its IAM binding were deleted after use.
-- **Env/secret bindings:** unchanged from Wave 1 (`GROQ_API_KEY`, `OPENROUTER_API_KEY`
-  both bound; `OPENROUTER_API_KEY` is now live-called on the demo path for the first
-  time, previously dormant).
+- **Running revision:** `agentic-travel-booking-api-prod-00053-yet` at **100%
+  traffic** (commit `4562617`); `agentic-travel-booking-api-prod-restored` (commit
+  `c51989f`) **drained** — confirmed via `gcloud run services describe` (traffic
+  list has exactly one entry, `latestRevision: true`). Staleness check re-run
+  post-promotion: **GREEN — drift resolved, no open alert**.
+- **Image/commit:** `4562617` = ADR-0028's full fix set: Supabase transaction-pooler
+  migration (port 6543, explicit pool sizing), the asyncpg prepared-statement
+  collision fix (both the SQLAlchemy-level `prepared_statement_name_func` and the
+  separate `pool_pre_ping`/raw-asyncpg `statement_cache_size` fix), and the Sentry
+  `before_send` fallback-noise filter (PRs #72/#74/#75).
+- **The honest gap that just closed:** all three fixes were built, unit-tested, and
+  verified live against 0%-traffic canary revisions (`00051-miz` -> `00052-nik` ->
+  `00053-yet`) starting ~13:00 UTC, but **sat un-promoted for ~5 hours** while real
+  production traffic kept running on `c51989f` — a revision with the pool-exhaustion
+  bug, the prepared-statement collision bug, and *zero* Sentry noise-filter code
+  (`before_send` there only does credential scrubbing). `c51989f` also defaulted all
+  real traffic to `LLM_ROUTING_PROFILE=demo-llama` (the fallback-chain profile), so
+  every recovered Groq 429 on real customer traffic was reaching Sentry unfiltered
+  the whole time — confirmed via a Sentry Release-field spot-check that the 102
+  cumulative "LLMError" events were all tagged to the canary revisions (self-inflicted
+  smoke-test exhaustion, not real-user noise) before promoting, but the *filter
+  itself* was not protecting real users until this promotion. Root cause of the delay:
+  every deploy this session used `workflow_dispatch stage=canary` only (0% traffic by
+  design, for forced-outage verification per ADR-0027's discipline) — nothing was ever
+  promoted to `stage=full` until this step.
+- **Post-promotion sanity, on the revision actually serving real traffic (not the
+  canary tag URL):** `db_engine_configured` confirmed `port=6543,
+  pooler_mode=transaction, source_env_var=DATABASE_URL_RUNTIME` on fresh instances
+  spun up at promotion time; a 16-request burst against the real production URL
+  (`https://agentic-travel-booking-api-prod-rqyyasfwaa-el.a.run.app/search`, no
+  `X-LLM-Profile` override — the actual customer path) returned zero
+  `EMAXCONNSESSION`, zero `DuplicatePreparedStatementError`/
+  `InvalidSQLStatementNameError`, zero raw 500s; all 16 were valid SSE streams (some
+  hit LLM free-tier exhaustion under the burst, which is expected application-level
+  behavior, not a DB/pool failure).
+- **Revision name note (historical):** `-restored` was a manual-gcloud revision
+  suffix from an earlier smoke-test sequence (canary -> forced-401 test revision
+  `-groqfail2` -> `-restored`), not a GitHub Actions naming convention. It is now
+  fully drained and superseded by `00053-yet`.
+- **Env/secret bindings:** unchanged from Wave 1 plus `DATABASE_URL_RUNTIME` (the
+  Supabase transaction-pooler secret, added this session for the pool fix).
 
-See ADR-0027 (+ its addendum) for the full candidate-validation matrix, chain-shape
-decision, and config/wrapper/wiring design.
+See ADR-0027 (+ its addendum) for the fallback-chain candidate-validation matrix, and
+ADR-0028 (+ its addendum) for the pool-sizing math, the prepared-statement root cause
+(confirmed against actual SQLAlchemy/asyncpg source, not guessed), and the Sentry
+filter design.
 
 ## Production audit summary (Phase 2D iteration 2)
 

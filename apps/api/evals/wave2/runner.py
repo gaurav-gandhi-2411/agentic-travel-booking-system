@@ -23,6 +23,7 @@ import argparse
 import asyncio
 import json
 import os
+import re
 import sys
 import time
 from dataclasses import dataclass
@@ -194,12 +195,142 @@ def _resolve_agents(profile: str, *, use_fallback: bool = True) -> _Agents:
     )
 
 
+def _reuse_cached(record: dict[str, Any], cached: dict[str, Any], keys: tuple[str, ...]) -> None:
+    for k in keys:
+        record[k] = cached[k]
+
+
+async def _run_or_reuse_planner(
+    record: dict[str, Any],
+    case: dict[str, Any],
+    agents: _Agents,
+    cached: dict[str, Any] | None,
+) -> None:
+    """Reuse a prior successful planner call from --resume-from, or call fresh.
+
+    Reuse (not re-spending Groq tokens) is what makes splitting a run across
+    multiple clean TPD windows token-frugal.
+    """
+    if cached is not None and cached.get("intent") is not None:
+        _reuse_cached(
+            record,
+            cached,
+            ("latency_ms_planner", "intent", "intent_error", "served_model_planner"),
+        )
+        return
+    t0 = time.monotonic()
+    try:
+        state = RequestState(raw_input=case["query"])
+        result = await agents.planner.run(state, today=date.fromisoformat(case["today"]))
+        record["latency_ms_planner"] = round((time.monotonic() - t0) * 1000, 1)
+        record["served_model_planner"] = result.served_model.get("planner")
+        if result.intent is None:
+            record["intent_error"] = "planner returned None intent"
+        else:
+            record["intent"] = result.intent.model_dump(mode="json")
+    except Exception as exc:
+        record["latency_ms_planner"] = round((time.monotonic() - t0) * 1000, 1)
+        record["intent_error"] = str(exc)
+        _safe = str(exc).encode("ascii", "replace").decode()
+        _logger.warning("planner_error", case_id=case["id"], error=_safe)
+
+
+async def _run_or_reuse_refine(
+    record: dict[str, Any],
+    case: dict[str, Any],
+    agents: _Agents,
+    cached: dict[str, Any] | None,
+) -> None:
+    """Reuse rule mirrors the planner's — see _run_or_reuse_planner."""
+    if not case.get("refine") or record["intent"] is None:
+        return
+    if cached is not None and cached.get("refine_classified") is not None:
+        _reuse_cached(
+            record,
+            cached,
+            (
+                "latency_ms_conversation",
+                "refine_classified",
+                "refine_error",
+                "served_model_conversation",
+            ),
+        )
+        return
+    intent = TravelIntent.model_validate(record["intent"])
+    refine_state = RequestState(
+        raw_input=case["refine"]["message"],
+        intent=intent,
+        flight_options=SYNTHETIC_REFINE_POOL,
+    )
+    t0 = time.monotonic()
+    try:
+        classified = await agents.conv.understand(case["refine"]["message"], refine_state)
+        record["latency_ms_conversation"] = round((time.monotonic() - t0) * 1000, 1)
+        record["served_model_conversation"] = refine_state.served_model.get("conversation")
+        record["refine_classified"] = classified.model_dump(mode="json")
+    except Exception as exc:
+        record["latency_ms_conversation"] = round((time.monotonic() - t0) * 1000, 1)
+        record["refine_error"] = str(exc)
+        _safe = str(exc).encode("ascii", "replace").decode()
+        _logger.warning("refine_error", case_id=case["id"], error=_safe)
+
+
+async def _run_or_reuse_optimizer(
+    record: dict[str, Any],
+    case: dict[str, Any],
+    agents: _Agents,
+    cached: dict[str, Any] | None,
+    *,
+    run_optimizer: bool,
+) -> None:
+    """Reuse rule mirrors the planner's — this is what lets the 93 optimizer
+    calls be split across multiple clean TPD windows via --resume-from instead
+    of restarting from zero each window."""
+    if not run_optimizer or record["intent"] is None:
+        return
+    if cached is not None and cached.get("optimizer_archetypes") is not None:
+        _reuse_cached(
+            record,
+            cached,
+            (
+                "latency_ms_optimizer",
+                "optimizer_archetypes",
+                "optimizer_error",
+                "served_model_optimizer",
+                "model_optimizer",
+            ),
+        )
+        return
+    intent = TravelIntent.model_validate(record["intent"])
+    opt_state = RequestState(
+        raw_input=case["query"],
+        intent=intent,
+        flight_options=_make_route_pool(intent),
+    )
+    t0 = time.monotonic()
+    try:
+        opt_result = await agents.opt.run(opt_state, today=date.fromisoformat(case["today"]))
+        record["latency_ms_optimizer"] = round((time.monotonic() - t0) * 1000, 1)
+        record["optimizer_archetypes"] = [a.model_dump(mode="json") for a in opt_result.archetypes]
+        optimizer_served = {
+            k: v for k, v in opt_result.served_model.items() if k.startswith("optimizer")
+        }
+        record["served_model_optimizer"] = optimizer_served or None
+    except Exception as exc:
+        record["latency_ms_optimizer"] = round((time.monotonic() - t0) * 1000, 1)
+        record["optimizer_error"] = str(exc)
+        # Sanitize for terminals that can't encode full Unicode (e.g. Windows cp1252)
+        safe_err = str(exc).encode("ascii", "replace").decode()
+        _logger.warning("optimizer_error", case_id=case["id"], error=safe_err)
+
+
 async def _generate_one(
     case: dict[str, Any],
     agents: _Agents,
     profile: str,
     *,
     run_optimizer: bool,
+    cached: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     planner_model: str = agents.planner._model  # type: ignore[attr-defined]
     conv_model: str = agents.conv._model  # type: ignore[attr-defined]
@@ -234,68 +365,9 @@ async def _generate_one(
         "fallback_used": False,
     }
 
-    # --- Planner ---
-    t0 = time.monotonic()
-    try:
-        state = RequestState(raw_input=case["query"])
-        result = await agents.planner.run(state, today=date.fromisoformat(case["today"]))
-        record["latency_ms_planner"] = round((time.monotonic() - t0) * 1000, 1)
-        record["served_model_planner"] = result.served_model.get("planner")
-        if result.intent is None:
-            record["intent_error"] = "planner returned None intent"
-        else:
-            record["intent"] = result.intent.model_dump(mode="json")
-    except Exception as exc:
-        record["latency_ms_planner"] = round((time.monotonic() - t0) * 1000, 1)
-        record["intent_error"] = str(exc)
-        _safe = str(exc).encode("ascii", "replace").decode()
-        _logger.warning("planner_error", case_id=case["id"], error=_safe)
-
-    # --- ConversationManagerAgent (refine cases only) ---
-    if case.get("refine") and record["intent"] is not None:
-        intent = TravelIntent.model_validate(record["intent"])
-        refine_state = RequestState(
-            raw_input=case["refine"]["message"],
-            intent=intent,
-            flight_options=SYNTHETIC_REFINE_POOL,
-        )
-        t0 = time.monotonic()
-        try:
-            classified = await agents.conv.understand(case["refine"]["message"], refine_state)
-            record["latency_ms_conversation"] = round((time.monotonic() - t0) * 1000, 1)
-            record["served_model_conversation"] = refine_state.served_model.get("conversation")
-            record["refine_classified"] = classified.model_dump(mode="json")
-        except Exception as exc:
-            record["latency_ms_conversation"] = round((time.monotonic() - t0) * 1000, 1)
-            record["refine_error"] = str(exc)
-            _safe = str(exc).encode("ascii", "replace").decode()
-            _logger.warning("refine_error", case_id=case["id"], error=_safe)
-
-    # --- OptimizerAgent (Tier-2 input; skipped if --no-optimizer or planner failed) ---
-    if run_optimizer and record["intent"] is not None:
-        intent = TravelIntent.model_validate(record["intent"])
-        opt_state = RequestState(
-            raw_input=case["query"],
-            intent=intent,
-            flight_options=_make_route_pool(intent),
-        )
-        t0 = time.monotonic()
-        try:
-            opt_result = await agents.opt.run(opt_state, today=date.fromisoformat(case["today"]))
-            record["latency_ms_optimizer"] = round((time.monotonic() - t0) * 1000, 1)
-            record["optimizer_archetypes"] = [
-                a.model_dump(mode="json") for a in opt_result.archetypes
-            ]
-            optimizer_served = {
-                k: v for k, v in opt_result.served_model.items() if k.startswith("optimizer")
-            }
-            record["served_model_optimizer"] = optimizer_served or None
-        except Exception as exc:
-            record["latency_ms_optimizer"] = round((time.monotonic() - t0) * 1000, 1)
-            record["optimizer_error"] = str(exc)
-            # Sanitize for terminals that can't encode full Unicode (e.g. Windows cp1252)
-            safe_err = str(exc).encode("ascii", "replace").decode()
-            _logger.warning("optimizer_error", case_id=case["id"], error=safe_err)
+    await _run_or_reuse_planner(record, case, agents, cached)
+    await _run_or_reuse_refine(record, case, agents, cached)
+    await _run_or_reuse_optimizer(record, case, agents, cached, run_optimizer=run_optimizer)
 
     record["fallback_used"] = _did_fallback(record)
     return record
@@ -318,31 +390,60 @@ def _did_fallback(record: dict[str, Any]) -> bool:
     )
 
 
+def _load_resume_cache(path: Path) -> dict[str, dict[str, Any]]:
+    """Load a prior run's records keyed by case id, for --resume-from.
+
+    Lets a later window reuse already-succeeded planner/refine/optimizer calls
+    instead of re-spending Groq tokens on them — the mechanism that makes
+    splitting a run across multiple clean TPD windows token-frugal.
+    """
+    records = [
+        json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()
+    ]
+    return {r["id"]: r for r in records}
+
+
+@dataclass(frozen=True)
+class GenerationOptions:
+    run_optimizer: bool
+    use_fallback: bool = True
+    resume_from: Path | None = None
+
+
 async def generate_all(
     cases: list[dict[str, Any]],
     profile: str,
     limit: int | None,
-    *,
-    run_optimizer: bool,
-    use_fallback: bool = True,
+    options: GenerationOptions,
 ) -> list[dict[str, Any]]:
-    agents = _resolve_agents(profile, use_fallback=use_fallback)
+    agents = _resolve_agents(profile, use_fallback=options.use_fallback)
     planner_model: str = agents.planner._model  # type: ignore[attr-defined]
 
     if limit is not None:
         cases = cases[:limit]
 
+    resume_from = options.resume_from
+    run_optimizer = options.run_optimizer
+    resume_cache = _load_resume_cache(resume_from) if resume_from is not None else {}
+
     opt_tag = " + optimizer" if run_optimizer else " (no optimizer)"
-    fb_tag = "fallback ON" if use_fallback else "fallback OFF (single-model-clean)"
+    fb_tag = "fallback ON" if options.use_fallback else "fallback OFF (single-model-clean)"
+    resume_tag = f", resuming from {resume_from.name}" if resume_from is not None else ""
     print(
         f"Generating {len(cases)} cases — profile={profile}, planner={planner_model}"
-        f"{opt_tag}, {fb_tag}"
+        f"{opt_tag}, {fb_tag}{resume_tag}"
     )
 
     records: list[dict[str, Any]] = []
     for i, case in enumerate(cases, 1):
         print(f"  [{i:>2}/{len(cases)}] {case['id']}  {case['query'][:55]}")
-        record = await _generate_one(case, agents, profile, run_optimizer=run_optimizer)
+        record = await _generate_one(
+            case,
+            agents,
+            profile,
+            run_optimizer=run_optimizer,
+            cached=resume_cache.get(case["id"]),
+        )
         records.append(record)
 
         p_status = (
@@ -406,19 +507,86 @@ def save_run(profile: str, records: list[dict[str, Any]]) -> Path:
 # 31 cases x 4 calls + 3 refine extra = 127 calls x 1,123 ≈ 143,000 tokens.
 # Groq llama-3.3-70b-versatile TPD is 100,000 — the full run CANNOT complete in one
 # day without splitting the run or changing the optimizer model. See README.md.
+# Confirmed empirically 2026-07-05: optimizer alone (31 x 3 = 93 calls, ~104k tokens)
+# already exceeds a fully-fresh day's 100k ceiling on its own -- splitting the
+# optimizer step itself across >=2 clean windows (--resume-from) is required even
+# starting from zero prior usage, not just when the day is partially consumed.
 _GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 _GROQ_PROBE_MODEL = "llama-3.3-70b-versatile"
 _HTTP_TOO_MANY_REQUESTS = 429
 # Minimum remaining TPD we require before starting; set to the full daily limit so
 # any prior consumption stops the run. A partial baseline is not usable.
 _GROQ_MIN_REMAINING = 100_000
+# Groq's chat-completions API does NOT return x-ratelimit-*-tokens-day response
+# headers on a 200 -- only per-MINUTE headers (x-ratelimit-*-tokens, no "-day"
+# suffix). The daily bucket's Used/Limit numbers are only ever revealed inside a
+# 429's error body, e.g. "Rate limit reached for model ... on tokens per day
+# (TPD): Limit 100000, Used 99814, Requested 20037. Please try again in 4h45m...".
+# Confirmed empirically 2026-07-05 (direct curl against the live API) -- a probe
+# that reads response headers for daily figures always sees them absent and
+# silently reports remaining=0/limit=0, a false "TPD exhausted" regardless of
+# actual state. Fix: deliberately over-request via max_tokens so Groq's own
+# pre-generation budget check either 429s with the exact Used/Limit or succeeds
+# (confirmed: a 429's "Requested" field matches max_tokens + prompt_tokens, not
+# actual completion length, so this never wastes real budget on the reject path;
+# on the accept path actual usage stays tiny too, since the model naturally
+# stops after a few tokens for a trivial "Say OK" prompt).
+#
+# Capped at the MODEL's own max_tokens ceiling (32768 for llama-3.3-70b-versatile
+# — confirmed empirically: Groq 400s "max_tokens must be <= 32768" for anything
+# above that, independent of the rate limiter). Since 32768 < _GROQ_MIN_REMAINING
+# (100_000), a single probe call can only ever confirm a LOWER BOUND on daily
+# remaining (">= ~32.7k" on success), never the full 100k — see probe_groq_tpd's
+# docstring.
+_GROQ_PROBE_MAX_TOKENS = 32768 - 50  # headroom for ~37-50 prompt tokens
+_TPD_ERROR_RE = re.compile(
+    r"on tokens per day \(TPD\): Limit (\d+), Used (\d+), Requested (\d+)\."
+    r".*?try again in ([0-9hm.]*[0-9]s)",  # must end in "s" -- stops before the
+    re.DOTALL,  # sentence-ending "." after the unit, e.g. "...28.8s." Need more..."
+)
+_TPM_ERROR_RE = re.compile(r"on tokens per minute \(TPM\)")
+
+
+def _parse_groq_429(body: str, print_fn) -> dict[str, int | str]:
+    if _TPM_ERROR_RE.search(body):
+        print_fn(f"[probe] 429 TPM (per-minute, transient) — {body[:200]}")
+        return {"status": "429_tpm", "detail": body}
+    m = _TPD_ERROR_RE.search(body)
+    if not m:
+        return {"status": "error", "detail": f"429 but couldn't parse body: {body[:300]}"}
+    tpd_limit, used, requested, reset_in = int(m[1]), int(m[2]), int(m[3]), m[4]
+    remaining = tpd_limit - used
+    print_fn(
+        f"[probe] Groq TPD  remaining={remaining:,}  used={used:,}  limit={tpd_limit:,}  "
+        f"(requested {requested:,}, reset in {reset_in})  model={_GROQ_PROBE_MODEL}"
+    )
+    return {
+        "status": "429_tpd",
+        "remaining": remaining,
+        "limit": tpd_limit,
+        "used": used,
+        "reset_in": reset_in,
+    }
 
 
 async def probe_groq_tpd(print_fn=print) -> dict[str, int | str]:
-    """Probe Groq TPD headroom by reading rate-limit headers from a 5-token call.
+    """Probe real Groq TPD headroom for llama-3.3-70b-versatile.
 
-    Returns a dict with keys: remaining, limit, used, status.
-    status is one of: 'ok', '429', 'error'.
+    Deliberately over-requests (at the model's own max_tokens ceiling, 32768) so
+    Groq's own pre-generation budget check either 429s with the exact Used/Limit/
+    reset-eta (daily bucket has less than ~32.7k left) or succeeds (daily bucket
+    has at least ~32.7k) -- see the module comment above for why this is the only
+    reliable signal (response headers never carry daily figures) and why it's
+    capped there (Groq 400s above 32768, independent of the rate limiter).
+
+    Returns a dict with keys depending on status:
+      'ok'       — remaining >= _GROQ_PROBE_MAX_TOKENS (~32.7k; a LOWER BOUND only,
+                   not exact -- a single call can never confirm the full 100k)
+      '429_tpd'  — daily bucket has less than ~32.7k left; remaining/limit/used/
+                   reset_in are exact
+      '429_tpm'  — hit the per-minute bucket instead (transient, not a daily block;
+                   retry shortly, does not mean the daily budget is exhausted)
+      'error'    — request failed outright (bad key, network, unparseable 429 body)
     """
     api_key = os.environ.get("GROQ_API_KEY", "")
     if not api_key:
@@ -427,7 +595,7 @@ async def probe_groq_tpd(print_fn=print) -> dict[str, int | str]:
     payload = {
         "model": _GROQ_PROBE_MODEL,
         "messages": [{"role": "user", "content": "Say OK"}],
-        "max_tokens": 5,
+        "max_tokens": _GROQ_PROBE_MAX_TOKENS,
     }
     try:
         async with httpx.AsyncClient() as client:
@@ -441,25 +609,18 @@ async def probe_groq_tpd(print_fn=print) -> dict[str, int | str]:
         return {"status": "error", "detail": str(exc)}
 
     if resp.status_code == _HTTP_TOO_MANY_REQUESTS:
-        reset_at = resp.headers.get("x-ratelimit-reset-tokens-day", "?")
-        print_fn(f"[probe] 429 TPD_EXHAUSTED  reset={reset_at}")
-        return {"status": "429", "reset_at": reset_at}
+        return _parse_groq_429(resp.text, print_fn)
 
     try:
         resp.raise_for_status()
     except Exception as exc:
         return {"status": "error", "detail": f"HTTP {resp.status_code}: {exc}"}
 
-    hdrs = resp.headers
-    remaining = int(hdrs.get("x-ratelimit-remaining-tokens-day", 0))
-    limit = int(hdrs.get("x-ratelimit-limit-tokens-day", 0))
-    used = limit - remaining
-
     print_fn(
-        f"[probe] Groq TPD  remaining={remaining:,}  used={used:,}  limit={limit:,}  "
-        f"model={_GROQ_PROBE_MODEL}"
+        f"[probe] Groq TPD  remaining>={_GROQ_PROBE_MAX_TOKENS:,} (exact figure not "
+        f"exposed on success) model={_GROQ_PROBE_MODEL}"
     )
-    return {"status": "ok", "remaining": remaining, "limit": limit, "used": used}
+    return {"status": "ok", "remaining": _GROQ_PROBE_MAX_TOKENS}
 
 
 async def main() -> int:
@@ -478,7 +639,11 @@ async def main() -> int:
     )
     parser.add_argument(
         "--probe", action="store_true",
-        help="Probe Groq TPD headroom and exit (reads x-ratelimit-remaining-tokens-day header)",
+        help=(
+            "Probe Groq TPD headroom and exit (deliberately over-requests to force a "
+            "429 whose error body carries the real Used/Limit -- response headers "
+            "never do)"
+        ),
     )
     parser.add_argument(
         "--no-fallback", action="store_true",
@@ -488,6 +653,18 @@ async def main() -> int:
             "baseline (mixed-provider runs aren't comparable to a single-model "
             "baseline); the default (fallback ON) is for resilient/non-blocking "
             "reruns through a Groq TPD wall. See README.md."
+        ),
+    )
+    parser.add_argument(
+        "--resume-from", type=Path, default=None,
+        help=(
+            "Prior run JSONL to reuse cached planner/refine/optimizer output from -- "
+            "any case whose call already succeeded there is never re-spent. This is "
+            "what makes splitting a 100k-TPD-exceeding run (see README's optimizer-"
+            "alone-exceeds-100k note) across multiple clean windows token-frugal: "
+            "run --no-optimizer first (fits in one window), then repeat with "
+            "--resume-from on each subsequent clean window until every case's "
+            "optimizer_archetypes is populated."
         ),
     )
     args = parser.parse_args()
@@ -503,22 +680,35 @@ async def main() -> int:
 
     if args.probe:
         result = await probe_groq_tpd()
-        if result["status"] == "429":
-            print("STOP — TPD exhausted. Wait for reset before running the full eval.")
-            return 1
         if result["status"] == "error":
             print(f"STOP — probe failed: {result.get('detail')}")
             return 1
-        remaining = result.get("remaining", 0)
-        if remaining < _GROQ_MIN_REMAINING:
+        if result["status"] == "429_tpm":
             print(
-                f"STOP — insufficient headroom: {remaining:,} remaining, "
-                f"need {_GROQ_MIN_REMAINING:,} (full daily reset required).\n"
-                "NOTE: full 31-case demo-llama run needs ~143k tokens (exceeds 100k daily limit).\n"
-                "See evals/wave2/README.md for split-run options."
+                "Hit the per-MINUTE bucket, not the daily one — transient, unrelated to "
+                "TPD headroom. Retry the probe in a few seconds."
             )
             return 1
-        print(f"OK — {remaining:,} tokens available. Full run needs ~143k (may exceed limit).")
+        if result["status"] == "429_tpd":
+            remaining = result["remaining"]
+            print(
+                f"STOP — insufficient daily headroom: {remaining:,} remaining "
+                f"(used {result['used']:,}/{result['limit']:,}), need "
+                f"{_GROQ_MIN_REMAINING:,} for a fully-fresh day. Resets gradually "
+                f"(rolling 24h window, not a fixed clock) — retry in {result['reset_in']}.\n"
+                "NOTE: optimizer alone (31 cases x 3 calls, ~104k tokens) exceeds a "
+                "fully-fresh day's 100k ceiling on its own — even at remaining=100000 "
+                "this must be split across >=2 clean windows via --resume-from. "
+                "See evals/wave2/README.md."
+            )
+            return 1
+        print(
+            f"OK — at least {_GROQ_PROBE_MAX_TOKENS:,} tokens available (a lower bound; "
+            "Groq's own max_tokens ceiling of 32768 means no single call can confirm "
+            "more than that, even on a fully-fresh 100k day). Note: optimizer alone "
+            "(~104k) still exceeds one day's 100k ceiling regardless — plan on "
+            "--resume-from across >=2 windows."
+        )
         return 0
 
     cases = _load_golden()
@@ -528,8 +718,11 @@ async def main() -> int:
         cases,
         args.profile,
         args.limit,
-        run_optimizer=not args.no_optimizer,
-        use_fallback=not args.no_fallback,
+        GenerationOptions(
+            run_optimizer=not args.no_optimizer,
+            use_fallback=not args.no_fallback,
+            resume_from=args.resume_from,
+        ),
     )
     save_run(args.profile, records)
     return 0
