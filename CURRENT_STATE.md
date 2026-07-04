@@ -195,8 +195,9 @@ stateless HMAC verification; tampered PNR and garbage ref correctly rejected.
 
 ### Backend (Cloud Run)
 
-- **Running revision:** `agentic-travel-booking-api-prod-00042-cit` at **100% traffic**;
+- **Running revision (2026-06-20):** `agentic-travel-booking-api-prod-00042-cit` at **100% traffic**;
   prior `00041-yud` (WS2 Sentry DSN) and `00038-sus` **drained**. Staleness: current (2026-06-20).
+  **SUPERSEDED 2026-07-04** — see "Production state — LLM Fallback Chain LIVE" below.
 - **Image:** built from `main` HEAD commit `8fcf894` (PR #71 — WS2 `capture_exception` fix;
   PR #70 Sentry DSN + tags; PR #68 Wave 1 WS1/WS2/WS3 code; all squash-merged).
 - **Deploy arc (2026-06-20):**
@@ -243,6 +244,85 @@ schema/guard design.
   occurred during Phase 3.2-G demo prep; the live frontend was actually at `173855b`
   (from `feat/3.2-G-demo-last-mile-fixes`) before this deploy. The `1cf0a07` record was
   stale and has been corrected here.
+
+## Production state — LLM Fallback Chain LIVE (2026-07-04)
+
+Groq -> OpenRouter fallback chain (spec.md, ADR-0027) promoted to 100% prod traffic.
+Fixes the recurring Groq TPD blocker (Issue #15/#16) AND makes `/search` + `/refine`
+degrade gracefully instead of hard-429ing when Groq is exhausted or rate-limited.
+
+### What's live
+
+- **Chain:** Groq `llama-3.3-70b-versatile` (primary) -> OpenRouter
+  `google/gemma-4-31b-it:free` (fallback) -> structured error
+  (`AllProvidersExhaustedError`) if both fail. Covers **planner, optimizer, AND
+  conversation** (ConversationManagerAgent / `/refine`'s classifier) — all three
+  validated against Gemma-4-31B's real tool-call output before inclusion (see
+  `apps/api/scripts/validate_fallback_candidates.py`, ADR-0027 + its addendum).
+- **Dropped from the chain:** OpenRouter Llama-3.3-70B as a same-model position #2
+  — validated at 0/6 successful calls across two rounds (100% 429, oversubscribed),
+  would add a guaranteed-to-fail hop on the exact path that's already degraded.
+- **Retryable-vs-not:** 429/timeout/5xx fall back; 400/401/other 4xx surface
+  immediately (never fall back) — verified live, not just unit-tested (see canary
+  smoke below).
+- **Observability:** every fallback attempt/success/exhaustion logs via structlog
+  (`llm_fallback_attempt_failed`, `llm_fallback_served`); a served fallback also
+  sends a Sentry warning, full exhaustion sends a Sentry-captured exception.
+- **Eval transparency:** `RequestState.served_model` + Wave 2 runner's
+  `served_model_planner/conversation/optimizer` + `fallback_used` flag record which
+  model actually served each case. Wave 2's authoritative baseline must use
+  `--no-fallback` (default is fallback ON, for resilience/non-blocking reruns only)
+  — see `evals/wave2/README.md`.
+
+### Canary smoke (GG-approved, 2026-07-04) — forced-outage verification, not happy-path
+
+Deployed canary at 0% traffic, then forced REAL failures (not synthetic) before
+clearing to promote:
+
+1. **Real Groq 429** (concurrent burst against the canary hit Groq's actual per-minute
+   rate limit) -> `/search` returned real flight archetypes served by Gemma-4-31B,
+   confirmed via structured logs correlated by `request_id`
+   (`llm_fallback_attempt_failed` groq/retryable=True -> `llm_fallback_served`
+   openrouter/gemma).
+2. **Same for `/refine`** (the gap this session closed) — conversation_manager's
+   classification call hit the same Groq 429, fell back to Gemma, produced a
+   correctly-filtered refine result (`direct_only: true` applied, both returned
+   flights had `layover_count: 0`).
+3. **Observability confirmed both ways:** structlog lines pulled directly from Cloud
+   Run (`gcloud logging read`); Sentry dashboard confirmed by GG — fallback-served
+   warnings visible at 05:44-05:48Z, matching the log timestamps exactly.
+4. **Restore verified:** after the rate-limit windows cleared, a clean `/search` +
+   `/refine` both went straight to Groq — zero fallback log lines — confirming the
+   fallback is per-request, not sticky.
+5. **Non-retryable sanity:** redeployed canary with a deliberately invalid
+   `GROQ_API_KEY` (real 401, not simulated) -> `/search` surfaced the raw error
+   immediately, exactly one `llm_fallback_attempt_failed retryable=False` log line,
+   **no** fallback attempt to Gemma. Restored the correct secret afterward.
+
+### Backend (Cloud Run) — current (2026-07-04)
+
+- **Running revision:** `agentic-travel-booking-api-prod-restored` at **100%
+  traffic**; prior `agentic-travel-booking-api-prod-00042-cit` **drained** (confirmed
+  via `gcloud run services describe` — traffic list has exactly one entry). Staleness
+  check re-run post-promotion: **GREEN — both surfaces current**.
+- **Image/commit:** `c51989f` (full fallback-chain work: `a875a95` planner/optimizer
+  fallback core, `fb1916a` eval-runner wiring + TPD probe, `7714840` judge fix,
+  `e43bf05` ADR-0027 + spec.md, `c51989f` conversation_manager coverage).
+- **Revision name note:** `-restored` is a manual-gcloud revision suffix from the
+  smoke-test sequence (canary -> forced-401 test revision `-groqfail2` -> `-restored`
+  once the correct `GROQ_API_KEY` secret was rebound), not a GitHub Actions naming
+  convention. Promoted to 100% via `workflow_dispatch stage=full` (traffic-shift-only
+  path — the workflow's build/deploy steps are skipped for `stage=full`, it just
+  shifts 5% -> soaks 5 min -> 100% -> health check against whatever revision the
+  `canary` tag already points to).
+- **New secret/IAM artifacts from the smoke test:** none remain — the temporary
+  `smoke-test-invalid-groq-key` secret and its IAM binding were deleted after use.
+- **Env/secret bindings:** unchanged from Wave 1 (`GROQ_API_KEY`, `OPENROUTER_API_KEY`
+  both bound; `OPENROUTER_API_KEY` is now live-called on the demo path for the first
+  time, previously dormant).
+
+See ADR-0027 (+ its addendum) for the full candidate-validation matrix, chain-shape
+decision, and config/wrapper/wiring design.
 
 ## Production audit summary (Phase 2D iteration 2)
 
