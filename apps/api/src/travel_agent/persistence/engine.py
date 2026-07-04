@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import AsyncGenerator
+from uuid import uuid4
 
 import structlog
 from sqlalchemy import make_url
@@ -63,6 +64,52 @@ _MAX_OVERFLOW = 2  # burst connections beyond pool_size, per instance
 # blocking a request for up to SQLAlchemy's 30s default while waiting on a full pool.
 _POOL_TIMEOUT_SECONDS = 5
 
+# Bounds how long any one connection (and whatever prepared statements it may have
+# accumulated -- see _POOLER_CONNECT_ARGS below) can persist before being forcibly
+# replaced. A deliberate alternative to NullPool (see _POOLER_CONNECT_ARGS docstring).
+_POOL_RECYCLE_SECONDS = 300
+
+# ADR-0028 addendum -- asyncpg + Supavisor transaction-mode prepared-statement fix.
+#
+# SQLAlchemy's asyncpg dialect has its OWN prepared-statement layer, independent of
+# raw asyncpg: every execution calls `connection.prepare(operation, name=<name_func>())`
+# directly (see sqlalchemy/dialects/postgresql/asyncpg.py, AsyncAdapt_asyncpg_connection
+# ._prepare). The parameter is `prepared_statement_cache_size` (NOT the raw asyncpg
+# `statement_cache_size` -- that name is only meaningful to asyncpg.connect() directly,
+# and is silently a no-op when passed through SQLAlchemy's connect_args, which is
+# exactly what happened here originally: the "fix" set the wrong key).
+#
+# Setting prepared_statement_cache_size=0 ALONE is NOT sufficient: with caching
+# disabled, SQLAlchemy still falls back to its DEFAULT name function, which enumerates
+# names sequentially PER CONNECTION OBJECT. Under transaction-mode pooling, two
+# different concurrent client connections can independently reach the same sequential
+# name and collide when Supavisor routes them to the same backend at the same time --
+# this is exactly the live DuplicatePreparedStatementError observed under a 24-request
+# concurrent burst (SQLAlchemy's own docs describe this exact PgBouncer failure mode).
+# Fix: prepared_statement_name_func generates a globally-unique name (uuid4) per
+# statement, making a collision effectively impossible regardless of pool/backend
+# multiplexing.
+#
+# SQLAlchemy's docs also recommend NullPool + PgBouncer-side DISCARD for this scenario,
+# to prevent "useless prepared statements" accumulating on a long-lived connection.
+# Deliberately NOT adopted here: NullPool would remove the pool_size/max_overflow
+# throttle above (the whole point of which is protecting the co-tenant's share of the
+# 200-connection ceiling) -- with NullPool, a burst of N concurrent requests opens N
+# simultaneous connections, unbounded by pool_size. Mitigating the accumulation
+# concern instead via pool_recycle (bounds how long any one connection, and its
+# accumulated prepared statements, can persist) plus the already-small pool size (at
+# most 5 connections/instance ever hold statements at once, not an unbounded number).
+_POOLER_HOST_MARKER = "pooler.supabase.com"
+
+
+def _pooler_connect_args(host: str | None) -> dict[str, object]:
+    if not host or _POOLER_HOST_MARKER not in host:
+        return {}
+    return {
+        "prepared_statement_cache_size": 0,
+        "prepared_statement_name_func": lambda: f"__asyncpg_{uuid4()}__",
+    }
+
 
 def _normalise_url(url: str) -> str:
     """Ensure the URL uses the asyncpg driver scheme."""
@@ -90,13 +137,16 @@ def get_engine() -> AsyncEngine:
         if not raw:
             msg = "DATABASE_URL_RUNTIME or DATABASE_URL environment variable must be set"
             raise RuntimeError(msg)
+        normalised = _normalise_url(raw)
+        parsed = make_url(normalised)
         _engine = create_async_engine(
-            _normalise_url(raw),
+            normalised,
             echo=os.environ.get("DB_ECHO", "false").lower() == "true",
             pool_pre_ping=True,
             pool_size=_POOL_SIZE,
             max_overflow=_MAX_OVERFLOW,
             pool_timeout=_POOL_TIMEOUT_SECONDS,
+            pool_recycle=_POOL_RECYCLE_SECONDS,
             # NOTE: no search_path server_setting here. Tenant/ApiKey now declare
             # schema=DB_SCHEMA explicitly (tenancy/models.py) and
             # resolve_api_key_secure has SET search_path bound into the function
@@ -105,13 +155,14 @@ def get_engine() -> AsyncEngine:
             # under transaction pooling (a pooled connection can be handed to a
             # different logical session between transactions, so a search_path
             # pinned only at connection-open time isn't guaranteed to still apply).
+            connect_args=_pooler_connect_args(parsed.host),
         )
         # Port only -- never log host/credentials. This is the one log line that
         # PROVES which pooler is actually active: the absence of a pool-exhaustion
         # error is NOT proof (the session-pooler fallback could be silently active
         # under load too light to ever hit its 15-client ceiling). A canary smoke
         # test should grep for this line, not just check for a lack of 500s.
-        port = make_url(_normalise_url(raw)).port
+        port = parsed.port
         pooler_mode = _POOLER_MODE_BY_PORT.get(port, "unknown") if port is not None else "unknown"
         _logger.info(
             "db_engine_configured",

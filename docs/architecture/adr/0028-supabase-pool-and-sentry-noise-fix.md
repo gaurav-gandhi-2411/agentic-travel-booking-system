@@ -169,6 +169,46 @@ full exhaustion DOES — is deferred to the next canary smoke test (forced concu
 forced recovered 429, forced full exhaustion), the same live-forced-outage discipline
 ADR-0027 established.
 
+### Addendum — DuplicatePreparedStatementError under real concurrency (found post-canary)
+
+The 12/12 PASS above was real but incomplete: every check in that battery ran one session
+at a time. The first genuinely concurrent canary smoke (a ~24-request burst, part 1 of the
+ADR-0027-style forced-outage discipline) surfaced `asyncpg.exceptions.
+DuplicatePreparedStatementError` on 11/24 requests — a raw 500, not the structured 503 this
+ADR's retry logic was designed to produce (correctly so: `ProgrammingError` isn't transient,
+and the retry layer was right not to catch it).
+
+**Root cause**, confirmed against the installed SQLAlchemy dialect source
+(`sqlalchemy/dialects/postgresql/asyncpg.py`), not guessed: the original fix set
+`connect_args["statement_cache_size"] = 0` — the raw asyncpg-only parameter name, silently
+a no-op when passed through SQLAlchemy's `connect_args` (SQLAlchemy's own asyncpg dialect
+recognizes `prepared_statement_cache_size` instead). With the real parameter still unset,
+SQLAlchemy's asyncpg adapter called `connection.prepare(operation, name=self.
+_prepared_statement_name_func())` on every execution using its **default name function**,
+which returns `None` and lets asyncpg apply its own sequential per-connection-object naming
+(`__asyncpg_stmt_1__`, `_2__`, ...). Two different concurrent client connections can
+independently reach the same sequential name and collide when Supavisor's transaction-mode
+multiplexing routes both onto the same backend at the same moment — exactly SQLAlchemy's
+own documented "Prepared Statement Name with PGBouncer" failure mode.
+
+**Fix:** `prepared_statement_cache_size=0` **and** `prepared_statement_name_func=lambda:
+f"__asyncpg_{uuid4()}__"` together (`persistence/engine.py::_pooler_connect_args()`),
+matching SQLAlchemy's own prescribed remedy. The name-func is the load-bearing half: it
+makes the collision structurally impossible (globally-unique names can never collide,
+regardless of backend multiplexing) rather than merely less frequent — `cache_size=0` alone
+would not have eliminated it, only changed which sequential counter collided. `NullPool`
+(SQLAlchemy's other documented mitigation, paired with PgBouncer-side `DISCARD`) was
+deliberately not adopted, to preserve the explicit `pool_size`/`max_overflow` budget this
+ADR exists to enforce; `pool_recycle=300` was added instead to bound how long any one
+connection's prepared statements can accumulate.
+
+**Process gap, fixed:** `scripts/verify_transaction_pooler_isolation.py` had the identical
+wrong parameter name (it was written by copying the same mistaken pattern) and ran fully
+sequentially, so it could not have caught this regardless. It now imports
+`_pooler_connect_args()` directly from `persistence/engine.py` (instead of reimplementing
+it) and includes a 24-request concurrent burst as a permanent verification step — a future
+change to pooler connect_args cannot regress this silently again.
+
 ## Consequences
 
 **Positive:**
