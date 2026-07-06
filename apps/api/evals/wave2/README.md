@@ -180,11 +180,14 @@ over the following ~24h, not all at once.
    - Not recommended — partial baselines are not authoritative
 
 Always probe before starting: `python -m evals.wave2.runner --probe`. The probe
-deliberately over-requests (at the model's own max_tokens ceiling, 32768) so a 429's
-error body reveals the real Used/Limit/reset-eta — Groq's success-response headers
-never carry daily-bucket figures at all, only per-minute ones. A single probe call
-can therefore only ever confirm a lower bound (~32.7k), never the full 100k, since
-32768 < 100,000.
+deliberately over-requests (near Groq's 12,000-tokens/minute ceiling — the smaller
+of the two structural limits; going higher toward the model's own 32768 max_tokens
+field limit instead gets a 413 "request too large for TPM" once the daily bucket is
+no longer the binding constraint, confirmed empirically 2026-07-06) so a 429/413's
+error body reveals the real daily Used/Limit/reset-eta — Groq's success-response
+headers never carry daily-bucket figures at all, only per-minute ones. A single
+probe call can therefore only ever confirm a lower bound (~11.9k), never the full
+100k, since 12,000 < 100,000.
 
 A partial run (429 mid-way) produces an incomplete baseline — do not score partial runs as
 authoritative. Use `--resume-from` to complete it token-frugally on a later window

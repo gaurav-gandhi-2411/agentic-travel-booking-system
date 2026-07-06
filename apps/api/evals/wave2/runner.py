@@ -532,24 +532,34 @@ _GROQ_MIN_REMAINING = 100_000
 # on the accept path actual usage stays tiny too, since the model naturally
 # stops after a few tokens for a trivial "Say OK" prompt).
 #
-# Capped at the MODEL's own max_tokens ceiling (32768 for llama-3.3-70b-versatile
-# — confirmed empirically: Groq 400s "max_tokens must be <= 32768" for anything
-# above that, independent of the rate limiter). Since 32768 < _GROQ_MIN_REMAINING
-# (100_000), a single probe call can only ever confirm a LOWER BOUND on daily
-# remaining (">= ~32.7k" on success), never the full 100k — see probe_groq_tpd's
-# docstring.
-_GROQ_PROBE_MAX_TOKENS = 32768 - 50  # headroom for ~37-50 prompt tokens
+# Capped at the per-MINUTE ceiling (12000 for llama-3.3-70b-versatile), NOT the
+# model's own max_tokens field limit (32768) -- confirmed empirically 2026-07-06:
+# a probe sized near 32768 got HTTP 413 "Request too large ... on tokens per
+# minute (TPM): Limit 12000, Requested 32755, please reduce your message size",
+# a STRUCTURAL rejection (this exact request size can never succeed, regardless
+# of current usage) distinct from the daily 429 -- once the daily bucket has
+# enough headroom that it's no longer the binding constraint, the smaller
+# per-minute ceiling becomes it instead. 12000 < _GROQ_MIN_REMAINING (100_000)
+# either way, so a single probe call can only ever confirm a LOWER BOUND on
+# daily remaining (">= ~11.9k" on success), never the full 100k -- see
+# probe_groq_tpd's docstring.
+_GROQ_PROBE_MAX_TOKENS = 12_000 - 100  # headroom for ~37-100 prompt tokens
 _TPD_ERROR_RE = re.compile(
     r"on tokens per day \(TPD\): Limit (\d+), Used (\d+), Requested (\d+)\."
     r".*?try again in ([0-9hm.]*[0-9]s)",  # must end in "s" -- stops before the
     re.DOTALL,  # sentence-ending "." after the unit, e.g. "...28.8s." Need more..."
 )
 _TPM_ERROR_RE = re.compile(r"on tokens per minute \(TPM\)")
+# Groq returns 429 for "you've used up this window's allotment, retry later" but
+# 413 for "this single request structurally exceeds a per-request-scoped limit,
+# no amount of waiting fixes it" (confirmed empirically 2026-07-06). Both carry
+# an informative JSON body worth parsing the same way.
+_HTTP_PAYLOAD_TOO_LARGE = 413
 
 
 def _parse_groq_429(body: str, print_fn) -> dict[str, int | str]:
     if _TPM_ERROR_RE.search(body):
-        print_fn(f"[probe] 429 TPM (per-minute, transient) — {body[:200]}")
+        print_fn(f"[probe] hit the per-minute (TPM) bucket, not the daily one — {body[:200]}")
         return {"status": "429_tpm", "detail": body}
     m = _TPD_ERROR_RE.search(body)
     if not m:
@@ -572,21 +582,21 @@ def _parse_groq_429(body: str, print_fn) -> dict[str, int | str]:
 async def probe_groq_tpd(print_fn=print) -> dict[str, int | str]:
     """Probe real Groq TPD headroom for llama-3.3-70b-versatile.
 
-    Deliberately over-requests (at the model's own max_tokens ceiling, 32768) so
-    Groq's own pre-generation budget check either 429s with the exact Used/Limit/
-    reset-eta (daily bucket has less than ~32.7k left) or succeeds (daily bucket
-    has at least ~32.7k) -- see the module comment above for why this is the only
-    reliable signal (response headers never carry daily figures) and why it's
-    capped there (Groq 400s above 32768, independent of the rate limiter).
+    Deliberately over-requests (near the per-MINUTE ceiling, 12000 -- the smaller
+    of the two structural limits, see module comment above) so Groq's own
+    pre-generation budget check either rejects with the exact Used/Limit/reset-eta
+    (daily bucket has less than ~11.9k left) or succeeds (daily bucket has at
+    least ~11.9k) -- this is the only reliable signal, since response headers
+    never carry daily figures on a 200.
 
     Returns a dict with keys depending on status:
-      'ok'       — remaining >= _GROQ_PROBE_MAX_TOKENS (~32.7k; a LOWER BOUND only,
+      'ok'       — remaining >= _GROQ_PROBE_MAX_TOKENS (~11.9k; a LOWER BOUND only,
                    not exact -- a single call can never confirm the full 100k)
-      '429_tpd'  — daily bucket has less than ~32.7k left; remaining/limit/used/
+      '429_tpd'  — daily bucket has less than ~11.9k left; remaining/limit/used/
                    reset_in are exact
-      '429_tpm'  — hit the per-minute bucket instead (transient, not a daily block;
-                   retry shortly, does not mean the daily budget is exhausted)
-      'error'    — request failed outright (bad key, network, unparseable 429 body)
+      '429_tpm'  — hit the per-minute bucket's CURRENT usage instead (transient,
+                   not a daily block; retry shortly)
+      'error'    — request failed outright (bad key, network, unparseable body)
     """
     api_key = os.environ.get("GROQ_API_KEY", "")
     if not api_key:
@@ -608,7 +618,7 @@ async def probe_groq_tpd(print_fn=print) -> dict[str, int | str]:
     except Exception as exc:
         return {"status": "error", "detail": str(exc)}
 
-    if resp.status_code == _HTTP_TOO_MANY_REQUESTS:
+    if resp.status_code in (_HTTP_TOO_MANY_REQUESTS, _HTTP_PAYLOAD_TOO_LARGE):
         return _parse_groq_429(resp.text, print_fn)
 
     try:
@@ -704,7 +714,7 @@ async def main() -> int:
             return 1
         print(
             f"OK — at least {_GROQ_PROBE_MAX_TOKENS:,} tokens available (a lower bound; "
-            "Groq's own max_tokens ceiling of 32768 means no single call can confirm "
+            "Groq's own 12000-tokens/minute ceiling means no single call can confirm "
             "more than that, even on a fully-fresh 100k day). Note: optimizer alone "
             "(~104k) still exceeds one day's 100k ceiling regardless — plan on "
             "--resume-from across >=2 windows."
