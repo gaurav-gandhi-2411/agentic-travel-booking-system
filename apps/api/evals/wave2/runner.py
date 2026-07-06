@@ -134,6 +134,39 @@ def _make_route_pool(intent: TravelIntent) -> list[FlightOption]:
     ]
 
 
+def build_pool_for_case(case: dict[str, Any], intent: TravelIntent) -> list[FlightOption]:
+    """Return the flight pool to give the optimizer for this case.
+
+    Uses the case's "optimizer_pool" override when present -- a golden case can
+    define its own flight list to exercise a Pareto frontier/winner shape that
+    the default pool can't (e.g. a converged best_value==best_experience winner,
+    or a wider non-dominated frontier). Falls back to the default route pool
+    otherwise. Both the runner (generation) and the scorer (archetype-selection
+    verification) call this SAME function so the pool a case was actually scored
+    against can never drift from the pool the check assumes.
+    """
+    custom = case.get("optimizer_pool")
+    if not custom:
+        return _make_route_pool(intent)
+    return [
+        FlightOption(
+            window=_POOL_WINDOW,
+            provider="synthetic",
+            origin_iata=intent.origin_iata,
+            destination_iata=intent.destination_iata,
+            cabin_class=intent.cabin_class,
+            airline_code=spec["airline_code"],
+            flight_number=spec["flight_number"],
+            price_inr=spec["price_inr"],
+            outbound_duration_minutes=spec["outbound_duration_minutes"],
+            layover_count=spec["layover_count"],
+            outbound_departure_at=spec["outbound_departure_at"],
+            outbound_arrival_at=spec["outbound_arrival_at"],
+        )
+        for spec in custom
+    ]
+
+
 @dataclass
 class _Agents:
     planner: PlannerAgent
@@ -305,7 +338,7 @@ async def _run_or_reuse_optimizer(
     opt_state = RequestState(
         raw_input=case["query"],
         intent=intent,
-        flight_options=_make_route_pool(intent),
+        flight_options=build_pool_for_case(case, intent),
     )
     t0 = time.monotonic()
     try:

@@ -34,14 +34,19 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
+from evals.wave2.runner import build_pool_for_case
 from travel_agent.agents.conversation_manager_types import ConversationAction, RefineArgs
 from travel_agent.api.routes.refine import _apply_refine_filters
 from travel_agent.coordinator.state import (
+    ArchetypeLabel,
     CabinClass,
     FlightOption,
     TravelIntent,
     Window,
 )
+from travel_agent.utility.experience import experience_score
+from travel_agent.utility.pareto import pareto_frontier
+from travel_agent.utility.value import value_score
 
 _GOLDEN_FILE = Path(__file__).parent / "golden.json"
 _RUNS_DIR = Path(__file__).parent / "runs"
@@ -264,6 +269,50 @@ def _score_refine_case(case: dict[str, Any], record: dict[str, Any]) -> dict[str
     }
 
 
+def _score_archetype_selection(case: dict[str, Any], record: dict[str, Any]) -> dict[str, Any]:
+    """Verify OptimizerAgent's deterministic Pareto selection for this case.
+
+    Reconstructs the EXACT pool the optimizer was given (build_pool_for_case --
+    the same function runner.py calls, so this can't drift from what actually
+    ran) and recomputes the SAME two-line rule optimizer.py itself uses
+    (pareto_frontier + argmax per axis) to derive the one correct best_value /
+    best_experience flight. Pure Python, no LLM -- this checks the deterministic
+    selection logic, not the LLM-generated explanation text (that's Tier-2).
+
+    Skips gracefully (not a failure) when there's no intent (planner failed) or
+    no optimizer_archetypes (--no-optimizer run) -- same pattern as judge.py.
+    """
+    intent_d = record.get("intent")
+    archetypes = record.get("optimizer_archetypes")
+    if intent_d is None or not archetypes:
+        return {"skipped": True, "reason": "no intent or no optimizer_archetypes"}
+
+    intent = TravelIntent.model_validate(intent_d)
+    pool = build_pool_for_case(case, intent)
+    frontier = pareto_frontier(pool, value_score, experience_score)
+    # ArchetypeLabel serializes hyphenated ("best-value"/"best-experience"), not
+    # underscored -- key off the enum's own value so this can't drift from what
+    # optimizer.py actually emits.
+    expected = {
+        ArchetypeLabel.BEST_VALUE.value: max(frontier, key=value_score),
+        ArchetypeLabel.BEST_EXPERIENCE.value: max(frontier, key=experience_score),
+    }
+    got_by_label = {a.get("label"): a.get("flight") or {} for a in archetypes}
+
+    per_label: dict[str, dict[str, Any]] = {}
+    all_correct = True
+    for label, exp_flight in expected.items():
+        got_flight = got_by_label.get(label) or {}
+        correct = got_flight.get("flight_number") == exp_flight.flight_number
+        all_correct = all_correct and correct
+        per_label[label] = {
+            "correct": correct,
+            "expected": exp_flight.flight_number,
+            "got": got_flight.get("flight_number"),
+        }
+    return {"skipped": False, "pass": all_correct, "per_label": per_label}
+
+
 def score_records(
     golden: dict[str, dict[str, Any]],
     records: list[dict[str, Any]],
@@ -272,6 +321,7 @@ def score_records(
     record_map = {r["id"]: r for r in records}
     all_field_results: dict[str, list[bool]] = {}
     refine_results: list[dict[str, Any]] = []
+    archetype_results: list[dict[str, Any]] = []
     case_failures: list[dict[str, Any]] = []
 
     for cid, case in golden.items():
@@ -308,6 +358,11 @@ def score_records(
             result["id"] = cid
             refine_results.append(result)
 
+        arch_result = _score_archetype_selection(case, rec)
+        if not arch_result["skipped"]:
+            arch_result["id"] = cid
+            archetype_results.append(arch_result)
+
     def _acc(fields: list[str]) -> float:
         checks = [v for f in fields for v in all_field_results.get(f, [])]
         return sum(checks) / len(checks) if checks else 1.0
@@ -315,6 +370,8 @@ def score_records(
     window_keys = [k for k in all_field_results if k.startswith("window_")]
     n_refine = len(refine_results)
     n_refine_pass = sum(1 for r in refine_results if r.get("pass"))
+    n_arch = len(archetype_results)
+    n_arch_pass = sum(1 for r in archetype_results if r.get("pass"))
 
     return {
         "cases_scored": len(record_map),
@@ -334,6 +391,12 @@ def score_records(
             "pass_rate": round(n_refine_pass / n_refine, 3) if n_refine > 0 else None,
             "results": refine_results,
         },
+        "archetype_selection": {
+            "n_cases": n_arch,
+            "n_pass": n_arch_pass,
+            "pass_rate": round(n_arch_pass / n_arch, 3) if n_arch > 0 else None,
+            "results": archetype_results,
+        },
         "failures": case_failures,
     }
 
@@ -341,6 +404,7 @@ def score_records(
 def print_report(report: dict[str, Any], run_path: Path, profile: str) -> None:
     p = report["planner"]
     r = report["refine"]
+    a = report["archetype_selection"]
     sep = "=" * 62
 
     print(f"\n{sep}")
@@ -369,6 +433,21 @@ def print_report(report: dict[str, Any], run_path: Path, profile: str) -> None:
             tag = "PASS" if res.get("pass") else "FAIL"
             print(f"  [{tag}] {res['id']}: {res.get('reason', '')}")
 
+    if a["n_cases"] > 0:
+        print(f"\nARCHETYPE SELECTION (Tier-1, deterministic)  {a['n_pass']}/{a['n_cases']} pass", end="")
+        if a["pass_rate"] is not None:
+            print(f" ({a['pass_rate']:.1%})", end="")
+        print("  -- reported, not gated")
+        for res in a["results"]:
+            tag = "PASS" if res.get("pass") else "FAIL"
+            detail = ", ".join(
+                f"{label}: exp={v['expected']!r} got={v['got']!r}"
+                for label, v in res["per_label"].items()
+                if not v["correct"]
+            )
+            suffix = f" -- {detail}" if not res.get("pass") else ""
+            print(f"  [{tag}] {res['id']}{suffix}")
+
     if report["failures"]:
         print(f"\nFIELD FAILURES ({len(report['failures'])} total, first 20 shown):")
         for fail in report["failures"][:20]:
@@ -385,6 +464,7 @@ def write_report(report: dict[str, Any], run_path: Path, profile: str) -> Path:
     ts = datetime.now(tz=UTC).strftime("%Y%m%dT%H%M%S")
     p = report["planner"]
     r = report["refine"]
+    a = report["archetype_selection"]
 
     lines: list[str] = [
         f"# Wave 2 Tier-1 Eval — {profile}",
@@ -416,6 +496,27 @@ def write_report(report: dict[str, Any], run_path: Path, profile: str) -> Path:
         for res in r["results"]:
             tag = "PASS" if res.get("pass") else "FAIL"
             lines.append(f"- [{tag}] `{res['id']}`: {res.get('reason', '')}")
+
+    if a["n_cases"] > 0:
+        pass_str = f"{a['n_pass']}/{a['n_cases']}"
+        if a["pass_rate"] is not None:
+            pass_str += f" ({a['pass_rate']:.1%})"
+        lines += [
+            "\n## Archetype selection (Tier-1, deterministic -- reported, not gated)",
+            f"**Pass rate: {pass_str}**\n",
+            "Verifies OptimizerAgent's Pareto selection (best_value/best_experience) "
+            "against the same pool + scoring functions the agent itself uses -- pure "
+            "Python, no LLM. Not part of the required-field CI gate.\n",
+        ]
+        for res in a["results"]:
+            tag = "PASS" if res.get("pass") else "FAIL"
+            detail = "; ".join(
+                f"{label}: exp=`{v['expected']}` got=`{v['got']}`"
+                for label, v in res["per_label"].items()
+                if not v["correct"]
+            )
+            suffix = f" -- {detail}" if not res.get("pass") else ""
+            lines.append(f"- [{tag}] `{res['id']}`{suffix}")
 
     if report["failures"]:
         lines += [
