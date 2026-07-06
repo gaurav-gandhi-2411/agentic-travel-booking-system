@@ -353,6 +353,54 @@ ADR-0028 (+ its addendum) for the pool-sizing math, the prepared-statement root 
 (confirmed against actual SQLAlchemy/asyncpg source, not guessed), and the Sentry
 filter design.
 
+## Wave 2 eval baseline — 31-case canonical baseline LOCKED (2026-07-06)
+
+**This is the Wave 3 yardstick.** Every Wave 3 planner/optimizer change is measured
+against these numbers. Run file: `apps/api/evals/wave2/runs/20260706T132209_local.jsonl`.
+Reports: `apps/api/evals/wave2/reports/20260706T132905_local_tier1.md` and
+`apps/api/evals/wave2/reports/20260706T132408_20260706T132209_local_tier2.md`.
+
+### Why generation is split across two providers (read this before comparing numbers)
+
+Groq's 100k-tokens/day free-tier ceiling structurally cannot hold the Wave 2
+optimizer step (93+ calls, ~104k tokens) in one day — true even on a fully fresh
+day, not a quota-exhaustion problem (confirmed empirically 2026-07-05/06). Planner
+extraction (31 cases, ~38k tokens) fits easily. So generation is split by
+canonical-need, NOT mixed within a single metric:
+
+| Metric | Model | Canonical? |
+|---|---|---|
+| Planner/refine extraction (Tier-1 field accuracy, refine constraints) | Groq `llama-3.3-70b-versatile`, `--no-fallback` | **YES — canonical, this IS the production planner model** |
+| Archetype selection (best_value/best_experience) | Deterministic Python (`pareto_frontier` + `value_score`/`experience_score`) | **Model-independent** — no LLM involved at all |
+| Optimizer explanation quality (Tier-2 judge) | Local `llama3.1:8b` via Ollama | **NO — non-canonical.** TPD-forced substitute, unblocked because the 93-call step can never fit Groq's daily ceiling. Do NOT read Tier-2 scores as "what production Llama-3.3-70B's explanations score" — they're `llama3.1:8b`'s explanations, judged by a different local model (`qwen3:8b`, cross-family — avoids self-grading bias since it's a different lineage than the generator). |
+
+### Tier-1 (deterministic, canonical Groq planner) — 31/31 cases
+
+| Metric | Score |
+|---|---|
+| Required fields (origin_iata, destination_iata, trip_type, cabin_class) | **100.0% (31/31)** — zero failures |
+| Optional fields | 96.4% |
+| Departure window | 98.3% |
+| Refine constraints | 3/3 (100%) |
+| Archetype selection (deterministic, model-independent) | 31/31 (100%) |
+
+**Every deviation, classified — nothing hides behind the headline numbers:**
+
+| Case | Field | Expected | Got | Classification |
+|---|---|---|---|---|
+| `w2-p-008` | `hotel_min_stars` | 5.0 | 3.0 | **(a) genuine weakness — Wave 3 #1** (luxury dual-trigger: planner correctly maps "luxury"→business but silently drops the co-located "luxury"→hotel_min_stars=5.0 rule). 2nd regression case: `w2-p-032`. |
+| `w2-p-023` | `window_earliest_not_before` / `window_latest_not_before` | 2027-03-* | 2026-03-* | **(a) genuine weakness — Wave 3 #2** (date-rollover rule: planner resolved bare month name "March" to the PAST occurrence instead of rolling to the next one, per the documented "in [month] → ... use next occurrence if already passed" rule). |
+
+Both tagged `known_weakness` in `golden.json` (`w2-p-008`/`w2-p-032` = "luxury dual-trigger (Wave 3 #1)"; `w2-p-023` = "date-rollover rule (Wave 3 #2)") so future baseline re-runs pre-classify these as genuine weakness, not golden-set miscalibration. No (b) golden-set-too-strict or (c) uncertain cases found in this baseline — every deviation across required/optional/window fields is accounted for above.
+
+### Tier-2 (llama3.1:8b-generated explanations, qwen3:8b judge — non-canonical, caveated)
+
+Overall quality **5.00/5** (factual_accuracy 5.00, value_defensibility 4.98, specificity 5.00, traveler_framing 5.00, n=31 cases / 62 archetypes). `specificity` is a known-soft criterion on qwen3:8b (validated 2026-06-21: pure filler text scored 4/5 instead of 1/5) — treat as low-confidence. The near-ceiling score across the other three criteria too is a genuinely good sign for `llama3.1:8b` on this templated task, not independently re-validated for over-leniency beyond the known specificity issue — worth a qualitative spot-check before citing as a hard number.
+
+### Explicitly OUT of scope for this locked baseline — pending, not merged
+
+`w2-p-029` through `w2-p-035` (7 cases added for the archetype-selection-check harness work) have **no canonical Groq planner output yet** — Groq TPD hasn't opened a small-enough window since. They are **structurally absent** from this run (confirmed: `Cases: 31/38`, zero mentions of any of the 7 IDs in the Tier-1 report) — not defaulted to pass or fail. **PENDING**: generate their Groq planner extraction (~8-19k tokens, fits a small window) when TPD allows, then their `llama3.1:8b` optimizer explanations, then merge as a documented supplement to this baseline — not a silent merge.
+
 ## Production audit summary (Phase 2D iteration 2)
 
 **Service URL (confirmed Phase 2D iteration 3):** `https://agentic-travel-booking-api-prod-rqyyasfwaa-el.a.run.app` — this is the canonical URL per `gcloud run services describe`. The `646079085526.asia-south1.run.app` URL cited in `spec.md` is stale.

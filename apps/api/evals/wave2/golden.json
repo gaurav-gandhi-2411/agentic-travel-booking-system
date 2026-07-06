@@ -506,7 +506,8 @@
     },
     "refine": null,
     "tier2": true,
-    "notes": "'in March' no year -> next occurrence = March 2027 (March 2026 already passed); covers HKG"
+    "notes": "'in March' no year -> next occurrence = March 2027 (March 2026 already passed); covers HKG KNOWN WEAKNESS (pre-classified, not a golden-set error, confirmed 2026-07-06): planner resolved bare month name \"March\" to the PAST occurrence (2026-03) instead of rolling to the next occurrence (2027-03) per the documented DATE RESOLUTION RULE \"in [month name] -> ... (use next occurrence if already passed)\" -- today=2026-07-01, so March 2026 had already passed. Distinct rule/field from w2-p-008/w2-p-032 (Wave 3 #1, luxury dual-trigger) -- tracked as its own Wave 3 #2 line item.",
+    "known_weakness": "date-rollover rule (Wave 3 #2)"
   },
   {
     "id": "w2-p-024",
