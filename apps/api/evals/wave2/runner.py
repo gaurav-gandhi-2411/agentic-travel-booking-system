@@ -248,7 +248,13 @@ async def _run_or_reuse_planner(
         _reuse_cached(
             record,
             cached,
-            ("latency_ms_planner", "intent", "intent_error", "served_model_planner"),
+            (
+                "latency_ms_planner",
+                "intent",
+                "intent_error",
+                "served_model_planner",
+                "model_planner",
+            ),
         )
         return
     t0 = time.monotonic()
@@ -286,6 +292,7 @@ async def _run_or_reuse_refine(
                 "refine_classified",
                 "refine_error",
                 "served_model_conversation",
+                "model_conversation",
             ),
         )
         return
