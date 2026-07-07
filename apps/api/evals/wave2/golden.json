@@ -173,8 +173,8 @@
     },
     "refine": null,
     "tier2": true,
-    "notes": "'luxury' keyword -> business AND hotel_min_stars=5.0; both are documented rules KNOWN WEAKNESS (pre-classified, not a golden-set error): planner drops hotel_min_stars to the 3.0 default instead of applying the luxury->5.0 rule (Wave 3 item #1 fixes this). See also w2-p-032, the 2nd regression case.",
-    "known_weakness": "luxury dual-trigger (Wave 3 #1)"
+    "notes": "'luxury' keyword -> business AND hotel_min_stars=5.0; both are documented rules. FIXED in Wave 3 #1 (planner_system.txt luxury dual-trigger rule -- see git blame for the commit): planner now correctly applies hotel_min_stars=5.0 alongside cabin_class=business for the literal 'luxury' keyword. Verified via targeted --only-cases rerun 2026-07-07 (100% field accuracy). See also w2-p-032, the 2nd regression case.",
+    "known_weakness": "FIXED in Wave 3 #1 (see git blame on golden.json for the fixing commit)"
   },
   {
     "id": "w2-p-009",
@@ -506,8 +506,8 @@
     },
     "refine": null,
     "tier2": true,
-    "notes": "'in March' no year -> next occurrence = March 2027 (March 2026 already passed); covers HKG KNOWN WEAKNESS (pre-classified, not a golden-set error, confirmed 2026-07-06): planner resolved bare month name \"March\" to the PAST occurrence (2026-03) instead of rolling to the next occurrence (2027-03) per the documented DATE RESOLUTION RULE \"in [month name] -> ... (use next occurrence if already passed)\" -- today=2026-07-01, so March 2026 had already passed. Distinct rule/field from w2-p-008/w2-p-032 (Wave 3 #1, luxury dual-trigger) -- tracked as its own Wave 3 #2 line item.",
-    "known_weakness": "date-rollover rule (Wave 3 #2)"
+    "notes": "'in March' no year -> next occurrence = March 2027 (March 2026 already passed); covers HKG. FIXED in Wave 3 #2 (planner_system.txt date-rollover clause -- see git blame for the commit): planner now correctly rolls the bare month name \"March\" to the next occurrence (2027-03) instead of resolving to the already-passed 2026-03, per the DATE RESOLUTION RULE month-number comparison against today's month. Verified via targeted --only-cases rerun 2026-07-07 (100% field accuracy). Distinct rule/field from w2-p-008/w2-p-032 (Wave 3 #1, luxury dual-trigger). See also w2-p-036, the negative control for this same fix.",
+    "known_weakness": "FIXED in Wave 3 #2 (see git blame on golden.json for the fixing commit)"
   },
   {
     "id": "w2-p-024",
@@ -899,8 +899,8 @@
     },
     "refine": null,
     "tier2": true,
-    "known_weakness": "luxury dual-trigger (Wave 3 #1)",
-    "notes": "2nd regression-guard case for the luxury->{cabin_class=business, hotel_min_stars=5.0} dual-trigger rule (see w2-p-008, same tag). EXPECTED TO FAIL against the current (unfixed) agent -- planner correctly sets cabin_class=business but drops hotel_min_stars to the 3.0 default. This is a documented genuine planner weakness (Wave 3 item #1), not a golden-set calibration error -- pre-classified for the baseline classify-then-lock review."
+    "known_weakness": "FIXED in Wave 3 #1 (see git blame on golden.json for the fixing commit)",
+    "notes": "2nd regression-guard case for the luxury->{cabin_class=business, hotel_min_stars=5.0} dual-trigger rule (see w2-p-008, same tag). FIXED in Wave 3 #1 (same planner_system.txt rule as w2-p-008 -- see git blame for the commit). Verified via targeted --only-cases rerun 2026-07-07 (100% field accuracy)."
   },
   {
     "id": "w2-p-033",
@@ -970,5 +970,26 @@
     "refine": null,
     "tier2": false,
     "notes": "new co-occurring optional-field combo: hotel_min_stars + budget_inr together in one query (existing w2-p-013 only pairs airline_preference+departure_time_constraint)."
+  },
+  {
+    "id": "w2-p-036",
+    "category": "planner",
+    "query": "economy flights from Mumbai to Doha in December",
+    "today": "2026-07-01",
+    "expected_planner": {
+      "origin_iata": "BOM",
+      "destination_iata": "DOH",
+      "trip_type": "round_trip",
+      "cabin_class": "economy",
+      "departure_window": {
+        "earliest_not_before": "2026-12-01",
+        "earliest_not_after": "2026-12-01",
+        "latest_not_before": "2026-12-31",
+        "latest_not_after": "2026-12-31"
+      }
+    },
+    "refine": null,
+    "tier2": true,
+    "notes": "Negative control for the date-rollover fix (Wave 3 #2): bare month name 'December', NO year given, today=2026-07-01. December (12) >= July (07) -- month has NOT yet passed this year -- must resolve to THIS year (2026-12), not roll to 2027-12. Catches an over-correction where the fix rolls every bare month forward regardless of direction."
   }
 ]

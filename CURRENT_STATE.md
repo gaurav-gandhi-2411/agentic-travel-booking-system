@@ -401,6 +401,49 @@ Overall quality **5.00/5** (factual_accuracy 5.00, value_defensibility 4.98, spe
 
 `w2-p-029` through `w2-p-035` (7 cases added for the archetype-selection-check harness work) have **no canonical Groq planner output yet** — Groq TPD hasn't opened a small-enough window since. They are **structurally absent** from this run (confirmed: `Cases: 31/38`, zero mentions of any of the 7 IDs in the Tier-1 report) — not defaulted to pass or fail. **PENDING**: generate their Groq planner extraction (~8-19k tokens, fits a small window) when TPD allows, then their `llama3.1:8b` optimizer explanations, then merge as a documented supplement to this baseline — not a silent merge.
 
+## Wave 3 #1+#2 — planner luxury + date-rollover fixes — DONE (2026-07-07)
+
+Two `planner_system.txt` fixes for the two genuine weaknesses classified against the
+locked Wave 2 baseline above (this section does not overwrite that baseline — it
+stays as the before-reference).
+
+- **Wave 3 #1 (luxury dual-trigger):** the literal word "luxury" now sets
+  `hotel_min_stars=5.0` in addition to `cabin_class=business` — previously the
+  hotel field silently dropped to the 3.0 default. "premium" still maps
+  `cabin_class=business` only (no hotel signal) — verified unchanged.
+- **Wave 3 #2 (date-rollover):** bare month names with no year now compare the
+  named month's number against today's month number and only roll to next year
+  if the named month has already passed this year — previously every bare month
+  resolved to the past occurrence regardless of direction.
+
+**Verified via targeted `--only-cases` rerun** (`runner.py`'s new flag, harness-only,
+no agent-code change), run file
+`apps/api/evals/wave2/runs/20260707T082620_demo-llama.jsonl`, scored by
+`apps/api/evals/wave2/reports/20260707T085306_demo-llama_tier1.md`:
+
+| Case | Check | Result |
+|---|---|---|
+| `w2-p-008` | `hotel_min_stars` | 5.0 (fixed) |
+| `w2-p-032` | `hotel_min_stars` | 5.0 (fixed, 2nd regression case) |
+| `w2-p-023` | departure window year | 2027 (fixed) |
+| `w2-p-033` | `hotel_min_stars` | 3.0 (held — "premium" negative control) |
+| `w2-p-036` | departure window year | 2026 (held — new negative control, Dec ≥ Jul, no rollover) |
+
+100% field accuracy across all 5 cases. 34 of the 39 golden cases are untouched by
+either fix (not re-run this pass — see "not merged" note below).
+
+**`golden.json` provenance:** `w2-p-008`/`w2-p-032`/`w2-p-023` notes updated from
+"Wave 3 #1/#2 target" (open) to "FIXED in Wave 3 #1/#2" — see `git blame` on
+`golden.json` for the exact commit. `w2-p-036` added as the date-rollover negative
+control (`w2-p-033` already covered the luxury-vs-premium negative control).
+
+**Explicitly NOT done in this pass** (separate, token-budgeted, later):
+- The full 39-case re-lock against the fixed prompt — this pass only re-ran the 5
+  directly-affected cases, not the 34 unaffected ones, so there is no new "locked"
+  baseline yet. The 2026-07-06 31-case baseline above remains the last full lock.
+- `w2-p-029` through `w2-p-035` (7 cases, see PENDING note above) — still have no
+  canonical Groq planner output, unrelated to this fix.
+
 ## Production audit summary (Phase 2D iteration 2)
 
 **Service URL (confirmed Phase 2D iteration 3):** `https://agentic-travel-booking-api-prod-rqyyasfwaa-el.a.run.app` — this is the canonical URL per `gcloud run services describe`. The `646079085526.asia-south1.run.app` URL cited in `spec.md` is stale.
