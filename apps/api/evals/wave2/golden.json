@@ -174,7 +174,7 @@
     "refine": null,
     "tier2": true,
     "notes": "'luxury' keyword -> business AND hotel_min_stars=5.0; both are documented rules. FIXED in Wave 3 #1 (planner_system.txt luxury dual-trigger rule -- see git blame for the commit): planner now correctly applies hotel_min_stars=5.0 alongside cabin_class=business for the literal 'luxury' keyword. Verified via targeted --only-cases rerun 2026-07-07 (100% field accuracy). See also w2-p-032, the 2nd regression case.",
-    "known_weakness": "luxury dual-trigger (Wave 3 #1)"
+    "known_weakness": "FIXED in Wave 3 #1 (see git blame on golden.json for the fixing commit)"
   },
   {
     "id": "w2-p-009",
@@ -507,7 +507,7 @@
     "refine": null,
     "tier2": true,
     "notes": "'in March' no year -> next occurrence = March 2027 (March 2026 already passed); covers HKG. FIXED in Wave 3 #2 (planner_system.txt date-rollover clause -- see git blame for the commit): planner now correctly rolls the bare month name \"March\" to the next occurrence (2027-03) instead of resolving to the already-passed 2026-03, per the DATE RESOLUTION RULE month-number comparison against today's month. Verified via targeted --only-cases rerun 2026-07-07 (100% field accuracy). Distinct rule/field from w2-p-008/w2-p-032 (Wave 3 #1, luxury dual-trigger). See also w2-p-036, the negative control for this same fix.",
-    "known_weakness": "date-rollover rule (Wave 3 #2)"
+    "known_weakness": "FIXED in Wave 3 #2 (see git blame on golden.json for the fixing commit)"
   },
   {
     "id": "w2-p-024",
@@ -899,7 +899,7 @@
     },
     "refine": null,
     "tier2": true,
-    "known_weakness": "luxury dual-trigger (Wave 3 #1)",
+    "known_weakness": "FIXED in Wave 3 #1 (see git blame on golden.json for the fixing commit)",
     "notes": "2nd regression-guard case for the luxury->{cabin_class=business, hotel_min_stars=5.0} dual-trigger rule (see w2-p-008, same tag). FIXED in Wave 3 #1 (same planner_system.txt rule as w2-p-008 -- see git blame for the commit). Verified via targeted --only-cases rerun 2026-07-07 (100% field accuracy)."
   },
   {
