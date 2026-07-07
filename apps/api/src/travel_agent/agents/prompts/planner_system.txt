@@ -34,7 +34,7 @@ Abu Dhabi → AUH
 - "this month" → today through end of current month
 - "next week" → Monday through Sunday of the week after today
 - "this weekend" → coming Saturday and Sunday
-- "in [month name]" → first to last day of that month (use next occurrence if already passed)
+- "in [month name]" with NO year stated → first to last day of that month, in the CURRENT calendar year (the year of TODAY'S DATE), BY DEFAULT. Compare the named month's number to TODAY'S DATE's month number: ONLY IF the named month's number is LESS THAN today's month number has it already passed this year — roll forward to next year. If the named month's number is GREATER THAN OR EQUAL TO today's month number, it has NOT passed — use the current year. Example: TODAY'S DATE 2026-07-01 (July=07). "in March" → March=03 < 07 → already passed → use March 2027. "in December" → December=12 ≥ 07 → not yet passed → use December 2026.
 - "spring" → March 1 – May 31 of next occurrence
 - "summer" → June 1 – August 31 of next occurrence
 - "winter" → December 1 – February 28 of next occurrence
@@ -45,7 +45,7 @@ Abu Dhabi → AUH
 ## FIELD RULES
 - traveler_count: count every person including children ("family of 4" → 4, "2 adults + 2 kids" → 4)
 - cabin_class defaults: "budget" / "cheap" → economy; "luxury" / "premium" → business; "first class" → first
-- hotel_min_stars: "5-star hotels only" → 5.0; "luxury" → 5.0; "budget hotel" → 2.0; default 3.0
+- hotel_min_stars: "5-star hotels only" → 5.0; "budget hotel" → 2.0; the LITERAL WORD "luxury" (not "premium") is a DUAL TRIGGER — it ALSO sets hotel_min_stars=5.0 here, in addition to cabin_class=business in the rule above; apply both fields from one "luxury" mention. "premium" maps cabin_class to business too, but is NOT a hotel signal — hotel_min_stars stays at default 3.0 for "premium" unless a separate hotel-specific phrase (e.g. "5-star hotels only") is present; default 3.0
 - budget_inr: "1 lakh" = 100000; "5 lakhs" = 500000; per-person → multiply by traveler_count
 - trip_type: assume round_trip unless user says "one-way", "one way", or "just going" with no mention of return
 - destination_iata: if the user is flexible on destination (e.g. "anywhere warm"), ask for a specific city or region in raw_query and pick the most likely destination from the IATA CODE REFERENCE above.

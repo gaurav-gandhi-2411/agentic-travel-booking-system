@@ -684,6 +684,15 @@ async def main() -> int:
         help="Generate only first N cases (frugal mode)",
     )
     parser.add_argument(
+        "--only-cases", type=str, default=None,
+        help=(
+            "Comma-separated case IDs to generate, e.g. --only-cases w2-p-008,w2-p-023 "
+            "-- targeted frugal reruns (verifying a prompt-fix regression guard) without "
+            "spending tokens on the full golden set. Reuse the rest from a prior run via "
+            "the scorer's --run flag."
+        ),
+    )
+    parser.add_argument(
         "--no-optimizer", action="store_true",
         help="Skip optimizer call (faster; Tier-1 only run)",
     )
@@ -763,6 +772,14 @@ async def main() -> int:
 
     cases = _load_golden()
     print(f"Loaded {len(cases)} cases from {_GOLDEN_FILE.name}")
+
+    if args.only_cases:
+        wanted = {cid.strip() for cid in args.only_cases.split(",") if cid.strip()}
+        cases = [c for c in cases if c["id"] in wanted]
+        missing = wanted - {c["id"] for c in cases}
+        if missing:
+            print(f"WARNING: --only-cases IDs not found in golden set: {sorted(missing)}")
+        print(f"--only-cases filter -> {len(cases)} case(s): {[c['id'] for c in cases]}")
 
     records = await generate_all(
         cases,
