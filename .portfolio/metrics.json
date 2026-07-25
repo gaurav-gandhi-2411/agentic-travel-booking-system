@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "project": "dealhunter",
+  "docs": "https://github.com/gaurav-gandhi-2411/gg-portfolio#autonomous-metric-refresh",
+  "metrics": [
+    {
+      "id": "dealhunter:test-coverage",
+      "label": "Test suite",
+      "value": "597 tests, ≥87.65% coverage",
+      "source_file": "CURRENT_STATE.md",
+      "source_line": 645,
+      "commit_sha": "4dbc25e4b71e6560bde6ec11d1b19dd1aa88c6bb",
+      "measured_at": "2026-06-09"
+    }
+  ]
+}
