@@ -26,7 +26,9 @@ MANIFEST_PATH = Path(".portfolio/metrics.json")
 
 
 def tracked_files() -> set[str]:
-    out = subprocess.run(["git", "ls-files"], capture_output=True, text=True, check=True)
+    out = subprocess.run(
+        ["git", "ls-files"], capture_output=True, text=True, check=True
+    )
     return set(out.stdout.splitlines())
 
 
@@ -62,7 +64,9 @@ def main() -> int:
         print(f"WARN: {w}")
 
     if failures:
-        print(f"\nFAIL: {len(failures)} metric(s) in {MANIFEST_PATH} have no committed artifact:")
+        print(
+            f"\nFAIL: {len(failures)} metric(s) in {MANIFEST_PATH} have no committed artifact:"
+        )
         for f in failures:
             print(f"  - {f}")
         return 1
