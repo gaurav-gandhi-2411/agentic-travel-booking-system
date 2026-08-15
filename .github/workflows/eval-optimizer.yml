@@ -1,5 +1,28 @@
 name: Optimizer Eval
 
+# Corrected 2026-08-15 (Item 76):
+#  - No top-level `permissions:` existed, so "Open failure issue" ran under
+#    whatever the repo's default GITHUB_TOKEN permissions are -- which don't
+#    include issues:write here, so the failure-notification step failed too
+#    (GraphQL: Resource not accessible by integration). 5/5 nightly runs
+#    failed silently: no eval result, no issue, no signal at all.
+#  - `python -m evals.optimizer.runner`/`scorer` both do
+#    `from optimizer.throttle import ...` internally -- a bare top-level
+#    import, not `evals.optimizer.throttle`. This resolves fine under pytest
+#    (which inserts apps/api/evals onto sys.path via its own rootdir
+#    discovery) but NOT under a plain `python -m` invocation, which only
+#    puts apps/api itself on sys.path. Reproduced locally
+#    (ModuleNotFoundError: No module named 'optimizer') and confirmed the
+#    fix: PYTHONPATH=evals (relative to the apps/api working-directory)
+#    makes the same bare `optimizer.*` imports resolve, matching pytest's
+#    behavior without touching the many files that already use this import
+#    convention (6+ files across evals/ and tests/, established pattern, not
+#    a one-off typo).
+
+permissions:
+  contents: read
+  issues: write
+
 on:
   pull_request:
     types: [labeled]
@@ -20,6 +43,8 @@ jobs:
     defaults:
       run:
         working-directory: apps/api
+    env:
+      PYTHONPATH: evals
 
     steps:
       - uses: actions/checkout@v6
@@ -53,6 +78,8 @@ jobs:
     defaults:
       run:
         working-directory: apps/api
+    env:
+      PYTHONPATH: evals
 
     steps:
       - uses: actions/checkout@v6
