@@ -346,7 +346,29 @@ openssl rand -base64 64 | tr -d '\n' | gcloud secrets create jwt-signing-key \
   --project="$PROJECT_ID"
 echo "Created: jwt-signing-key  (random value)"
 
-# 4.3 Grant the deployer SA read access to all secrets
+# 4.3 Grant the RUNTIME SA (not the deployer SA) read access to all secrets.
+#
+# Corrected 2026-08-15: this section previously granted secretAccessor to
+# ${SA_EMAIL} (the deployer/CI identity). That is wrong per Google's own
+# Cloud Run + Secret Manager docs: the deploying principal needs only
+# Cloud Run Admin-tier (roles/run.developer here) + iam.serviceAccountUser
+# on the runtime SA to attach a --set-secrets reference; secretAccessor is
+# a RUNTIME-SA-only requirement, checked when the container starts, not by
+# the deploying identity. Granting it to the deployer too is excess
+# privilege with no functional benefit. This was caught live in production
+# (dealhunter-prod-260812) on 2026-08-15 and reverted there; fixing the
+# runbook so it isn't reproduced on the next bootstrap.
+#
+# Also note: this runbook still reflects the original single-SA bootstrap
+# design (one SA_EMAIL doing both CI-deploy and Cloud Run runtime duty).
+# The live project has since split into a dedicated deployer SA and a
+# dedicated runtime SA (dealhunter-deployer / dealhunter-api-runtime) with
+# the deployer holding iam.serviceAccountUser scoped to the runtime SA.
+# This section assumes that split — substitute your project's actual
+# runtime SA email for RUNTIME_SA_EMAIL below. Reconciling the rest of this
+# runbook's variable set with the two-SA architecture is tracked separately
+# and not done here.
+export RUNTIME_SA_EMAIL="travel-agent-runtime@${PROJECT_ID}.iam.gserviceaccount.com"
 for name in \
   anthropic-api-key \
   travelpayouts-api-token travelpayouts-partner-id travelpayouts-aviasales-marker \
@@ -355,11 +377,11 @@ for name in \
   clerk-secret-key clerk-publishable-key \
   jwt-signing-key sentry-dsn; do
   gcloud secrets add-iam-policy-binding "$name" \
-    --member="serviceAccount:${SA_EMAIL}" \
+    --member="serviceAccount:${RUNTIME_SA_EMAIL}" \
     --role="roles/secretmanager.secretAccessor" \
     --project="$PROJECT_ID"
 done
-echo "SA access granted to all 12 secrets."
+echo "Runtime SA access granted to all 12 secrets."
 ```
 
 **Verification:**
@@ -386,9 +408,10 @@ openssl rand -base64 32 | gcloud secrets create tenant-credential-master-key \
   --data-file=- \
   --project="$PROJECT_ID"
 
-# Grant deployer SA read access (used at runtime for encrypt/decrypt)
+# Grant the RUNTIME SA read access (used at runtime for encrypt/decrypt) —
+# not the deployer SA. See the 2026-08-15 correction note in Section 4.3.
 gcloud secrets add-iam-policy-binding tenant-credential-master-key \
-  --member="serviceAccount:${SA_EMAIL}" \
+  --member="serviceAccount:${RUNTIME_SA_EMAIL}" \
   --role="roles/secretmanager.secretAccessor" \
   --project="$PROJECT_ID"
 ```
