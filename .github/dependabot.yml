@@ -1,7 +1,12 @@
 version: 2
 updates:
   # Python — apps/api
-  - package-ecosystem: pip
+  # uv, not pip: apps/api is uv-managed (uv.lock present). The pip ecosystem
+  # updater does not understand uv.lock, which is why this had opened zero
+  # PRs since the repo's dependabot.yml was added despite ruff>=0.6.0 sitting
+  # unpinned in apps/api/pyproject.toml the whole time (caught via PR #81's
+  # CI break, 2026-08-15).
+  - package-ecosystem: uv
     directory: /apps/api
     schedule:
       interval: weekly
