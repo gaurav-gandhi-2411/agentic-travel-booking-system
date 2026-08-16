@@ -74,7 +74,15 @@ jobs:
         with:
           service: agentic-travel-booking-api-prod
           region: ${{ vars.CLOUD_RUN_REGION }}
-          image: ${{ vars.CLOUD_RUN_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.ARTIFACT_REGISTRY_REPO }}/api:${{ github.ref_name }}
+          # Deploy by the immutable commit-SHA tag, not github.ref_name -- every real
+          # production deploy so far has been a workflow_dispatch run off `main` (never
+          # an actual v* tag push, confirmed via full run history, Item 150), which makes
+          # github.ref_name resolve to the literal string "main" and overwrite that same
+          # mutable tag on every deploy. The build step above already pushes both tags;
+          # this just points the deploy at the one that can't silently change out from
+          # under a running revision. github.sha is stable for both trigger types (a real
+          # tag push or workflow_dispatch), unlike github.ref_name.
+          image: ${{ vars.CLOUD_RUN_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.ARTIFACT_REGISTRY_REPO }}/api:${{ github.sha }}
           tag: canary
           no_traffic: true  # Deploy revision without sending traffic
           env_vars: |
