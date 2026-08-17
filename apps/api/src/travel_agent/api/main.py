@@ -175,9 +175,43 @@ async def health() -> JSONResponse:
         )
     if not cache_ok:
         logger.warning("cache_ping_failed", mode=app_mode)
+
+    # Item 257: this was the only health signal in the repo, and it never
+    # touched the database -- only the cache. No scheduled job here queries
+    # Supabase either (checked: eval-optimizer.yml, production-staleness-
+    # check.yml, pip-audit.yml are all unrelated to the DB), so a week of no
+    # real traffic would let Supabase's 7-day-inactivity auto-pause take the
+    # database down with nothing catching it. A cheap SELECT 1 answers "is the
+    # database actually reachable," not just "is the cache."
+    db_ok = True
+    if os.environ.get("DATABASE_URL_RUNTIME") or os.environ.get("DATABASE_URL"):
+        try:
+            from sqlalchemy import text  # noqa: PLC0415
+
+            from travel_agent.persistence.engine import get_session_factory  # noqa: PLC0415
+
+            factory = get_session_factory()
+            async with factory() as session:
+                await session.execute(text("SELECT 1"))
+        except Exception:
+            logger.warning("db_ping_failed", mode=app_mode, exc_info=True)
+            db_ok = False
+
+    if not db_ok and app_mode == "prod":
+        return JSONResponse(
+            {
+                "status": "degraded",
+                "phase": "C",
+                "cache": "ok" if cache_ok else "degraded",
+                "database": "unreachable",
+            },
+            status_code=503,
+        )
+
     payload: dict[str, object] = {
         "status": "ok",
         "phase": "C",
         "cache": "ok" if cache_ok else "degraded",
+        "database": "ok" if db_ok else "degraded",
     }
     return JSONResponse(payload)
