@@ -3836,7 +3836,7 @@ finetune = [
 requires-dist = [
     { name = "accelerate", marker = "extra == 'finetune'", specifier = ">=0.30.0" },
     { name = "alembic", specifier = ">=1.14.0" },
-    { name = "anthropic", specifier = ">=0.40.0" },
+    { name = "anthropic", specifier = "==0.104.1" },
     { name = "asyncpg", specifier = ">=0.30.0" },
     { name = "bandit", extras = ["toml"], marker = "extra == 'dev'", specifier = ">=1.8.0" },
     { name = "bitsandbytes", marker = "extra == 'finetune'", specifier = ">=0.43.0" },
