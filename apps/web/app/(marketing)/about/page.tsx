@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "About — Agentic Travel Booking System",
+  title: "About — DealHunter",
   description:
     "Solo developer building a multi-agent reasoning layer for travel platforms. Based in India, building in public.",
 };
@@ -24,7 +24,7 @@ export default function AboutPage() {
         <div className="flex flex-col gap-3">
           <h2 className="text-base font-semibold text-foreground">The project</h2>
           <p>
-            The Agentic Travel Booking System is a B2B SDK designed to sit in front of
+            DealHunter is a B2B SDK designed to sit in front of
             existing travel inventory. Platforms — OTAs, metasearch engines, booking
             applications — have flights and hotels. What they typically lack is a reasoning
             agent that identifies optimal booking windows across a 30-day horizon, ranks

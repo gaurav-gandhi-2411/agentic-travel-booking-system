@@ -35,13 +35,15 @@ profiles:
     conversation:   qwen/qwen-2.5-72b-instruct:free
     provider:       openrouter
     fallback_provider: groq
+    # llama-3.3-70b-versatile deprecated by Groq 2026-08-16 (console.groq.com/docs/
+    # deprecations); openai/gpt-oss-120b is their documented same-tier replacement.
     fallback_models:
-      planner:        llama-3.3-70b-versatile
-      flight_hunter:  llama-3.3-70b-versatile
-      hotel_hunter:   llama-3.3-70b-versatile
-      optimizer:      llama-3.3-70b-versatile
-      booking:        llama-3.3-70b-versatile
-      conversation:   llama-3.3-70b-versatile
+      planner:        openai/gpt-oss-120b
+      flight_hunter:  openai/gpt-oss-120b
+      hotel_hunter:   openai/gpt-oss-120b
+      optimizer:      openai/gpt-oss-120b
+      booking:        openai/gpt-oss-120b
+      conversation:   openai/gpt-oss-120b
 
   # ── demo / demo-haiku ────────────────────────────────────────────────────────
   # Live demo profile (premium track). Haiku for all agents.
@@ -66,16 +68,21 @@ profiles:
     provider:       anthropic
 
   # ── demo-llama ───────────────────────────────────────────────────────────────
-  # Free-tier demo profile. Groq + Llama 3.3 70B for reasoning agents.
+  # Free-tier demo profile. Groq for reasoning agents.
   # Requires GROQ_API_KEY (free at console.groq.com).
-  # Activated per-request via X-LLM-Profile: demo-llama header.
+  # Activated per-request via X-LLM-Profile: demo-llama header, AND is the actual
+  # production default (LLM_ROUTING_PROFILE=demo-llama on the live Cloud Run
+  # service, confirmed 2026-08-18) -- this is not merely an opt-in demo path.
+  # llama-3.3-70b-versatile / llama-3.1-8b-instant deprecated by Groq 2026-08-16
+  # (console.groq.com/docs/deprecations); replaced with their documented
+  # same-tier successors, openai/gpt-oss-120b / openai/gpt-oss-20b.
   demo-llama:
-    planner:        llama-3.3-70b-versatile
-    flight_hunter:  llama-3.1-8b-instant
-    hotel_hunter:   llama-3.1-8b-instant
-    optimizer:      llama-3.3-70b-versatile
-    booking:        llama-3.1-8b-instant
-    conversation:   llama-3.3-70b-versatile
+    planner:        openai/gpt-oss-120b
+    flight_hunter:  openai/gpt-oss-20b
+    hotel_hunter:   openai/gpt-oss-20b
+    optimizer:      openai/gpt-oss-120b
+    booking:        openai/gpt-oss-20b
+    conversation:   openai/gpt-oss-120b
     provider:       groq
     # Fallback chain (spec.md, validated 2026-07-04 — see
     # apps/api/scripts/validate_fallback_candidates.py and ADR-0027). On a
@@ -194,12 +201,23 @@ profiles:
   # decommissioned that model on 2026-05-17.
   # See docs/architecture/adr/0016-llm-judge-design.md.
   #
+  # qwen/qwen3-32b deprecated by Groq 2026-08-16 (console.groq.com/docs/
+  # deprecations); their docs give ONLY openai/gpt-oss-120b as the documented
+  # successor for this specific model (unlike some other deprecations, no
+  # same-family Qwen alternative is offered). Substituted here on that basis,
+  # but this REOPENS the within-family-bias concern this profile's own name and
+  # comments were written to avoid: demo-llama (the profile normally being
+  # judged) now also uses openai/gpt-oss-120b for planner/optimizer/
+  # conversation (see that profile's own entry above, fixed in the same pass).
+  # Judge and judged model are now the same family. Not resolved here --
+  # flagging for a real fix (e.g. eval-judge-sonnet for anything judging
+  # demo-llama's output) rather than silently keeping a compromised default.
   # Reasoning-tuned (emits <think>...</think> blocks stripped before parsing).
-  # Free on Groq free tier. Cross-family from evaluated profiles (Haiku/Llama)
-  # to reduce within-family bias. max_tokens 2048 because Qwen3 think blocks
-  # average ~500 tokens.
+  # Free on Groq free tier. max_tokens 2048 carried over from the Qwen3
+  # judge's think-block budget; gpt-oss-120b's own reasoning behavior has not
+  # been re-validated against this budget.
   eval-judge-qwen3-32b:
-    model:          qwen/qwen3-32b
+    model:          openai/gpt-oss-120b
     provider:       groq
     temperature:    0.0
     max_tokens:     2048

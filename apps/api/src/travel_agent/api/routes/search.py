@@ -4,10 +4,12 @@ Request:  {"query": "fly from Mumbai to Paris next month"}
 Response: text/event-stream, one JSON event per line.
 
 The X-LLM-Profile request header selects the LLM provider for this request:
-  demo-haiku  → Anthropic Claude Haiku (default when env profile is "demo")
-  demo-llama  → Groq Llama 3.3 70B (free tier)
-  demo-qwen   → OpenRouter Qwen 2.5 72B (free tier)
-  (absent)    → falls back to LLM_ROUTING_PROFILE env var
+  demo-haiku       → Anthropic Claude Haiku (default when env profile is "demo")
+  demo-llama       → Groq GPT-OSS-20B/120B (free tier; llama-3.3-70b-versatile
+                      deprecated by Groq 2026-08-16, see llm_routing.yaml)
+  demo-gpt-oss-120b → Groq GPT-OSS-120B (free tier)
+  demo-qwen        → OpenRouter Qwen 2.5 72B (free tier)
+  (absent)         → falls back to LLM_ROUTING_PROFILE env var
 
 See coordinator/streaming.py for the full event sequence spec.
 """
@@ -32,7 +34,12 @@ from travel_agent.observability.langfuse_client import get_langfuse, set_request
 
 router = APIRouter()
 
-_ALLOWED_PROFILES: frozenset[str] = frozenset({"demo-haiku", "demo-llama", "demo-qwen"})
+# demo-gpt-oss-120b added 2026-08-22: ProfileToggle.tsx defaults to this value and it
+# was missing here, so the frontend's own default silently fell through to the env
+# profile on every /search request regardless of what the user selected.
+_ALLOWED_PROFILES: frozenset[str] = frozenset(
+    {"demo-haiku", "demo-llama", "demo-gpt-oss-120b", "demo-qwen"}
+)
 
 
 def _resolve_profile(requested: str | None) -> str:

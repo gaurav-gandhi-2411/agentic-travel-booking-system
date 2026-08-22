@@ -14,17 +14,17 @@ export const metadata: Metadata = {
       ? `https://${process.env.VERCEL_URL}`
       : "http://localhost:3000",
   ),
-  title: "Agentic Travel Booking System",
+  title: "DealHunter",
   description: DESCRIPTION,
   openGraph: {
-    title: "Agentic Travel Booking System",
+    title: "DealHunter",
     description: DESCRIPTION,
     type: "website",
-    siteName: "Agentic Travel Booking System",
+    siteName: "DealHunter",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Agentic Travel Booking System",
+    title: "DealHunter",
     description: DESCRIPTION,
   },
 };
@@ -47,7 +47,7 @@ export default function RootLayout({
               href="/"
               className="font-semibold text-sm tracking-tight text-foreground hover:text-foreground/80 transition-colors"
             >
-              Agentic Travel Booking System
+              DealHunter
             </Link>
             <nav className="flex items-center gap-6 text-sm">
               <Link

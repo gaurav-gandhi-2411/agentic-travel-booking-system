@@ -122,10 +122,13 @@ def test_demo_haiku_profile_matches_demo() -> None:
 
 
 def test_demo_llama_profile_uses_groq() -> None:
+    # planner/optimizer model IDs no longer contain "llama" (llama-3.3-70b-versatile
+    # deprecated by Groq 2026-08-16, replaced by openai/gpt-oss-120b) -- the profile
+    # name itself is retained as the header/env-var value, unrelated to the model ID.
     config = load_routing_config()
     assert config["demo-llama"]["provider"] == "groq"
-    assert "llama" in config["demo-llama"]["planner"]
-    assert "llama" in config["demo-llama"]["optimizer"]
+    assert config["demo-llama"]["planner"] == "openai/gpt-oss-120b"
+    assert config["demo-llama"]["optimizer"] == "openai/gpt-oss-120b"
 
 
 def test_demo_deepseek_v4_profile_uses_nvidia_flash() -> None:
@@ -172,8 +175,10 @@ def test_get_profile_by_name_unknown_raises() -> None:
 
 
 def test_get_model_for_agent_in_profile() -> None:
+    # demo-llama's planner model is openai/gpt-oss-120b post-deprecation (2026-08-16);
+    # the profile name is retained, only the underlying model ID changed.
     model = get_model_for_agent_in_profile("planner", "demo-llama")
-    assert "llama" in model.lower()
+    assert model == "openai/gpt-oss-120b"
 
 
 def test_get_provider_for_profile() -> None:
