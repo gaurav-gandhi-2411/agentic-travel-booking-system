@@ -23,7 +23,7 @@ def _provider_keys(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_planner_on_demo_llama_gets_fallback_client() -> None:
     client, model = get_llm_client_and_model("planner", "demo-llama")
     assert isinstance(client, FallbackLLMClient)
-    assert model == "llama-3.3-70b-versatile"
+    assert model == "openai/gpt-oss-120b"
 
 
 def test_optimizer_on_demo_llama_gets_fallback_client() -> None:
@@ -37,14 +37,14 @@ def test_conversation_on_demo_llama_gets_fallback_client() -> None:
     and passed -- it shares the same fallback hop as planner/optimizer."""
     client, model = get_llm_client_and_model("conversation", "demo-llama")
     assert isinstance(client, FallbackLLMClient)
-    assert model == "llama-3.3-70b-versatile"
+    assert model == "openai/gpt-oss-120b"
 
 
 def test_use_fallback_false_forces_plain_client() -> None:
     client, model = get_llm_client_and_model("planner", "demo-llama", use_fallback=False)
     assert not isinstance(client, FallbackLLMClient)
     assert isinstance(client, GroqAdapter)
-    assert model == "llama-3.3-70b-versatile"
+    assert model == "openai/gpt-oss-120b"
 
 
 def test_conversation_use_fallback_false_forces_plain_client() -> None:

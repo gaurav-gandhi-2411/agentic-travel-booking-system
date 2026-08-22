@@ -112,6 +112,11 @@ def test_resolve_profile_haiku_returns_as_is() -> None:
     assert _resolve_profile("demo-haiku") == "demo-haiku"
 
 
+def test_resolve_profile_gpt_oss_120b_returns_as_is() -> None:
+    """Regression: ProfileToggle.tsx's default profile must resolve as-is here."""
+    assert _resolve_profile("demo-gpt-oss-120b") == "demo-gpt-oss-120b"
+
+
 def test_resolve_profile_unknown_demo_env_returns_haiku(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("LLM_ROUTING_PROFILE", "demo")
     assert _resolve_profile("not-a-profile") == "demo-haiku"
