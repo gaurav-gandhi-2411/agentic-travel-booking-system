@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Terms — Agentic Travel Booking System",
+  title: "Terms — DealHunter",
 };
 
 export default function TermsPage() {
@@ -18,7 +18,7 @@ export default function TermsPage() {
           </h2>
           <p>
             This site is informational and provided as-is during the development phase
-            of the Agentic Travel Booking System. No products or services are offered
+            of DealHunter. No products or services are offered
             for purchase. No contracts are formed by visiting this site or submitting
             the waitlist form.
           </p>

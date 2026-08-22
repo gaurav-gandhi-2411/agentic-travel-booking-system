@@ -39,7 +39,7 @@ export default function OGImage() {
             maxWidth: 900,
           }}
         >
-          Agentic Travel Booking System
+          DealHunter
         </div>
         <div
           style={{
