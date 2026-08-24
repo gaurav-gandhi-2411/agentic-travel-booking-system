@@ -286,7 +286,21 @@ jobs:
             echo "Production is current — no open staleness issue to close"
           fi
 
-      # ── Summary ────────────────────────────────────────────────────────────
+      # ── Summary + fail the job on drift ────────────────────────────────────
+      # Added 2026-08-25: the alert issue (above) was working correctly and had
+      # been open and accurately describing real drift since 2026-08-17 -- but
+      # every step in this job completes regardless of what it finds, so the
+      # workflow *run itself* showed green ("success") on every single one of
+      # those days. Nothing about the run's own CI-visible status ever reflected
+      # what the check had actually found; only opening the Issues tab did. A
+      # human or an automated audit scanning `gh run list`/checks status (as
+      # happened here) sees a wall of green and reasonably assumes nothing is
+      # wrong -- the finding was real, but invisible anywhere except the one
+      # place nobody was looking. This step makes the run itself fail whenever
+      # drift is detected (including "-1" == the SHA lookup itself failed,
+      # which must never read as clean -- rule 98a) so the drift is visible in
+      # the same status surface as every other check in this repo, not only in
+      # a GitHub issue whose existence still has to be independently known.
       - name: Print drift summary
         if: always()
         env:
@@ -303,3 +317,14 @@ jobs:
           else
             echo "Result: DRIFT DETECTED — staleness issue opened/updated"
           fi
+
+      - name: Fail the run if drift (or an unverifiable SHA lookup) was found
+        if: >
+          steps.backend.outputs.commits_behind != '0' ||
+          steps.frontend.outputs.commits_behind != '0'
+        env:
+          BACKEND_BEHIND: ${{ steps.backend.outputs.commits_behind }}
+          FRONTEND_BEHIND: ${{ steps.frontend.outputs.commits_behind }}
+        run: |
+          echo "::error::Production is behind main (backend: ${BACKEND_BEHIND} commits, frontend: ${FRONTEND_BEHIND} commits -- -1 means the deployed SHA itself couldn't be determined, treated as drift, never as clean). See the open '${ALERT_LABEL}' issue for the deploy commands."
+          exit 1
